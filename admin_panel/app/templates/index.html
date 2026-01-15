@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Користувачі{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+      <h5 class="mb-0 text-dark">
+        <i class="bi bi-people-fill text-primary me-2"></i>Користувачі
+      </h5>
+      <div class="text-muted small">Натисни на рядок користувача, щоб редагувати або видалити</div>
+    </div>
+
+    <form class="row g-3 mb-4" method="get" action="{{ url_for('index') }}">
+      <div class="col-lg-5 col-12">
+        <input class="form-control" name="search_name" placeholder="Пошук по імені" value="{{ search_name }}">
+      </div>
+      <div class="col-lg-4 col-12">
+        <input class="form-control" name="search_id" placeholder="Telegram ID" value="{{ search_id }}">
+      </div>
+      <div class="col-lg-3 col-12">
+        <button class="btn btn-primary w-100 btn-mobile-full" type="submit">
+          <i class="bi bi-search me-1"></i>Пошук
+        </button>
+      </div>
+    </form>
+
+    <div class="table-wrap border">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th style="width: 180px;">
+              <i class="bi bi-telegram me-1"></i>Telegram ID
+            </th>
+            <th>
+              <i class="bi bi-person me-1"></i>Імʼя
+            </th>
+            <th style="width: 220px;">
+              <i class="bi bi-shield me-1"></i>Роль
+            </th>
+          </tr>
+        </thead>
+        <tbody id="usersTbody">
+          {% for u in users %}
+          <tr class="row-click"
+              data-id="{{ u[0] }}"
+              data-name="{{ u[1]|e }}"
+              data-role="{{ u[2]|e }}">
+            <td class="font-monospace">{{ u[0] }}</td>
+            <td>{{ u[1] }}</td>
+            <td><span class="badge bg-primary">{{ u[2] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div class="modal fade" id="userModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow">
+      <form method="post" action="{{ url_for('user_action') }}" id="userForm">
+        <div class="modal-header bg-light">
+          <div>
+            <div class="small text-muted">
+              <i class="bi bi-telegram me-1"></i>Telegram ID
+            </div>
+            <div class="fw-semibold" id="mTelegramId">—</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <input type="hidden" name="selected_users" id="mSelectedUser">
+
+          <label class="form-label">
+            <i class="bi bi-person me-1"></i>Імʼя
+          </label>
+          <input class="form-control mb-3" name="name" id="mName" required>
+
+          <label class="form-label">
+            <i class="bi bi-shield me-1"></i>Роль
+          </label>
+          <select class="form-select" name="role" id="mRole" required>
+            <option value="admin">admin</option>
+            <option value="adminpre">adminpre</option>
+            <option value="конструктор">конструктор</option>
+            <option value="замірник">замірник</option>
+            <option value="менеджер">менеджер</option>
+            <option value="директор">директор</option>
+            <option value="user">user</option>
+          </select>
+
+          <div class="alert alert-info mt-3 mb-0 small">
+            <i class="bi bi-info-circle me-1"></i>
+            Після збереження користувач отримає повідомлення в Telegram.
+          </div>
+        </div>
+
+        <div class="modal-footer d-flex gap-2">
+          <button type="submit" name="action" value="delete"
+                  class="btn btn-outline-danger"
+                  onclick="return confirm('Точно видалити користувача?');">
+            <i class="bi bi-trash me-1"></i>Видалити
+          </button>
+
+          <button type="submit" name="action" value="edit" class="btn btn-primary flex-grow-1">
+            <i class="bi bi-check-circle me-1"></i>Зберегти
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const userModalEl = document.getElementById('userModal');
+  const userModal = new bootstrap.Modal(userModalEl);
+
+  const mTelegramId = document.getElementById('mTelegramId');
+  const mSelectedUser = document.getElementById('mSelectedUser');
+  const mName = document.getElementById('mName');
+  const mRole = document.getElementById('mRole');
+
+  document.getElementById('usersTbody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr');
+    if(!tr) return;
+
+    const id = tr.dataset.id || '';
+    const name = tr.dataset.name || '';
+    const role = tr.dataset.role || '';
+
+    mTelegramId.textContent = id;
+    mSelectedUser.value = id;
+    mName.value = name;
+
+    const roleExists = [...mRole.options].some(o => o.value === role);
+    if(roleExists){
+      mRole.value = role;
+    } else {
+      const opt = new Option(role, role, true, true);
+      mRole.add(opt, 0);
+      mRole.value = role;
+    }
+
+    userModal.show();
+  });
+</script>
+{% endblock %}

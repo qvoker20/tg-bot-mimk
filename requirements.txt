@@ -1,0 +1,12 @@
+python-telegram-bot==20.7
+psycopg2-binary
+pytz
+httpx
+chromadb
+openai
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+reportlab
+# pip install -r requirements.txt

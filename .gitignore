@@ -1,0 +1,16 @@
+# Секрети
+.env
+
+# Логи та службові файли
+*.log
+*.json
+*.rar
+*.zip
+*.sst
+
+# Бази даних та кеші
+chroma_db/
+__pycache__/
+
+# Особисті/локальні файли
+google_parset_active.py
