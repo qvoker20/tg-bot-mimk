@@ -4,19 +4,23 @@ from telegram.ext import CallbackContext
 import chromadb
 from openai import OpenAI
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PG_CONN = {
-    'host': 'localhost',
-    'port': 5433,  # ваш порт
-    'dbname': 'parset_google_mimk',
-    'user': 'postgres',
-    'password': '123789456'
+    'host': os.environ.get("PG_HOST"),
+    'port': int(os.environ.get("PG_PORT")),
+    'dbname': os.environ.get("PG_DBNAME"),
+    'user': os.environ.get("PG_USER"),
+    'password': os.environ.get("PG_PASSWORD")
 }
 
 def get_pg_connection():
     return psycopg2.connect(**PG_CONN)
 
-USER_DATABASE_FILE = r'C:\Users\user\Desktop\tg-bot\google_sheet_data.db'
+USER_DATABASE_FILE = os.environ.get("USER_DATABASE_FILE")
 
 def get_user_data(user_id):
     conn = get_pg_connection()

@@ -11,6 +11,3 @@
 # Бази даних та кеші
 chroma_db/
 __pycache__/
-
-# Особисті/локальні файли
-google_parset_active.py

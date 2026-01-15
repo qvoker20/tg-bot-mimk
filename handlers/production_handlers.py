@@ -8,20 +8,25 @@ from utils.drive_utils import upload_to_gdrive
 import httpx
 import asyncio
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 PG_CONN = {
-    'host': 'localhost',
-    'port': 5433,  # ваш порт
-    'dbname': 'parset_google_mimk',
-    'user': 'postgres',
-    'password': '123789456'
+    'host': os.environ.get("PG_HOST"),
+    'port': int(os.environ.get("PG_PORT")),
+    'dbname': os.environ.get("PG_DBNAME"),
+    'user': os.environ.get("PG_USER"),
+    'password': os.environ.get("PG_PASSWORD")
 }
 
 def get_pg_connection():
     return psycopg2.connect(**PG_CONN)
 
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHpFOxYKpozKk1Np-GUXm8K2PR6bzQnaATuMqgxbLaxgxp_BkRCPY6cmhk-3oztxoATg/exec"
-ISSUE_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyDoHuoeQsjx9pyKFJDMPDO2-klEJnr45Lod7Io78emoZyKRQWShvpesLNFYMq4hYeyXA/exec"
+GOOGLE_SCRIPT_URL = os.environ.get("GOOGLE_SCRIPT_URL")
+ISSUE_GOOGLE_SCRIPT_URL = os.environ.get("ISSUE_GOOGLE_SCRIPT_URL")
 
 # функція для перевірки, чи є користувач дозволеним
 async def show_production_menu(update: Update, context: CallbackContext):
