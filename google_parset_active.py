@@ -1,3 +1,4 @@
+
 import asyncio
 import socket
 import time
@@ -15,11 +16,11 @@ load_dotenv()
 # Google Sheets configuration
 # =========================
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
-SHEET_NAME = os.environ.get("SHEET_NAME")
-SHEET_NAME_DOP = os.environ.get("SHEET_NAME_DOP")
+SHEET_NAME = "3D замір"
+SHEET_NAME_DOP = "3D замір ДОП"
 
 SECOND_GOOGLE_SHEET_ID = os.environ.get("SECOND_GOOGLE_SHEET_ID")
-SECOND_SHEET_NAME = os.environ.get("SECOND_SHEET_NAME")
+SECOND_SHEET_NAME = "Список замірів"
 
 GOOGLE_SHEET_RZM_ID = '1llpmSz16AfGk_Bj27TybqalNGJ9tq5qrvAA-x40WWUQ'
 GOOGLE_SHEET_RZM_ID_NAME = 'Матеріали'

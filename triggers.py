@@ -11,13 +11,6 @@ import json
 import os, re
 from datetime import datetime
 import time
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib import colors
 from io import BytesIO
 import os
 import psycopg2
@@ -33,8 +26,6 @@ PG_CONN = {
 def get_pg_connection():
     return psycopg2.connect(**PG_CONN)
 
-
-pdfmetrics.registerFont(TTFont('DejaVu', os.path.join('fronts', 'DejaVuSans.ttf')))
 # Шлях до бази даних
 DATABASE_FILE = r'C:\Users\user\Desktop\tg-bot\google_sheet_data.db'
 

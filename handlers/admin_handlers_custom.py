@@ -150,67 +150,6 @@ async def send_ai_log_pdf(update: Update, context: CallbackContext):
         await update.message.reply_text("⚠️ Не вдалося надіслати PDF.")
         logging.error(f"Помилка надсилання PDF: {e}")
 
-def ai_log_to_pdf(pdf_filename="ai_dialogs_report.pdf", log_filename="ai_dialogs.log"):
-    from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-
-    pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
-    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=10, leftMargin=10, topMargin=10, bottomMargin=10)
-    styles = getSampleStyleSheet()
-    styleN = ParagraphStyle('Normal', parent=styles["Normal"], fontName='DejaVu', fontSize=8, leading=10)
-    styleH = ParagraphStyle('Header', parent=styles["Heading4"], fontName='DejaVu', fontSize=9, leading=12, textColor=colors.white, alignment=1)
-    styleAnswer = ParagraphStyle('Answer', parent=styleN, fontSize=7, leading=9, wordWrap='CJK', alignment=0)
-
-    headers = ["Дата", "User ID", "Username", "Тип", "Питання", "Відповідь"]
-    data = [[Paragraph(h, styleH) for h in headers]]
-
-    with open(log_filename, "r", encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split("\t")
-            if len(parts) == 6:
-                row = [
-                    Paragraph(parts[0], styleN),
-                    Paragraph(parts[1], styleN),
-                    Paragraph(parts[2], styleN),
-                    Paragraph(parts[3], styleN),
-                    Paragraph(parts[4], styleN),
-                    Paragraph(parts[5], styleAnswer),  # Відповідь — окремий стиль
-                ]
-                data.append(row)
-
-    # Збільшуємо ширину останньої колонки (Відповідь)
-    table = Table(
-        data,
-        repeatRows=1,
-        colWidths=[70, 50, 70, 40, 200, 400]  # 400 для "Відповідь"
-    )
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1976d2")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('FONTNAME', (0,0), (-1,-1), 'DejaVu'),
-        ('FONTSIZE', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.whitesmoke, colors.lightblue]),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-    ]))
-    doc.build([table])
-
-def log_ai_dialog(user_id, username, mode, question, answer):
-    with open("ai_dialogs.log", "a", encoding="utf-8") as f:
-        f.write(
-            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\t"
-            f"{user_id}\t"
-            f"{username}\t"
-            f"{mode}\t"
-            f"{question.replace(chr(10), ' ')}\t"
-            f"{answer.replace(chr(10), ' ')}\n"
-        )
 
 async def admin_change_role_handler(update: Update, context: CallbackContext):
     logging.info(f"admin_change_role_handler step: {context.user_data.get('change_role_step')}")

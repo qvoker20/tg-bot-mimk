@@ -9,6 +9,8 @@ import os
 from dotenv import load_dotenv
 # ---------------- CONFIG ----------------
 
+load_dotenv()
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 
@@ -63,20 +65,39 @@ def send_telegram_message(chat_id, text, reply_markup=None):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-
-        if username != "admin":
-            flash("Доступ дозволено лише адміну", "danger")
+        phone = request.form.get("phone", "").strip()
+        phone = phone.replace(" ", "").replace("-", "")
+        if phone.startswith("0") and len(phone) == 10:
+            phone = "+38" + phone
+        elif phone.startswith("380") and len(phone) == 12:
+            phone = "+" + phone
+        elif phone.startswith("+380") and len(phone) == 13:
+            pass
+        else:
+            flash("Невірний формат телефону", "danger")
             return redirect(url_for("login"))
 
+        # Перевірка в базі: тільки admin
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT telegram_id
+            FROM database_app_userdatatelegram
+            WHERE phone_number = %s AND username = 'admin'
+            LIMIT 1
+        """, (phone,))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+
+        if not row:
+            flash("Вхід дозволено лише для admin!", "danger")
+            return redirect(url_for("login"))
+
+        telegram_id = row[0]
         code = random.randint(100000, 999999)
         session["login_code"] = str(code)
-        session["username"] = "admin"
-
-        telegram_id = get_admin_telegram_id()
-        if not telegram_id:
-            flash("Не знайдено Telegram ID адміністратора", "danger")
-            return redirect(url_for("login"))
+        session["phone"] = phone
+        session["admin_telegram_id"] = telegram_id  # Зберігаємо id адміна
 
         send_telegram_message(
             telegram_id,
@@ -130,7 +151,7 @@ def index():
     cur = conn.cursor()
 
     query = """
-        SELECT telegram_id, name, username
+        SELECT telegram_id, name, username, phone_number
         FROM database_app_userdatatelegram
         WHERE 1=1
     """
@@ -151,11 +172,14 @@ def index():
     cur.close()
     conn.close()
 
+    admin_telegram_id = session.get("admin_telegram_id")
+
     return render_template(
         "index.html",
         users=users,
         search_name=search_name,
-        search_id=search_id
+        search_id=search_id,
+        admin_telegram_id=admin_telegram_id
     )
 
 
@@ -190,44 +214,44 @@ def user_action():
         telegram_id = selected_users[0]
         name = request.form.get("name", "").strip()
         role = request.form.get("role", "").strip()
+        phone = request.form.get("phone", "").strip()  # New: Get phone number
 
         cur.execute("""
             UPDATE database_app_userdatatelegram
-            SET name = %s, username = %s
+            SET name = %s, username = %s, phone_number = %s
             WHERE telegram_id = %s
-        """, (name, role, telegram_id))
+        """, (name, role, phone, telegram_id))
         conn.commit()
 
         send_telegram_message(
             telegram_id,
             f"✏️ <b>Ваш профіль оновлено</b>\n\n"
             f"👤 Імʼя: <b>{name}</b>\n"
-            f"🛡 Роль: <b>{role}</b>"
+            f"🛡 Роль: <b>{role}</b>\n"
+            f"📞 Телефон: <b>{phone}</b>"
         )
         flash("Користувача оновлено", "success")
+        cur.close(); conn.close()
+        return redirect(url_for("index"))
 
-    # ---------- DELETE ----------
+     # ---------- DELETE ----------
     elif action == "delete":
-        # Використовуємо ANY з кастом до bigint[]
-        cur.execute("""
-            DELETE FROM database_app_userdatatelegram
-            WHERE telegram_id = ANY(%s::bigint[])
-        """, (selected_users,))
-        conn.commit()
-
-        for uid in selected_users:
+        for telegram_id in selected_users:
+            cur.execute("DELETE FROM database_app_userdatatelegram WHERE telegram_id = %s", (telegram_id,))
             send_telegram_message(
-                uid,
-                "⛔ <b>Ваш доступ до системи було видалено</b>\n"
-                "Якщо це помилка — зверніться до адміністратора."
+                telegram_id,
+                "❌ <b>Ваш акаунт видалено з системи</b>"
             )
-        flash(f"Видалено користувачів: {len(selected_users)}", "success")
+        conn.commit()
+        flash("Користувачів видалено", "success")
+        cur.close(); conn.close()
+        return redirect(url_for("index"))
+
+    # ---------- INVALID ACTION ----------
     else:
         flash("Невідома дія", "danger")
-
-    cur.close()
-    conn.close()
-    return redirect(url_for("index"))
+        cur.close(); conn.close()
+        return redirect(url_for("index"))
 
 
 # ---------------- REGISTRATION ----------------
@@ -254,7 +278,8 @@ def registration_requests():
 
     roles = [
         "admin", "adminpre", "конструктор", "замірник",
-        "менеджер", "директор", "user"
+        "менеджер", "директор", "збиральник", "виробництво",
+        "логіст", "водій", "бухгалтер"
     ]
 
     return render_template(
@@ -262,7 +287,6 @@ def registration_requests():
         requests_list=requests_list,
         roles=roles
     )
-
 
 @app.route("/process_registration", methods=["POST"])
 def process_registration():
@@ -298,6 +322,18 @@ def process_registration():
         role = request.form.get(f"role_{req_id}", "").strip()
         phone = request.form.get(f"phone_{req_id}", "").strip()
 
+        # Автовиправлення номера на бекенді
+        phone = phone.replace(" ", "").replace("-", "")
+        if phone.startswith("0") and len(phone) == 10:
+            phone = "+380" + phone[1:]
+        elif phone.startswith("380") and len(phone) == 12:
+            phone = "+" + phone
+        elif phone.startswith("+380") and len(phone) == 13:
+            pass
+        else:
+            flash("Невірний формат телефону!", "danger")
+            continue
+
         # Витягуємо telegram_id із заявки
         cur.execute("SELECT telegram_id FROM registration_requests WHERE id = %s", (req_id,))
         row = cur.fetchone()
@@ -310,12 +346,16 @@ def process_registration():
         exists = cur.fetchone()
 
         if not exists:
-            # Вставка з авто датою
+             # Отримуємо максимальний id
+            cur.execute("SELECT COALESCE(MAX(id), 0) FROM database_app_userdatatelegram")
+            max_id = cur.fetchone()[0]
+            new_id = max_id + 1
+
             cur.execute("""
                 INSERT INTO database_app_userdatatelegram
-                (telegram_id, name, username, phone_number, date_registered)
-                VALUES (%s, %s, %s, %s, NOW())
-            """, (telegram_id, name, role, phone))
+                (id, telegram_id, name, username, phone_number, date_registered)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """, (new_id, telegram_id, name, role, phone))
 
         # Позначаємо заявку як зареєстровану
         cur.execute("""
@@ -345,6 +385,87 @@ def process_registration():
     flash("Користувачів зареєстровано", "success")
     return redirect(url_for("registration_requests"))
 
+# ---------------- ANNOUNCEMENTS ----------------
+
+@app.route("/announcements", methods=["GET", "POST"])
+def announcements():
+    if not session.get("is_admin"):
+        return redirect(url_for("login"))
+
+    roles = [
+        "admin", "adminpre", "конструктор", "замірник",
+        "менеджер", "директор", "збиральник", "виробництво",
+        "логіст", "водій", "бухгалтер", "user"
+    ]
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Відображення історії
+    cur.execute("""
+        SELECT message, roles, sent_at
+        FROM announcements_history
+        ORDER BY sent_at DESC
+        LIMIT 20
+    """)
+    history = cur.fetchall()
+
+    if request.method == "POST":
+        selected_roles = request.form.getlist("roles")
+        message = request.form.get("message", "").strip()
+
+        if not selected_roles:
+            flash("Виберіть хоча б одну роль", "danger")
+            cur.close(); conn.close()
+            return redirect(url_for("announcements"))
+
+        if not message:
+            flash("Введіть повідомлення", "danger")
+            cur.close(); conn.close()
+            return redirect(url_for("announcements"))
+
+        placeholders = ', '.join(['%s'] * len(selected_roles))
+        cur.execute(f"""
+            SELECT telegram_id, name
+            FROM database_app_userdatatelegram
+            WHERE username IN ({placeholders})
+        """, selected_roles)
+        users = cur.fetchall()
+
+        # Зберігаємо історію
+        cur.execute("""
+            INSERT INTO announcements_history (message, roles)
+            VALUES (%s, %s)
+        """, (message, ','.join(selected_roles)))
+
+        sent_count = 0
+        for telegram_id, name in users:
+            try:
+                send_telegram_message(
+                    telegram_id,
+                    f"📢 <b>Оголошення</b>\n\n{message}"
+                )
+                sent_count += 1
+            except Exception as e:
+                print(f"Помилка відправки до {telegram_id}: {e}")
+
+        conn.commit()
+        flash(f"Повідомлення надіслано {sent_count} користувачам", "success")
+        cur.close(); conn.close()
+        return redirect(url_for("announcements"))
+
+    cur.close(); conn.close()
+    return render_template("announcements.html", roles=roles, history=history)
+
+    @app.route("/registration_requests")
+    def registration_requests():
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT telegram_id, name, phone FROM registration_requests")
+        requests = cur.fetchall()
+        count = len(requests)
+        cur.close(); conn.close()
+        return render_template("registration_requests.html", requests=requests, count=count)
 
 # ---------------- RUN ----------------
 

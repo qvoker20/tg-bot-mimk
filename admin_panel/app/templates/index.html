@@ -39,6 +39,9 @@
             <th style="width: 220px;">
               <i class="bi bi-shield me-1"></i>Роль
             </th>
+            <th style="width: 220px;">
+              <i class="bi bi-telephone me-1"></i>Телефон
+            </th>
           </tr>
         </thead>
         <tbody id="usersTbody">
@@ -46,10 +49,13 @@
           <tr class="row-click"
               data-id="{{ u[0] }}"
               data-name="{{ u[1]|e }}"
-              data-role="{{ u[2]|e }}">
+              data-role="{{ u[2]|e }}"
+              data-phone="{{ u[3]|e }}"
+              {% if u[0] == admin_telegram_id %}data-self="1"{% endif %}>
             <td class="font-monospace">{{ u[0] }}</td>
             <td>{{ u[1] }}</td>
             <td><span class="badge bg-primary">{{ u[2] }}</span></td>
+            <td>{{ u[3] }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -95,6 +101,11 @@
             <option value="user">user</option>
           </select>
 
+          <label class="form-label">
+            <i class="bi bi-telephone me-1"></i>Телефон
+          </label>
+          <input class="form-control mb-3" name="phone" id="mPhone" required>
+
           <div class="alert alert-info mt-3 mb-0 small">
             <i class="bi bi-info-circle me-1"></i>
             Після збереження користувач отримає повідомлення в Telegram.
@@ -127,18 +138,24 @@
   const mSelectedUser = document.getElementById('mSelectedUser');
   const mName = document.getElementById('mName');
   const mRole = document.getElementById('mRole');
+  const mPhone = document.getElementById('mPhone');  // New: Phone input
 
   document.getElementById('usersTbody').addEventListener('click', (e) => {
     const tr = e.target.closest('tr');
     if(!tr) return;
-
+    if(tr.dataset.self === "1") {
+      alert("Ви не можете редагувати або видалити себе!");
+      return;
+    }
     const id = tr.dataset.id || '';
     const name = tr.dataset.name || '';
     const role = tr.dataset.role || '';
+    const phone = tr.dataset.phone || '';  // New: Get phone
 
     mTelegramId.textContent = id;
     mSelectedUser.value = id;
     mName.value = name;
+    mPhone.value = phone;  // New: Set phone
 
     const roleExists = [...mRole.options].some(o => o.value === role);
     if(roleExists){

@@ -8,7 +8,6 @@ import logging, sqlite3, re, pytz, json, os, zipfile
 from triggers import daily_measurements_trigger, check_for_changes, check_empty_column16, notify_overdue_orders, check_delivery_true_trigger
 from datetime import timedelta, time, datetime, date
 from openai import OpenAI
-import chromadb
 import httpx
 import os
 from utils.imports import *
@@ -60,7 +59,6 @@ def get_user_data(user_id):
 OPENAI_API_KEY = "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"
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-
 # Глобальний словник для зберігання корист
 # увачів і їхніх запитів
 user_requests = {}
@@ -68,159 +66,6 @@ user_requests = {}
 # Встановлюємо часову зону
 local_timezone = pytz.timezone("Europe/Kiev")
 
-
-# Функція для отримання даних користувача з бази даних
-def save_messages_to_pdf(messages, filename):
-    from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-
-    pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
-    doc = SimpleDocTemplate(filename, pagesize=landscape(A4), rightMargin=10, leftMargin=10, topMargin=10, bottomMargin=10)
-    styles = getSampleStyleSheet()
-    styleN = ParagraphStyle(
-        'Normal',
-        parent=styles["Normal"],
-        fontName='DejaVu',
-        fontSize=11,
-        leading=14,
-    )
-    styleH = ParagraphStyle(
-        'Header',
-        parent=styles["Heading4"],
-        fontName='DejaVu',
-        fontSize=13,
-        leading=16,
-        textColor=colors.white,
-        alignment=1
-    )
-    styleGreen = ParagraphStyle('Green', parent=styleN, textColor=colors.green)
-    styleRed = ParagraphStyle('Red', parent=styleN, textColor=colors.red)
-    styleBlue = ParagraphStyle('Blue', parent=styleN, textColor=colors.HexColor("#1976d2"))
-    styleGray = ParagraphStyle('Gray', parent=styleN, textColor=colors.gray)
-
-    # Додаємо нові колонки
-    headers = [
-        "Номер", "Тип", "Назва", "Кількість", "Адаптатор",
-        "Дата подачі", "Взято в роботу", "Виробництво Виконавець", "Дата виконання", "Статус"
-    ]
-    data = [[Paragraph(h, styleH) for h in headers]]
-
-    for msg in messages:
-        fields = {
-            "Номер": "",
-            "Тип": "",
-            "Назва": "",
-            "Кількість": "",
-            "Адаптатор": "",
-            "Дата подачі": "",
-            "Взято в роботу": "",
-            "Виробництво Виконавець": "",
-            "Дата виконання": "",
-            "Статус": ""
-        }
-        for line in msg.split('\n'):
-            for key in fields:
-                # Підлаштовуємо під формат <b>Назва поля:</b> значення
-                if line.lower().startswith(f"<b>{key.lower()}"):
-                    val = line.split(":", 1)[-1].replace("</b>", "").strip()
-                    fields[key] = val
-
-        # Взято в роботу: символ і колір
-        taken_val = fields["Взято в роботу"].upper()
-        if "ТАК" in taken_val:
-            taken = Paragraph("<font color='green'><b>✓ ТАК</b></font>", styleGreen)
-        elif "НІ" in taken_val:
-            taken = Paragraph("<font color='red'><b>✗ НІ</b></font>", styleRed)
-        else:
-            taken = Paragraph(fields["Взято в роботу"], styleN)
-
-        # Статус: символ і колір
-        status_val = fields["Статус"].lower()
-        if "виконано" in status_val:
-            status = Paragraph("<font color='green'><b>✓ Виконано</b></font>", styleGreen)
-        elif "опрацювання" in status_val:
-            status = Paragraph("<font color='#1976d2'><b>↻ Опрацювання</b></font>", styleBlue)
-        else:
-            status = Paragraph(f"<font color='gray'>{fields['Статус']}</font>", styleGray)
-
-        row = [
-            Paragraph(fields["Номер"], styleN),
-            Paragraph(fields["Тип"], styleN),
-            Paragraph(fields["Назва"], styleN),
-            Paragraph(fields["Кількість"], styleN),
-            Paragraph(fields["Адаптатор"], styleN),
-            Paragraph(fields["Дата подачі"], styleN),
-            taken,
-            Paragraph(fields["Виробництво Виконавець"], styleN),
-            Paragraph(fields["Дата виконання"], styleN),
-            status
-        ]
-        data.append(row)
-
-    # Збільшуємо ширину колонок для альбомного формату
-    table = Table(
-        data,
-        repeatRows=1,
-        colWidths=[55, 55, 120, 55, 70, 70, 70, 90, 70, 70]
-    )
-    table_style = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1976d2")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,-1), 'DejaVu'),
-        ('FONTSIZE', (0,0), (-1,-1), 11),
-        ('BOTTOMPADDING', (0,0), (-1,0), 8),
-        ('BACKGROUND', (0,1), (-1,-1), colors.whitesmoke),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.whitesmoke, colors.lightblue]),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-    ])
-    table.setStyle(table_style)
-    doc.build([table])
-
-async def send_daily_backup(context: CallbackContext):
-    my_user_id = 403271614  # заміни на свій id
-
-    project_folder = r'C:\Users\user\Desktop\tg-bot'
-    backup_name = f"tg-bot-backup-{datetime.now().strftime('%Y-%m-%d')}.zip"
-    backup_path = os.path.join(project_folder, backup_name)
-
-    # Додаємо всі файли з папки (і вкладених папок)
-    with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(project_folder):
-            for file in files:
-                file_path = os.path.join(root, file)
-                # Не додаємо сам архів у архів!
-                if file_path == backup_path:
-                    continue
-                zipf.write(file_path, os.path.relpath(file_path, project_folder))
-
-    try:
-        with open(backup_path, "rb") as zip_file:
-            await context.bot.send_document(chat_id=my_user_id, document=zip_file, filename=backup_name)
-    except Exception as e:
-        logging.error(f"Не вдалося надіслати архів: {e}")
-
-    os.remove(backup_path)
-
-    # Видаляємо локальний архів (опціонально)
-    os.remove(backup_path)
-
-async def savefiletgbot_command(update: Update, context: CallbackContext):
-    """Викликає ручне резервне копіювання та надсилає архів у Telegram."""
-    await update.message.reply_text("⏳ Створюється резервна копія коду...")
-    await send_daily_backup(context)
-    await update.message.reply_text("✅ Резервна копія надіслана!")
-# Створюємо клієнта (базу даних буде створено у папці ./chroma_db)
-client = chromadb.PersistentClient(path="./chroma_db")
-# Створюємо порожню колекцію для знань (назва: "knowledge")
-collection = client.get_or_create_collection(
-    name="knowledge",
-    metadata={"description": "База знань для ручного наповнення"}
-)
 # Оновлена функція /start
 async def start(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
@@ -929,10 +774,8 @@ def main():
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))  # Обробник для головного меню
     application.add_handler(CallbackQueryHandler(mimk_ai_button_handler, pattern='^(ai_sales|ai_tech|ai_work)$'))
-    application.add_handler(CommandHandler('ai_log_pdf', send_ai_log_pdf))
     application.add_handler(CallbackQueryHandler(admin_button_handler, pattern='^(admin_register|admin_delete|admin_users|admin_announce|admin_change_role)$'))
     application.add_handler(CallbackQueryHandler(admin_change_role_callback_handler, pattern='^(change_role_page_.*|change_role_select_.*|change_role_back)$'))
-    application.add_handler(CommandHandler('savefiletgbot', savefiletgbot_command))
 
     job_queue = application.job_queue
 
@@ -940,12 +783,6 @@ def main():
         daily_measurements_trigger,  # Функція, яка буде виконуватися
         time(hour=8, minute=30, tzinfo=local_timezone)  # Час запуску (8:00 ранку за локальним часом)
     )
-
-        # Запускаємо завдання одразу після запуску бота
-    # job_queue.run_once(
-    #     daily_measurements_trigger,  # Функція, яка буде виконуватися
-    #     when=0  # Виконати одразу
-    # )
 
     # Додаємо періодичну перевірку змін (кожні 5 хвилин)
     job_queue.run_repeating(
@@ -959,18 +796,6 @@ def main():
         check_empty_column16,  # Функція для перевірки
         interval=timedelta(minutes=1),  # Інтервал перевірки
         first=0  # Почати одразу після запуску
-    )
-
-# Додаємо щоденне повідомлення про просрочені закупки о 9:00
-
-    # job_queue.run_once(
-    #     notify_overdue_orders,  # Функція, яка буде виконуватися
-    #     when=0  # Виконати одразу
-    # )
-
-    job_queue.run_daily(
-    send_daily_backup,
-    time=time(hour=23, minute=59, tzinfo=local_timezone)
     )
 
     application.run_polling()

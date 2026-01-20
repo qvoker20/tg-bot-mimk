@@ -10,7 +10,7 @@
 
     <style>
       body{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #e5e5e5;
         min-height: 100vh;
         display: flex;
         align-items: center;
@@ -48,7 +48,7 @@
                     <div class="text-center mb-4">
                         <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
                         <h4 class="mt-3 text-dark">Вхід адміністратора</h4>
-                        <p class="text-muted small">Введіть ім'я для отримання коду в Telegram</p>
+                        <p class="text-muted small">Введіть номер телефону для отримання коду в Telegram</p>
                     </div>
 
                     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -62,17 +62,10 @@
 
                     <form method="post">
                         <div class="mb-3">
-                            <label class="form-label text-muted">Ім'я користувача</label>
-                            <input type="text"
-                                   name="username"
-                                   class="form-control form-control-lg"
-                                   placeholder="admin"
-                                   required>
+                            <label class="form-label">Номер телефону</label>
+                            <input type="text" name="phone" class="form-control" required placeholder="380667289321 або 0667289321">
                         </div>
-
-                        <button class="btn btn-primary btn-lg w-100 mt-3">
-                            <i class="bi bi-send-fill me-2"></i>Отримати код
-                        </button>
+                        <button type="submit" class="btn btn-primary w-100">Увійти</button>
                     </form>
                 </div>
             </div>

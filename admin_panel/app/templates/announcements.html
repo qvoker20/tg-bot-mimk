@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Оголошення{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+      <h5 class="mb-0 text-dark">
+        <i class="bi bi-megaphone-fill text-primary me-2"></i>Оголошення
+      </h5>
+      <div class="text-muted small">Виберіть ролі та введіть повідомлення для відправки</div>
+    </div>
+
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">
+          <i class="bi bi-shield me-1"></i>Виберіть ролі (можна кілька)
+        </label>
+        <div class="row">
+          {% for role in roles %}
+          <div class="col-md-4 col-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="roles" value="{{ role }}" id="role_{{ role }}">
+              <label class="form-check-label" for="role_{{ role }}">
+                {{ role }}
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">
+          <i class="bi bi-chat-text me-1"></i>Повідомлення
+        </label>
+        <textarea class="form-control" name="message" rows="5" placeholder="Введіть текст оголошення..." required></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-send-fill me-1"></i>Надіслати оголошення
+      </button>
+    </form>
+    <h6 class="mt-4 mb-2 text-secondary"><i class="bi bi-clock-history me-1"></i>Історія оголошень</h6>
+    <div class="card mb-3">
+      <div class="card-body p-2" style="max-height: 300px; overflow-y: auto;">
+        {% if history %}
+        <ul class="list-group list-group-flush">
+            {% for msg, roles, sent_at in history %}
+            <li class="list-group-item small">
+            <b>{{ sent_at.strftime('%d.%m.%Y %H:%M') }}</b> &mdash;
+            <span class="text-muted">{{ roles }}</span><br>
+            {{ msg }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="text-muted">Історія порожня</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
