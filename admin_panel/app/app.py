@@ -457,15 +457,6 @@ def announcements():
     cur.close(); conn.close()
     return render_template("announcements.html", roles=roles, history=history)
 
-    @app.route("/registration_requests")
-    def registration_requests():
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT telegram_id, name, phone FROM registration_requests")
-        requests = cur.fetchall()
-        count = len(requests)
-        cur.close(); conn.close()
-        return render_template("registration_requests.html", requests=requests, count=count)
 
 # ---------------- RUN ----------------
 
