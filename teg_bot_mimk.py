@@ -153,13 +153,14 @@ async def registration_callback(update: Update, context: CallbackContext):
             conn = get_pg_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO registration_requests (telegram_id, first_name, last_name, position, phone_number) VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO registration_requests (telegram_id, first_name, last_name, position, phone_number, status) VALUES (%s, %s, %s, %s, %s, %s)",
                 (
                     query.from_user.id,
                     context.user_data["reg_first_name"],
                     context.user_data["reg_last_name"],
                     context.user_data["reg_position"],
-                    context.user_data["reg_phone"]
+                    context.user_data["reg_phone"],
+                    "pending" 
                 )
             )
             conn.commit()
