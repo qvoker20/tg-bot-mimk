@@ -270,10 +270,10 @@ async def handle_text(update: Update, context: CallbackContext):
     if not user_data:
         await notify_admin_about_restriction(update, context, user_id)
         await update.message.reply_text(
-            "⚠️ У вас немає доступу до цього бота. Зверніться до вашого керівника.\n"
+            "⚠️ У вас немає доступу до цього бота. Передійти до реєстрації /start.\n"
             "Або до адміністратора @mindalovv"
         )
-        return
+        return  
     
     # Ініціалізуємо змінну result за замовчуванням
     result = []
