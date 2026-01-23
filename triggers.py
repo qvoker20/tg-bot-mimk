@@ -18,8 +18,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-
 PG_CONN = {
     "host": os.environ.get("PG_HOST"),
     "port": int(os.environ.get("PG_PORT")),
@@ -389,6 +387,47 @@ def save_state(state):
     """Зберігає стан у JSON-файл."""
     with open(STATE_FILE_2, "w", encoding="utf-8") as file:
         json.dump(list(state), file, ensure_ascii=False, indent=4)  # Зберігаємо множину як список
+
+# --- ДОДАНО: допоміжні тригери, які імпортуються у головному файлі, але були відсутні ---
+async def check_empty_column16(context: CallbackContext):
+    """
+    Перевіряє записи у таблиці second_sheet_data з порожнім значенням у column16.
+    Це базовий тригер-стаб, щоб уникнути ImportError.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM second_sheet_data
+            WHERE column16 IS NULL OR TRIM(column16) = ''
+            """
+        )
+        count = cursor.fetchone()[0]
+        logging.info(f"check_empty_column16: знайдено {count} запис(ів) з порожнім column16")
+    except Exception as e:
+        logging.error(f"Помилка у check_empty_column16: {e}")
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+async def check_delivery_true_trigger(context: CallbackContext):
+    """
+    Заглушка для тригера перевірки доставок (TRUE). Реалізацію можна доповнити пізніше.
+    Поточна версія лише фіксує факт виклику, щоб уникнути падіння сервісу.
+    """
+    try:
+        logging.debug("check_delivery_true_trigger: виклик тригера (заглушка)")
+    except Exception as e:
+        logging.error(f"Помилка у check_delivery_true_trigger: {e}")
 
 
 

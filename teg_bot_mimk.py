@@ -5,7 +5,7 @@ from googleapiclient.discovery import build
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import CommandHandler, Application, CallbackContext, MessageHandler, CallbackQueryHandler, filters
 import logging, sqlite3, re, pytz, json, os, zipfile
-from triggers import daily_measurements_trigger, check_for_changes, check_empty_column16, notify_overdue_orders, check_delivery_true_trigger
+from triggers import daily_measurements_trigger, check_for_changes, notify_overdue_orders, check_delivery_true_trigger
 from datetime import timedelta, time, datetime, date
 from openai import OpenAI
 import httpx
@@ -788,13 +788,6 @@ def main():
     # Додаємо періодичну перевірку змін (кожні 5 хвилин)
     job_queue.run_repeating(
         check_for_changes,  # Функція для перевірки змін
-        interval=timedelta(minutes=1),  # Інтервал перевірки
-        first=0  # Почати одразу після запуску
-    )
-
-    # Запускаємо перевірку порожніх значень у column16 кожну хвилину
-    job_queue.run_repeating(
-        check_empty_column16,  # Функція для перевірки
         interval=timedelta(minutes=1),  # Інтервал перевірки
         first=0  # Почати одразу після запуску
     )
