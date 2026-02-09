@@ -30,9 +30,6 @@ def get_pg_connection():
 
 async def show_assemblers_menu(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("Мої задачі на сьогодні", callback_data="asm_my_tasks_today")],
-        [InlineKeyboardButton("План на 4 дні", callback_data="asm_plan_4_days")],
-        [InlineKeyboardButton("Потрібна робота", callback_data="asm_need_work")],
         [InlineKeyboardButton("Мій профіль", callback_data="asm_my_profile")],
         [InlineKeyboardButton("Назад", callback_data="asm_back")],
     ]
