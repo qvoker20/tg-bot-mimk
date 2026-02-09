@@ -1,4 +1,8 @@
 
+from psycopg2.extras import execute_batch
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+from dotenv import load_dotenv
 import asyncio
 import socket
 import time
@@ -27,6 +31,15 @@ GOOGLE_SHEET_RZM_ID_NAME = 'Матеріали'
 GOOGLE_SHEET_RZM_ID_REGISTER = 'реєстр'
 GOOGLE_SHEET_RZM_ID_REGISTER_CLOSED = 'Виконані'
 
+PLAN_GOOGLE_SHEET_ID = os.environ.get(
+    "PLAN_GOOGLE_SHEET_ID",
+    "1I10uroNnT9yL6vcfsHi2WG3tBAc6tbGTxqUBbe7NLv8"
+)
+PLAN_SHEET_NAME = "data-plan"
+PLAN_DATE_SHEET_NAME = "data-plan-date"
+REC_SHEET_NAME = "data-rec"
+USERS_SHEET_NAME = "users"
+
 JSON_KEY_FILE = os.environ.get('JSON_KEY_FILE')
 
 # =========================
@@ -49,7 +62,10 @@ RZM_TABLE_NAME = 'rzm_data'
 REGISTER_TABLE_NAME = 'register_data'
 TABLE_NAME_DOP = 'sheet_data_dop'
 REGISTER_TABLE_NAME_CLOSED = 'register_data_closed'
-
+DATA_PLAN_TABLE_NAME = 'data_plan'
+DATA_PLAN_DATE_TABLE_NAME = 'data_plan_date'
+DATA_REC_TABLE_NAME = 'data_rec'
+USERS_TABLE_NAME = 'users'
 
 # =========================
 # Utilities
@@ -73,6 +89,10 @@ def is_work_time():
 
 
 def authenticate_google_sheets(json_key_file):
+    if not json_key_file:
+        raise ValueError("JSON_KEY_FILE не задано в .env")
+    if not os.path.exists(json_key_file):
+        raise FileNotFoundError(f"Не знайдено файл сервісного акаунта: {json_key_file}")
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     credentials = ServiceAccountCredentials.from_json_keyfile_name(json_key_file, scope)
     client = gspread.authorize(credentials)
@@ -478,10 +498,16 @@ async def update_google_sheets():
         sheet_dop = client.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_DOP)
         register_sheet_closed = client.open_by_key(GOOGLE_SHEET_RZM_ID).worksheet(GOOGLE_SHEET_RZM_ID_REGISTER_CLOSED)
 
+        # plan sheets
+        plan_sheet = client.open_by_key(PLAN_GOOGLE_SHEET_ID).worksheet(PLAN_SHEET_NAME)
+        plan_date_sheet = client.open_by_key(PLAN_GOOGLE_SHEET_ID).worksheet(PLAN_DATE_SHEET_NAME)
+        rec_sheet = client.open_by_key(PLAN_GOOGLE_SHEET_ID).worksheet(REC_SHEET_NAME)
+        users_sheet = client.open_by_key(PLAN_GOOGLE_SHEET_ID).worksheet(USERS_SHEET_NAME)
+
         conn = get_pg_connection()
         cursor = conn.cursor()
 
-        # Create tables
+        # Create fixed-schema tables once
         create_table(cursor)
         create_second_table(cursor)
         create_rzm_table(cursor)
@@ -491,38 +517,75 @@ async def update_google_sheets():
         conn.commit()
 
         while True:
+            # 3D замір
             data = fetch_data_from_sheet(sheet)
             insert_data_into_db(cursor, data)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(data)} rows into {TABLE_NAME}.")
 
+            # Список замірів
             second_data = fetch_data_from_sheet(second_sheet)
             insert_data_into_second_table(cursor, second_data)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(second_data)} rows into {SECOND_TABLE_NAME}.")
 
+            # Матеріали (з 4000-го рядка)
             rzm_data = fetch_data_from_sheet(rzm_sheet)
             insert_data_into_rzm_table(cursor, rzm_data)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted rows into {RZM_TABLE_NAME} from row 4000+.")
 
+            # реєстр
             register_data = fetch_data_from_sheet(register_sheet)
             insert_data_into_register_table(cursor, register_data)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data)} rows into {REGISTER_TABLE_NAME}.")
 
+            # 3D замір ДОП
             sheet_data_dop = fetch_data_from_sheet(sheet_dop)
             insert_data_into_table_dop(cursor, sheet_data_dop)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(sheet_data_dop)} rows into {TABLE_NAME_DOP}.")
 
+            # Виконані
             register_data_closed = fetch_data_from_sheet(register_sheet_closed)
             insert_data_into_register_table_closed(cursor, register_data_closed)
             conn.commit()
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data_closed)} rows into {REGISTER_TABLE_NAME_CLOSED}.")
 
-            await asyncio.sleep(180)
+            # data-plan (dynamic width)
+            plan_data = fetch_data_from_sheet(plan_sheet)
+            plan_cols = get_max_columns(plan_data)
+            create_dynamic_table(cursor, DATA_PLAN_TABLE_NAME, plan_cols)
+            insert_rows_dynamic(cursor, DATA_PLAN_TABLE_NAME, plan_data, plan_cols)
+            conn.commit()
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(plan_data)} rows into {DATA_PLAN_TABLE_NAME} ({plan_cols} cols).")
 
+            # data-plan-date (dynamic width)
+            plan_date_data = fetch_data_from_sheet(plan_date_sheet)
+            plan_date_cols = get_max_columns(plan_date_data)
+            create_dynamic_table(cursor, DATA_PLAN_DATE_TABLE_NAME, plan_date_cols)
+            insert_rows_dynamic(cursor, DATA_PLAN_DATE_TABLE_NAME, plan_date_data, plan_date_cols)
+            conn.commit()
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(plan_date_data)} rows into {DATA_PLAN_DATE_TABLE_NAME} ({plan_date_cols} cols).")
+
+            # data-rec (dynamic width)
+            rec_data = fetch_data_from_sheet(rec_sheet)
+            rec_cols = get_max_columns(rec_data)
+            create_dynamic_table(cursor, DATA_REC_TABLE_NAME, rec_cols)
+            insert_rows_dynamic(cursor, DATA_REC_TABLE_NAME, rec_data, rec_cols)
+            conn.commit()
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(rec_data)} rows into {DATA_REC_TABLE_NAME} ({rec_cols} cols).")
+
+            # users (dynamic width)
+            users_data = fetch_data_from_sheet(users_sheet)
+            users_cols = get_max_columns(users_data)
+            create_dynamic_table(cursor, USERS_TABLE_NAME, users_cols)
+            insert_rows_dynamic(cursor, USERS_TABLE_NAME, users_data, users_cols)
+            conn.commit()
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(users_data)} rows into {USERS_TABLE_NAME} ({users_cols} cols).")
+
+            await asyncio.sleep(180)
     except Exception as e:
         print(f"Помилка під час оновлення Google Sheets: {e}")
         raise
@@ -537,6 +600,38 @@ async def update_google_sheets():
                 conn.close()
         except Exception:
             pass
+
+def get_max_columns(data):
+    return max((len(row) for row in data), default=1)
+
+
+def create_dynamic_table(cursor, table_name, column_count):
+    cursor.execute(f"DROP TABLE IF EXISTS {table_name};")
+    cols_sql = ", ".join([f"column{i} TEXT" for i in range(1, column_count + 1)])
+    cursor.execute(
+        f"CREATE TABLE IF NOT EXISTS {table_name} (id SERIAL PRIMARY KEY, {cols_sql});"
+    )
+
+
+def insert_rows_dynamic(cursor, table_name, data, column_count):
+    cursor.execute(f"TRUNCATE TABLE {table_name} RESTART IDENTITY;")
+    cols = ", ".join([f"column{i}" for i in range(1, column_count + 1)])
+    placeholders = ", ".join(["%s"] * column_count)
+    query = f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})"
+
+    rows_to_insert = []
+    for row in data:
+        # skip fully empty rows
+        if all(v is None or str(v).strip() == "" for v in row):
+            continue
+        # trim/pad
+        row = row[:column_count]
+        if len(row) < column_count:
+            row.extend([None] * (column_count - len(row)))
+        rows_to_insert.append(row)
+
+    if rows_to_insert:
+        execute_batch(cursor, query, rows_to_insert, page_size=500)
 
 # =========================
 # Entrypoint

@@ -1,0 +1,29 @@
+CREATE TABLE trips (
+    id SERIAL PRIMARY KEY,
+    driver TEXT,
+    status TEXT,
+    description TEXT,
+    address TEXT,
+    cargo_volume TEXT,
+    time TEXT,
+    time_from TEXT,
+    time_to TEXT,
+    date DATE,
+    proxy TEXT,
+    payment TEXT,
+    notes TEXT,
+    start_datetime TIMESTAMP,
+    end_datetime TIMESTAMP,
+    duration INTERVAL
+);
+
+CREATE TABLE requests (
+    id SERIAL PRIMARY KEY,
+    description TEXT,
+    photo_url TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    created_by TEXT,
+    status TEXT,
+    assigned_at TIMESTAMP,
+    cancelled_at TIMESTAMP
+);
