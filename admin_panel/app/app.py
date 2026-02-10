@@ -6,6 +6,9 @@ import psycopg2
 import requests
 import random
 import os
+import json
+from datetime import datetime
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 # ---------------- CONFIG ----------------
 
@@ -24,10 +27,36 @@ PG_CONN = {
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 # ---------------- HELPERS ----------------
 
 def get_db_connection():
     return psycopg2.connect(**PG_CONN)
+
+# --- NEW: лічильник активних заявок ---
+def get_pending_requests_count() -> int:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # TODO: за потреби підкоригуй назву таблиці/умову статусу
+        cur.execute(
+            "SELECT COUNT(*) FROM registration_requests WHERE status = 'pending'"
+        )
+        return cur.fetchone()[0]
+    except Exception:
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+@app.context_processor
+def inject_counts():
+    return {
+        "pending_requests_count": get_pending_requests_count()
+    }
+
 
 def get_admin_telegram_id():
     conn = get_db_connection()
@@ -44,21 +73,56 @@ def get_admin_telegram_id():
     conn.close()
     return row[0] if row else None
 
-def send_telegram_message(chat_id, text, reply_markup=None):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+def send_telegram_message(chat_id, text, reply_markup=None, file_path=None, mime=None):
+    """
+    Якщо file_path передано:
+      - для image/* відправляє як фото
+      - для інших типів відправляє як документ
+    Інакше — звичайне текстове повідомлення.
+    """
     try:
-        payload = {
-            "chat_id": int(chat_id),
-            "text": text,
-            "parse_mode": "HTML",
-        }
-        if reply_markup:
-            payload["reply_markup"] = reply_markup
-        r = requests.post(url, json=payload, timeout=8)
-        print("Telegram:", r.status_code, r.text)
+        chat_id = int(chat_id)
+    except Exception:
+        print("Невірний chat_id:", chat_id)
+        return
+
+    try:
+        if file_path:
+            # Відправка фото / документа
+            if mime and mime.startswith("image/"):
+                method = "sendPhoto"
+                file_field = "photo"
+            else:
+                method = "sendDocument"
+                file_field = "document"
+
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
+            data = {
+                "chat_id": chat_id,
+                "caption": text or "",
+                "parse_mode": "HTML",
+            }
+            if reply_markup:
+                data["reply_markup"] = json.dumps(reply_markup)
+
+            with open(file_path, "rb") as f:
+                files = {file_field: f}
+                r = requests.post(url, data=data, files=files, timeout=20)
+                print("Telegram file:", r.status_code, r.text)
+        else:
+            # Звичайне текстове повідомлення
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+            }
+            if reply_markup:
+                payload["reply_markup"] = reply_markup
+            r = requests.post(url, json=payload, timeout=8)
+            print("Telegram:", r.status_code, r.text)
     except Exception as e:
         print("Telegram error:", e)
-
 
 # ---------------- AUTH ----------------
 
@@ -146,16 +210,26 @@ def index():
 
     search_name = request.args.get("search_name", "").strip()
     search_id = request.args.get("search_id", "").strip()
+    search_role = request.args.get("search_role", "").strip()
 
     conn = get_db_connection()
     cur = conn.cursor()
+
+    # Отримуємо тільки ті ролі, які реально є в БД
+    cur.execute("""
+        SELECT DISTINCT username
+        FROM database_app_userdatatelegram
+        WHERE username IS NOT NULL
+        ORDER BY username
+    """)
+    roles = [r[0] for r in cur.fetchall()]
 
     query = """
         SELECT telegram_id, name, username, phone_number
         FROM database_app_userdatatelegram
         WHERE 1=1
     """
-    params = []
+    params: list[str] = []
 
     if search_name:
         query += " AND name ILIKE %s"
@@ -165,10 +239,15 @@ def index():
         query += " AND CAST(telegram_id AS TEXT) ILIKE %s"
         params.append(f"%{search_id}%")
 
+    if search_role:
+        query += " AND username = %s"
+        params.append(search_role)
+
     query += " ORDER BY name NULLS LAST"
 
     cur.execute(query, params)
     users = cur.fetchall()
+
     cur.close()
     conn.close()
 
@@ -179,6 +258,8 @@ def index():
         users=users,
         search_name=search_name,
         search_id=search_id,
+        search_role=search_role,
+        roles=roles,
         admin_telegram_id=admin_telegram_id
     )
 
@@ -392,16 +473,117 @@ def announcements():
     if not session.get("is_admin"):
         return redirect(url_for("login"))
 
-    roles = [
-        "admin", "adminpre", "конструктор", "замірник",
-        "менеджер", "директор", "збиральник", "виробництво",
-        "логіст", "водій", "бухгалтер", "user"
-    ]
-
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Відображення історії
+    # Ролі з БД
+    cur.execute("""
+        SELECT DISTINCT username
+        FROM database_app_userdatatelegram
+        WHERE username IS NOT NULL
+        ORDER BY username
+    """)
+    roles = [r[0] for r in cur.fetchall()]
+
+    # Усі користувачі для селекту
+    cur.execute("""
+        SELECT telegram_id, COALESCE(name, ''), COALESCE(username, '')
+        FROM database_app_userdatatelegram
+        WHERE telegram_id IS NOT NULL
+        ORDER BY COALESCE(name, ''), telegram_id
+    """)
+    users = cur.fetchall()
+
+    if request.method == "POST":
+        selected_roles = request.form.getlist("roles")
+        selected_user_ids = request.form.getlist("target_users")  # список telegram_id як str
+        message = request.form.get("message", "").strip()
+
+        # кілька файлів
+        uploads = request.files.getlist("attachment")
+        file_infos: list[tuple[str, str | None]] = []  # (path, mime)
+
+        # немає ні тексту, ні файлів
+        if (not message) and (not uploads or all(not f.filename for f in uploads)):
+            flash("Введіть повідомлення або додайте хоча б один файл/фото.", "danger")
+            cur.close(); conn.close()
+            return redirect(url_for("announcements"))
+
+        # зберігаємо всі файли
+        for upload in uploads:
+            if not upload or not upload.filename:
+                continue
+            mime = upload.mimetype
+            filename = datetime.now().strftime("%Y%m%d_%H%M%S_") + secure_filename(upload.filename)
+            file_path = os.path.join(UPLOAD_DIR, filename)
+            upload.save(file_path)
+            file_infos.append((file_path, mime))
+
+        recipients: list[int] = []
+        history_roles_text = ""
+
+        if selected_user_ids:
+            # розсилка тільки обраним користувачам
+            for uid in selected_user_ids:
+                try:
+                    recipients.append(int(uid))
+                except ValueError:
+                    continue
+            history_roles_text = "users:" + ",".join(selected_user_ids)
+        else:
+            # розсилка за ролями
+            if not selected_roles:
+                flash("Виберіть хоча б одну роль або користувача.", "danger")
+                cur.close(); conn.close()
+                return redirect(url_for("announcements"))
+
+            cur.execute("""
+                SELECT telegram_id
+                FROM database_app_userdatatelegram
+                WHERE username = ANY(%s) AND telegram_id IS NOT NULL
+            """, (selected_roles,))
+            recipients = [row[0] for row in cur.fetchall()]
+            history_roles_text = ", ".join(selected_roles)
+
+        if not recipients:
+            flash("Не знайдено жодного отримувача.", "warning")
+            cur.close(); conn.close()
+            return redirect(url_for("announcements"))
+
+        text = f"📢 <b>Оголошення</b>\n\n{message}" if message else "📢 <b>Оголошення</b>"
+
+        sent_count = 0
+        for chat_id in recipients:
+            try:
+                if file_infos:
+                    first = True
+                    for path, mime in file_infos:
+                        caption = text if first else ""
+                        send_telegram_message(
+                            chat_id,
+                            caption,
+                            file_path=path,
+                            mime=mime
+                        )
+                        first = False
+                else:
+                    send_telegram_message(chat_id, text)
+                sent_count += 1
+            except Exception as e:
+                print(f"Помилка відправки до {chat_id}: {e}")
+
+        # запис в історію
+        cur.execute(
+            "INSERT INTO announcements_history (message, roles) VALUES (%s, %s)",
+            (message, history_roles_text)
+        )
+        conn.commit()
+
+        flash(f"Повідомлення надіслано {sent_count} отримувачам", "success")
+        cur.close(); conn.close()
+        return redirect(url_for("announcements"))
+
+    # GET: історія
     cur.execute("""
         SELECT message, roles, sent_at
         FROM announcements_history
@@ -410,52 +592,8 @@ def announcements():
     """)
     history = cur.fetchall()
 
-    if request.method == "POST":
-        selected_roles = request.form.getlist("roles")
-        message = request.form.get("message", "").strip()
-
-        if not selected_roles:
-            flash("Виберіть хоча б одну роль", "danger")
-            cur.close(); conn.close()
-            return redirect(url_for("announcements"))
-
-        if not message:
-            flash("Введіть повідомлення", "danger")
-            cur.close(); conn.close()
-            return redirect(url_for("announcements"))
-
-        placeholders = ', '.join(['%s'] * len(selected_roles))
-        cur.execute(f"""
-            SELECT telegram_id, name
-            FROM database_app_userdatatelegram
-            WHERE username IN ({placeholders})
-        """, selected_roles)
-        users = cur.fetchall()
-
-        # Зберігаємо історію
-        cur.execute("""
-            INSERT INTO announcements_history (message, roles)
-            VALUES (%s, %s)
-        """, (message, ','.join(selected_roles)))
-
-        sent_count = 0
-        for telegram_id, name in users:
-            try:
-                send_telegram_message(
-                    telegram_id,
-                    f"📢 <b>Оголошення</b>\n\n{message}"
-                )
-                sent_count += 1
-            except Exception as e:
-                print(f"Помилка відправки до {telegram_id}: {e}")
-
-        conn.commit()
-        flash(f"Повідомлення надіслано {sent_count} користувачам", "success")
-        cur.close(); conn.close()
-        return redirect(url_for("announcements"))
-
     cur.close(); conn.close()
-    return render_template("announcements.html", roles=roles, history=history)
+    return render_template("announcements.html", roles=roles, users=users, history=history)
 
 
 # ---------------- RUN ----------------

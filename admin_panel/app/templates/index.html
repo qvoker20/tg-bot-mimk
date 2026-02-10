@@ -13,13 +13,24 @@
     </div>
 
     <form class="row g-3 mb-4" method="get" action="{{ url_for('index') }}">
-      <div class="col-lg-5 col-12">
+      <div class="col-lg-4 col-12">
         <input class="form-control" name="search_name" placeholder="Пошук по імені" value="{{ search_name }}">
       </div>
-      <div class="col-lg-4 col-12">
+
+      <div class="col-lg-3 col-12">
+        <select class="form-select" name="search_role">
+          <option value="">Усі ролі</option>
+          {% for r in roles %}
+          <option value="{{ r }}" {% if r == search_role %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-lg-3 col-12">
         <input class="form-control" name="search_id" placeholder="Telegram ID" value="{{ search_id }}">
       </div>
-      <div class="col-lg-3 col-12">
+
+      <div class="col-lg-2 col-12">
         <button class="btn btn-primary w-100 btn-mobile-full" type="submit">
           <i class="bi bi-search me-1"></i>Пошук
         </button>
@@ -105,7 +116,8 @@
             <option value="бухгалтер">бухгалтер</option>
             <option value="відвідувач">відвідувач</option>
           </select>
-          <label class="form-label">
+
+          <label class="form-label mt-3">
             <i class="bi bi-telephone me-1"></i>Телефон
           </label>
           <input class="form-control mb-3" name="phone" id="mPhone" required>
@@ -142,29 +154,29 @@
   const mSelectedUser = document.getElementById('mSelectedUser');
   const mName = document.getElementById('mName');
   const mRole = document.getElementById('mRole');
-  const mPhone = document.getElementById('mPhone');  // New: Phone input
+  const mPhone = document.getElementById('mPhone');
 
   document.getElementById('usersTbody').addEventListener('click', (e) => {
     const tr = e.target.closest('tr');
-    if(!tr) return;
-    if(tr.dataset.self === "1") {
+    if (!tr) return;
+    if (tr.dataset.self === "1") {
       alert("Ви не можете редагувати або видалити себе!");
       return;
     }
     const id = tr.dataset.id || '';
     const name = tr.dataset.name || '';
     const role = tr.dataset.role || '';
-    const phone = tr.dataset.phone || '';  // New: Get phone
+    const phone = tr.dataset.phone || '';
 
     mTelegramId.textContent = id;
     mSelectedUser.value = id;
     mName.value = name;
-    mPhone.value = phone;  // New: Set phone
+    mPhone.value = phone;
 
     const roleExists = [...mRole.options].some(o => o.value === role);
-    if(roleExists){
+    if (roleExists) {
       mRole.value = role;
-    } else {
+    } else if (role) {
       const opt = new Option(role, role, true, true);
       mRole.add(opt, 0);
       mRole.value = role;

@@ -8,10 +8,12 @@
       <h5 class="mb-0 text-dark">
         <i class="bi bi-megaphone-fill text-primary me-2"></i>Оголошення
       </h5>
-      <div class="text-muted small">Виберіть ролі та введіть повідомлення для відправки</div>
+      <div class="text-muted small">Виберіть ролі або конкретних користувачів та введіть повідомлення</div>
     </div>
 
-    <form method="post">
+    <!-- ВАЖЛИВО: enctype для файлів -->
+    <form method="post" enctype="multipart/form-data">
+      <!-- 1) Відправка по ролях -->
       <div class="mb-3">
         <label class="form-label">
           <i class="bi bi-shield me-1"></i>Виберіть ролі (можна кілька)
@@ -28,31 +30,67 @@
           </div>
           {% endfor %}
         </div>
+        <div class="form-text">
+          Якщо нижче вибрати конкретних користувачів, ролі будуть проігноровані.
+        </div>
       </div>
 
+      <!-- 2) Конкретні користувачі -->
+      <div class="mb-3">
+        <label class="form-label">
+          <i class="bi bi-person me-1"></i>Користувачі (необов'язково)
+        </label>
+        <input class="form-control mb-2" id="userSearch"
+               placeholder="Пошук по імені / ролі / Telegram ID">
+        <select class="form-select" id="targetUsers" name="target_users" multiple size="6">
+          {% for u in users %}
+          <option value="{{ u[0] }}">
+            {{ u[1] or 'Без імені' }} — {{ u[2] or 'роль не задана' }} ({{ u[0] }})
+          </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">
+          Можна вибрати кількох (Ctrl або ⌘ + клік). Якщо тут вибрано користувачів, розсилка йде тільки їм.
+        </div>
+      </div>
+
+      <!-- 3) Текст повідомлення -->
       <div class="mb-3">
         <label class="form-label">
           <i class="bi bi-chat-text me-1"></i>Повідомлення
         </label>
-        <textarea class="form-control" name="message" rows="5" placeholder="Введіть текст оголошення..." required></textarea>
+        <textarea class="form-control" name="message" rows="5" placeholder="Введіть текст оголошення..."></textarea>
+      </div>
+
+      <!-- 4) Файли / скріншоти -->
+      <div class="mb-3">
+        <label class="form-label">
+          <i class="bi bi-paperclip me-1"></i>Додати файли / фото (необов'язково)
+        </label>
+        <input class="form-control" type="file" name="attachment" multiple
+               accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip">
+        <div class="form-text">
+          Можна зробити скріншот і вставити його в це поле (Ctrl+V) у більшості сучасних браузерів.
+        </div>
       </div>
 
       <button type="submit" class="btn btn-success">
         <i class="bi bi-send-fill me-1"></i>Надіслати оголошення
       </button>
     </form>
+
     <h6 class="mt-4 mb-2 text-secondary"><i class="bi bi-clock-history me-1"></i>Історія оголошень</h6>
     <div class="card mb-3">
       <div class="card-body p-2" style="max-height: 300px; overflow-y: auto;">
         {% if history %}
         <ul class="list-group list-group-flush">
-            {% for msg, roles, sent_at in history %}
-            <li class="list-group-item small">
+          {% for msg, roles, sent_at in history %}
+          <li class="list-group-item small">
             <b>{{ sent_at.strftime('%d.%m.%Y %H:%M') }}</b> &mdash;
             <span class="text-muted">{{ roles }}</span><br>
             {{ msg }}
-            </li>
-            {% endfor %}
+          </li>
+          {% endfor %}
         </ul>
         {% else %}
         <div class="text-muted">Історія порожня</div>
@@ -61,4 +99,23 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Фільтр по користувачах (імʼя / роль / ID)
+  (function () {
+    const searchInput = document.getElementById('userSearch');
+    const select = document.getElementById('targetUsers');
+    if (!searchInput || !select) return;
+
+    searchInput.addEventListener('input', function () {
+      const q = this.value.toLowerCase();
+      Array.from(select.options).forEach(function (opt) {
+        const text = opt.text.toLowerCase();
+        opt.hidden = q && !text.includes(q);
+      });
+    });
+  })();
+</script>
 {% endblock %}
