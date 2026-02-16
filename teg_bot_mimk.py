@@ -23,6 +23,8 @@ from handlers.admin_handlers_custom import (
     notify_admin_about_restriction, admin_change_role_callback_handler
 )
 from handlers.assemblers_handlers import show_assemblers_menu, assembler_button_handler
+from handlers.logistics_handlers import show_logistics_menu, logistics_button_handler
+from handlers.assemblers_handlers import show_assemblers_menu, assembler_button_handler
 from utils.db_utils import get_user_data
 from googleapiclient.http import MediaFileUpload
 import psycopg2
@@ -103,7 +105,7 @@ async def start(update: Update, context: CallbackContext):
     # Формуємо меню
     keyboard = [
         ["Заміри", "Замірникам"],
-        ["Виробництво", "AI MIM-K"],
+        ["Виробництво", "Логістика"],
         ["Конструктор","Збиральникам"]
     ]
     if username == "admin":
@@ -666,6 +668,10 @@ async def handle_text(update: Update, context: CallbackContext):
         await show_assemblers_menu(update, context)
         return
 
+    if text == "Логістика":
+        await show_logistics_menu(update, context)
+        return
+
     if text == "AI MIM-K":
         # Перевірка доступу по username
         user_data = get_user_data(user_id)
@@ -781,7 +787,10 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_button_handler, pattern='^(admin_register|admin_delete|admin_users|admin_announce|admin_change_role)$'))
     application.add_handler(CallbackQueryHandler(admin_change_role_callback_handler, pattern='^(change_role_page_.*|change_role_select_.*|change_role_back)$'))
     application.add_handler(CallbackQueryHandler(assembler_button_handler, pattern='^(asm_.*)$'))
-
+    application.add_handler(CallbackQueryHandler(
+        logistics_button_handler,
+        pattern='^(logistics_request|logistics_driver_profile|logistics_menu_back|logistics_back)$'
+    ))
     job_queue = application.job_queue
 
     job_queue.run_daily(
