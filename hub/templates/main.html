@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>МІМК HUB</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+
+  <nav class="navbar">
+    <span class="navbar-title">МІМК HUB</span>
+    <div class="navbar-right">
+      <a href="/admin" id="adminLink" class="nav-btn hidden">
+        <span class="material-icons-round" style="font-size:16px">admin_panel_settings</span>
+        Адмін
+      </a>
+      <a href="/profile" class="nav-btn profile-btn">
+        <span class="material-icons-round" style="font-size:16px">person</span>
+        <span id="navName"></span>
+      </a>
+      <button class="theme-toggle" id="themeToggle">
+        <span class="material-icons-round">dark_mode</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Сервіси</h2>
+        <div class="service-search-wrap">
+          <span class="material-icons-round">search</span>
+          <input id="serviceSearch" type="text" placeholder="Пошук за назвою..." autocomplete="off" />
+          <button class="search-clear hidden" id="searchClear"><span class="material-icons-round">close</span></button>
+        </div>
+      </div>
+
+      <div class="service-block">
+        <div class="service-block-header">
+          <h3 class="service-block-title">
+            <span class="material-icons-round">language</span>
+            Сайти
+          </h3>
+          <div class="carousel-controls">
+            <button class="carousel-btn" id="sitePrev"><span class="material-icons-round">chevron_left</span></button>
+            <span class="carousel-info" id="sitePageInfo"></span>
+            <button class="carousel-btn" id="siteNext"><span class="material-icons-round">chevron_right</span></button>
+          </div>
+        </div>
+        <div class="cards-grid" id="siteCards"></div>
+      </div>
+
+      <div class="service-block">
+        <div class="service-block-header">
+          <h3 class="service-block-title">
+            <span class="material-icons-round">table_chart</span>
+            Гугл таблиці
+          </h3>
+          <div class="carousel-controls">
+            <button class="carousel-btn" id="sheetPrev"><span class="material-icons-round">chevron_left</span></button>
+            <span class="carousel-info" id="sheetPageInfo"></span>
+            <button class="carousel-btn" id="sheetNext"><span class="material-icons-round">chevron_right</span></button>
+          </div>
+        </div>
+        <div class="cards-grid" id="sheetCards"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- МОДАЛКА ДОДАВАННЯ -->
+  <div id="addModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Додати сервіс</h3>
+      <form id="addContractForm" enctype="multipart/form-data">
+        <input name="name" id="contractName" placeholder="Назва" required autocomplete="off" />
+        <div id="suggestions" class="suggestions"></div>
+        <input name="url" placeholder="Посилання" />
+        <textarea name="description" placeholder="Опис"></textarea>
+        <select name="service_type">
+          <option value="site">🌐 Сайт</option>
+          <option value="sheet">📊 Гугл таблиця</option>
+        </select>
+        <input type="file" name="image" accept="image/*" />
+        <div class="modal-actions">
+          <button type="submit">Додати</button>
+          <button type="button" id="closeModal">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- МОДАЛКА РЕДАГУВАННЯ -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Редагувати сервіс</h3>
+      <form id="editContractForm" enctype="multipart/form-data">
+        <input type="hidden" id="editId" />
+        <input name="name" id="editName" placeholder="Назва" required />
+        <input name="url" id="editUrl" placeholder="Посилання" />
+        <textarea name="description" id="editDescription" placeholder="Опис"></textarea>
+        <select name="service_type" id="editServiceType">
+          <option value="site">🌐 Сайт</option>
+          <option value="sheet">📊 Гугл таблиця</option>
+        </select>
+        <input type="file" name="image" accept="image/*" />
+        <div class="modal-actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" id="closeEditModal">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- МОДАЛКА ЛОГІН/ПАРОЛЬ -->
+  <div id="credsModal" class="modal hidden">
+    <div class="modal-content">
+      <h3><span class="material-icons-round" style="vertical-align:middle;margin-right:6px">key</span><span id="credsTitle"></span></h3>
+      <div class="creds-block">
+        <div class="creds-row">
+          <span class="creds-label">Логін</span>
+          <code id="credsLogin"></code>
+          <button onclick="copyText('credsLogin')"><span class="material-icons-round" style="font-size:16px">content_copy</span></button>
+        </div>
+        <div class="creds-row">
+          <span class="creds-label">Пароль</span>
+          <code id="credsPassword"></code>
+          <button onclick="copyText('credsPassword')"><span class="material-icons-round" style="font-size:16px">content_copy</span></button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="closeCredsModal">Закрити</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="fabAdd" class="fab hidden">
+    <span class="material-icons-round">add</span>
+    Додати
+  </button>
+
+  <!-- МОДАЛКА ДЕТАЛІ КАРТКИ -->
+  <div id="cardDetailModal" class="modal hidden">
+    <div class="modal-content card-detail-modal">
+      <div id="cardDetailImage" class="card-detail-img-wrap hidden">
+        <img id="cardDetailImg" src="" alt="" />
+      </div>
+      <div class="card-detail-body">
+        <div class="card-detail-type" id="cardDetailType"></div>
+        <h2 id="cardDetailName"></h2>
+        <p id="cardDetailDesc"></p>
+        <div class="card-detail-actions">
+          <a id="cardDetailLink" href="#" target="_blank" class="card-link-btn hidden">
+            <span class="material-icons-round" style="font-size:16px">open_in_new</span>
+            Перейти
+          </a>
+          <button id="cardDetailCredsBtn" class="card-creds-btn hidden">
+            <span class="material-icons-round" style="font-size:16px">key</span>
+            Мої дані
+          </button>
+        </div>
+
+        <!-- Inline credentials block -->
+        <div id="cardDetailCredsPanel" class="card-detail-creds-panel hidden">
+          <div class="creds-panel-header">
+            <span class="material-icons-round" style="font-size:15px">lock_open</span>
+            Доступи
+          </div>
+          <div class="creds-row">
+            <span class="creds-label">Логін</span>
+            <code id="cardDetailCredsLogin"></code>
+            <button onclick="copyText('cardDetailCredsLogin')"><span class="material-icons-round" style="font-size:15px">content_copy</span></button>
+          </div>
+          <div class="creds-row">
+            <span class="creds-label">Пароль</span>
+            <code id="cardDetailCredsPassword"></code>
+            <button onclick="copyText('cardDetailCredsPassword')"><span class="material-icons-round" style="font-size:15px">content_copy</span></button>
+          </div>
+        </div>
+
+        <div id="cardDetailAdminActions" class="admin-actions hidden">
+          <button id="cardDetailEditBtn" class="edit-btn">
+            <span class="material-icons-round" style="font-size:15px">edit</span> Редагувати
+          </button>
+          <button id="cardDetailDeleteBtn" class="delete-btn">
+            <span class="material-icons-round" style="font-size:15px">delete</span> Видалити
+          </button>
+        </div>
+      </div>
+      <button class="modal-close-x" id="closeCardDetail">
+        <span class="material-icons-round">close</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="/static/ui.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

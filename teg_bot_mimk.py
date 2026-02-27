@@ -11,7 +11,12 @@ from openai import OpenAI
 import httpx
 import os
 from utils.imports import *
-from handlers.zamiry_handlers import find_specific_order, button_searchpre, search, find_by_order_number, button_search, find_order_in_measuring,  find_order_in_measuring_specific, show_zamiry_menu, button, mservice, mservice_button, check_order_request
+from handlers.zamiry_handlers import (
+    find_specific_order, button_searchpre, search, find_by_order_number, button_search,
+    find_order_in_measuring, find_order_in_measuring_specific, show_zamiry_menu, button,
+    mservice, mservice_button, check_order_request,
+    handle_help_request_input, help_request_confirm  # <-- додати
+)
 from handlers.zamirnykam_functions import is_user_allowed, get_user_data, is_admin, show_zamirnykam_menu, show_zamiry_today, zamirnykam_button_handler, calculate_bonuses, show_zamiry_tomorrow
 from handlers.production_handlers import (
     show_production_menu,
@@ -280,6 +285,10 @@ async def handle_text(update: Update, context: CallbackContext):
     
     # Ініціалізуємо змінну result за замовчуванням
     result = []
+
+    handled = await handle_help_request_input(update, context)
+    if handled:
+        return
 
     if context.user_data.get("waiting_for_adaptation_request"):
         # Скидаємо стан
@@ -780,7 +789,7 @@ def main():
         production_button_handler,
         pattern='^(cut_menu|cut_submit|cut_confirm|cut_cancel|cut_search|issue_submit|issue_confirm|issue_cancel|back_to_production)$'
     ))
-
+    application.add_handler(CallbackQueryHandler(help_request_confirm, pattern='^help_(send|cancel)$'))
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))  # Обробник для головного меню
     application.add_handler(CallbackQueryHandler(mimk_ai_button_handler, pattern='^(ai_sales|ai_tech|ai_work)$'))

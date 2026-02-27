@@ -414,10 +414,9 @@ async def button(update: Update, context: CallbackContext):
         await mservice(update, context)
 
 async def mservice(update: Update, context: CallbackContext):
-
     keyboard = [
         [InlineKeyboardButton("➡️ Подача заміру на Адаптацію", callback_data='by_adaptation')],
-        [InlineKeyboardButton("➡️ Потрібна консультація", callback_data='by_help')],
+        [InlineKeyboardButton("➡️ Потрібна допомога (Залишити заявку)", callback_data='by_help')],
         [InlineKeyboardButton("⬅️ Назад", callback_data='back')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -436,33 +435,37 @@ async def mservice(update: Update, context: CallbackContext):
     if update.callback_query:
         try:
             sent_message = await update.callback_query.edit_message_text(
-                "⬇️ Вберіть тип допомги:", reply_markup=reply_markup
+                "⬇️ Вберіть тип допомоги:", reply_markup=reply_markup
             )
         except Exception as e:
             logging.warning(f"Не вдалося редагувати повідомлення: {e}")
             return
     else:
         sent_message = await update.message.reply_text(
-            "⬇️ Вберіть тип допомги:", reply_markup=reply_markup
+            "⬇️ Вберіть тип допомоги:", reply_markup=reply_markup
         )
 
     # Зберігаємо message_id нового повідомлення
-    context.user_data["mservice"] = sent_message.message_id
+    context.user_data["mservice_message_id"] = sent_message.message_id
 
 async def mservice_button(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
 
     if query.data == 'by_adaptation':
-        # Установлюємо стан для очікування тексту від користувача
         context.user_data["waiting_for_adaptation_request"] = True
-        await query.edit_message_text("❗️Введіть номер замовлення для адаптації за номером 6295, або за частиною 1 6295.")
+        await query.edit_message_text(
+            "❗️Введіть номер замовлення для адаптації за номером 6295, або за частиною 1 6295. "
+            "(Врахуйте, якщо замовлення вже є у списку на адаптацію, краще за всього залишити заявку на допомогу!)"
+        )
     elif query.data == 'by_help':
-        # Установлюємо стан для очікування тексту та фото від користувача
         context.user_data["waiting_for_help_request"] = True
-        await query.edit_message_text("⬇️ Введіть текст вашого запиту")
+        context.user_data.pop("pending_help_request_text", None)
+        await query.edit_message_text(
+            "⬇️ Введіть текст вашого запиту (Цей запит бачить весь відділ замірів. "
+            "Запит буде оброблено якнайшвидше):"
+        )
     elif query.data == 'back':
-        # Видаляємо поточне повідомлення
         try:
             await context.bot.delete_message(
                 chat_id=query.message.chat_id,
@@ -471,7 +474,6 @@ async def mservice_button(update: Update, context: CallbackContext):
         except Exception as e:
             logging.warning(f"Не вдалося видалити повідомлення: {e}")
 
-        # Повертаємося до головного меню
         await show_zamiry_menu(update, context)
 
 def check_order_request(text):
@@ -584,3 +586,59 @@ async def button_searchpre(update: Update, context: CallbackContext):
         # Повертаємося до головного меню
         await show_zamiry_menu(update, context)
 # функція для пошуку замовлення тендер\приватне в таблиці ЗАМІРИ
+
+async def handle_help_request_input(update: Update, context: CallbackContext):
+    """
+    Викликати з вашого текстового хендлера.
+    Працює лише коли користувач у стані waiting_for_help_request.
+    """
+    if not context.user_data.get("waiting_for_help_request"):
+        return False
+
+    if not update.message or not update.message.text:
+        return True
+
+    help_text = update.message.text.strip()
+    if not help_text:
+        await update.message.reply_text("⚠️ Текст запиту порожній. Введіть, будь ласка, запит.")
+        return True
+
+    context.user_data["pending_help_request_text"] = help_text
+    context.user_data["waiting_for_help_request"] = False
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Відправити", callback_data="help_send"),
+            InlineKeyboardButton("❌ Скасувати", callback_data="help_cancel"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"📝 Ваш запит:\n\n{help_text}\n\nПідтвердьте дію:",
+        reply_markup=reply_markup
+    )
+    return True
+
+async def help_request_confirm(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+
+    action = query.data
+    pending_text = context.user_data.get("pending_help_request_text")
+
+    if action == "help_cancel":
+        context.user_data.pop("pending_help_request_text", None)
+        context.user_data.pop("waiting_for_help_request", None)  # не чекаємо новий текст
+        await query.edit_message_text("❌ Запит скасовано.")
+        return
+
+    if action == "help_send":
+        if not pending_text:
+            await query.edit_message_text("⚠️ Немає тексту запиту для відправки.")
+            return
+
+        # ... ваша відправка в групу ...
+        context.user_data.pop("pending_help_request_text", None)
+        context.user_data.pop("waiting_for_help_request", None)
+        await query.edit_message_text("✅ Запит відправлено.")

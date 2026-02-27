@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>МІМК HUB — Вхід</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+
+  <!-- THEME TOGGLE -->
+  <div style="position:fixed;top:16px;right:16px;z-index:999">
+    <button class="theme-toggle" id="themeToggle">
+      <span class="material-icons-round">dark_mode</span>
+    </button>
+  </div>
+
+  <div class="login-wrap">
+    <div class="login-card">
+
+      <div class="login-logo">
+        <span class="material-icons-round" style="font-size:48px;color:var(--accent)">hub</span>
+      </div>
+      <div class="login-title">МІМК HUB</div>
+      <div class="login-sub">Введіть номер телефону для входу</div>
+
+      <div class="input-group">
+        <label><span class="material-icons-round" style="font-size:14px;vertical-align:middle">phone</span> Номер телефону</label>
+        <input id="phone" placeholder="+380..." type="tel" />
+      </div>
+
+      <button id="sendCodeBtn" class="btn-primary">
+        <span class="material-icons-round" style="font-size:18px">send</span>
+        Надіслати код
+      </button>
+
+      <div id="codeBlock" class="hidden" style="display:flex;flex-direction:column;gap:12px">
+        <div class="input-group">
+          <label><span class="material-icons-round" style="font-size:14px;vertical-align:middle">pin</span> Код з Telegram</label>
+          <input id="code" placeholder="6 цифр" type="number" maxlength="6" />
+        </div>
+        <button id="loginBtn" class="btn-primary">
+          <span class="material-icons-round" style="font-size:18px">login</span>
+          Увійти
+        </button>
+      </div>
+
+      <p id="msg"></p>
+    </div>
+  </div>
+
+  <script src="/static/ui.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

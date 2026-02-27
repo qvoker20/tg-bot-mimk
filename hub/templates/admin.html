@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Адмін — МІМК HUB</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+
+  <nav class="navbar">
+    <span class="navbar-title">МІМК HUB — Адмін</span>
+    <div class="navbar-right">
+      <a href="/" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">arrow_back</span>
+        Головна
+      </a>
+      <button class="theme-toggle" id="themeToggle">
+        <span class="material-icons-round">dark_mode</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2 class="section-title">Користувачі</h2>
+
+    <!-- ПОШУК / ФІЛЬТР -->
+    <div class="admin-filters">
+      <div class="search-input-wrap">
+        <span class="material-icons-round search-icon">search</span>
+        <input id="searchInput" placeholder="Пошук по імені..." />
+      </div>
+      <select id="roleFilter">
+        <option value="">Всі ролі</option>
+        <option value="admin">Адмін</option>
+        <option value="user">Користувач</option>
+      </select>
+    </div>
+
+    <!-- СПИСОК ЮЗЕРІВ -->
+    <div id="usersList"></div>
+  </div>
+
+  <!-- МОДАЛКА СЕРВІСІВ ЮЗЕРА -->
+  <div id="servicesModal" class="modal hidden">
+    <div class="modal-content modal-wide">
+      <h3>Сервіси користувача: <span id="modalUserName"></span></h3>
+
+      <!-- СПИСОК ПРИВ'ЯЗАНИХ СЕРВІСІВ -->
+      <div id="userServicesList"></div>
+
+      <!-- ФОРМА ДОДАВАННЯ -->
+      <h4 style="margin-top:16px;">Додати сервіс</h4>
+      <div class="add-service-form">
+        <select id="selectContract"></select>
+        <input id="serviceLogin" placeholder="Логін" />
+        <input id="servicePassword" placeholder="Пароль" type="text" />
+        <button id="addServiceBtn">Додати</button>
+      </div>
+
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" id="closeServicesModal">Закрити</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/ui.js"></script>
+  <script src="/static/admin.js"></script>
+</body>
+</html>

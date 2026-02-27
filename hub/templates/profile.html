@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профіль — МІМК HUB</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+
+  <nav class="navbar">
+    <span class="navbar-title">МІМК HUB</span>
+    <div class="navbar-right">
+      <a href="/" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">arrow_back</span>
+        Головна
+      </a>
+      <button class="theme-toggle" id="themeToggle">
+        <span class="material-icons-round">dark_mode</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="profile-card">
+
+      <!-- АВАТАР -->
+      <div class="profile-avatar">
+        <span id="avatarLetter">?</span>
+      </div>
+
+      <!-- ІМ'Я (редагується) -->
+      <div class="profile-field">
+        <label><span class="material-icons-round" style="font-size:14px">person</span> Ім'я</label>
+        <div class="profile-edit-row">
+          <input id="profileName" type="text" placeholder="Ім'я" />
+          <button id="saveNameBtn"><span class="material-icons-round" style="font-size:16px">save</span></button>
+        </div>
+      </div>
+
+      <!-- ТЕЛЕФОН (тільки читання) -->
+      <div class="profile-field">
+        <label><span class="material-icons-round" style="font-size:14px">phone</span> Телефон</label>
+        <div class="profile-readonly">
+          <span id="profilePhone">—</span>
+          <span class="readonly-hint">Не редагується</span>
+        </div>
+      </div>
+
+      <!-- USERNAME (тільки читання) -->
+      <div class="profile-field">
+        <label><span class="material-icons-round" style="font-size:14px">alternate_email</span> Username</label>
+        <div class="profile-readonly">
+          <span id="profileUsername">—</span>
+          <span class="readonly-hint">Не редагується</span>
+        </div>
+      </div>
+
+      <!-- РОЛЬ (тільки читання) -->
+      <div class="profile-field">
+        <label><span class="material-icons-round" style="font-size:14px">shield</span> Роль</label>
+        <div class="profile-readonly">
+          <span id="profileRole">—</span>
+          <span class="readonly-hint">Не редагується</span>
+        </div>
+      </div>
+
+      <!-- ВИЙТИ -->
+      <button id="logoutBtn" class="logout-btn">
+        <span class="material-icons-round" style="font-size:18px">logout</span>
+        Вийти
+      </button>
+
+    </div>
+  </div>
+
+  <script src="/static/ui.js"></script>
+  <script src="/static/profile.js"></script>
+</body>
+</html>
