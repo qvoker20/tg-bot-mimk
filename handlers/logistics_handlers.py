@@ -18,9 +18,7 @@ PG_CONN = {
     "password": os.environ.get("PG_PASSWORD")
 }
 
-# ...existing code...
-DRIVER_PROFILE_URL = "https://script.google.com/a/macros/mim-k.com/s/AKfycbwntmbkj-hiGviinO2yp7HxBSuJTtxUrp2omLJIUYoIlUt1yAwrUYa7MprTu1YZxf7MSw/exec"
-DRIVER_REQUEST_URL = "https://script.google.com/a/macros/mim-k.com/s/AKfycbww6AN75fUVTbRMsWejkM1EFNH5fqWY6orRUOuQJH8EM9EpULBJ-pRahIo9QDSaBHQN/exec"  # TODO: вставити лінк на “Заявка”
+
 
 DRIVER_PROFILE_URL = "https://script.google.com/a/macros/mim-k.com/s/AKfycbwntmbkj-hiGviinO2yp7HxBSuJTtxUrp2omLJIUYoIlUt1yAwrUYa7MprTu1YZxf7MSw/exec"
 DRIVER_REQUEST_URL = "https://script.google.com/a/macros/mim-k.com/s/AKfycbww6AN75fUVTbRMsWejkM1EFNH5fqWY6orRUOuQJH8EM9EpULBJ-pRahIo9QDSaBHQN/exec"
