@@ -45,7 +45,7 @@ async function loadContracts() {
   data.contracts.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c.id;
-    opt.textContent = c.name + (c.service_type === 'sheet' ? ' 📊' : ' 🌐');
+    opt.textContent = c.name + (c.service_type === 'sheet' ? ' (Таблиця)' : ' (Сайт)');
     sel.appendChild(opt);
   });
 }

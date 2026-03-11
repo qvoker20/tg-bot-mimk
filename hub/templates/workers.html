@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Робітники — МІМК HUB</title>
+  <link rel="icon" type="image/png" href="/static/branding/hub-favicon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="/" class="navbar-title nav-home-link"><img src="/static/branding/hub-logo.png" alt="МІМК HUB" class="brand-logo">МІМК HUB — Робітники</a>
+    <div class="navbar-right">
+      <a href="/" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">arrow_back</span>
+        Головна
+      </a>
+      <a href="/profile" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">person</span>
+        Профіль
+      </a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2 class="section-title">Робітники компанії</h2>
+    <div class="workers-filters">
+      <div class="search-input-wrap workers-search-wrap">
+        <span class="material-icons-round search-icon">search</span>
+        <input id="workersSearch" placeholder="Пошук: ім'я, телефон або посада (@username)" />
+      </div>
+      <select id="workersPositionFilter">
+        <option value="">Всі посади</option>
+      </select>
+    </div>
+    <div class="workers-table-wrap">
+      <table class="workers-table">
+        <thead>
+          <tr>
+            <th>Працівник</th>
+            <th>Телефон</th>
+            <th>Посада</th>
+          </tr>
+        </thead>
+        <tbody id="workersTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/static/ui.js"></script>
+  <script src="/static/workers.js"></script>
+</body>
+</html>

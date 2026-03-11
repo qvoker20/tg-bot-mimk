@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Адмін — МІМК HUB</title>
+  <link rel="icon" type="image/png" href="/static/branding/hub-favicon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
   <link rel="stylesheet" href="/static/style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
@@ -11,15 +13,16 @@
 <body>
 
   <nav class="navbar">
-    <span class="navbar-title">МІМК HUB — Адмін</span>
+    <a href="/" class="navbar-title nav-home-link"><img src="/static/branding/hub-logo.png" alt="МІМК HUB" class="brand-logo">МІМК HUB — Адмін</a>
     <div class="navbar-right">
       <a href="/" class="nav-btn">
         <span class="material-icons-round" style="font-size:16px">arrow_back</span>
         Головна
       </a>
-      <button class="theme-toggle" id="themeToggle">
-        <span class="material-icons-round">dark_mode</span>
-      </button>
+      <a href="/workers" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">groups</span>
+        Робітники
+      </a>
     </div>
   </nav>
 

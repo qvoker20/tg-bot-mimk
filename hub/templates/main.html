@@ -4,25 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>МІМК HUB</title>
+  <link rel="icon" type="image/png" href="/static/branding/hub-favicon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
   <link rel="stylesheet" href="/static/style.css">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 </head>
 <body>
 
   <nav class="navbar">
-    <span class="navbar-title">МІМК HUB</span>
+    <a href="/" class="navbar-title nav-home-link"><img src="/static/branding/hub-logo.png" alt="МІМК HUB" class="brand-logo">МІМК HUB</a>
     <div class="navbar-right">
       <a href="/admin" id="adminLink" class="nav-btn hidden">
         <span class="material-icons-round" style="font-size:16px">admin_panel_settings</span>
         Адмін
       </a>
+      <a href="/workers" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">groups</span>
+        Робітники
+      </a>
       <a href="/profile" class="nav-btn profile-btn">
         <span class="material-icons-round" style="font-size:16px">person</span>
         <span id="navName"></span>
       </a>
-      <button class="theme-toggle" id="themeToggle">
-        <span class="material-icons-round">dark_mode</span>
-      </button>
     </div>
   </nav>
 
@@ -79,8 +82,8 @@
         <input name="url" placeholder="Посилання" />
         <textarea name="description" placeholder="Опис"></textarea>
         <select name="service_type">
-          <option value="site">🌐 Сайт</option>
-          <option value="sheet">📊 Гугл таблиця</option>
+          <option value="site">Сайт</option>
+          <option value="sheet">Гугл таблиця</option>
         </select>
         <input type="file" name="image" accept="image/*" />
         <div class="modal-actions">
@@ -101,9 +104,13 @@
         <input name="url" id="editUrl" placeholder="Посилання" />
         <textarea name="description" id="editDescription" placeholder="Опис"></textarea>
         <select name="service_type" id="editServiceType">
-          <option value="site">🌐 Сайт</option>
-          <option value="sheet">📊 Гугл таблиця</option>
+          <option value="site">Сайт</option>
+          <option value="sheet">Гугл таблиця</option>
         </select>
+        <div class="service-users-box">
+          <div class="service-users-header">Підключені користувачі: <span id="editUsersCount">0</span></div>
+          <div id="editUsersList" class="service-users-list">Немає підключень</div>
+        </div>
         <input type="file" name="image" accept="image/*" />
         <div class="modal-actions">
           <button type="submit">Зберегти</button>

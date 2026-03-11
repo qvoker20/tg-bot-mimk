@@ -28,6 +28,22 @@ def get_db():
         password=os.getenv("PG_PASSWORD"),
     )
 
+def ensure_hub_tables():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hub_user_profiles (
+                    user_id BIGINT PRIMARY KEY,
+                    avatar_path TEXT,
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """
+            )
+            conn.commit()
+
+ensure_hub_tables()
+
 def normalize_phone(phone):
     return "".join([c for c in phone if c.isdigit() or c == "+"])
 
@@ -35,7 +51,13 @@ def get_user_by_phone(phone):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, telegram_id, name, phone_number, username FROM public.database_app_userdatatelegram WHERE phone_number=%s LIMIT 1",
+                """
+                SELECT u.id, u.telegram_id, u.name, u.phone_number, u.username, p.avatar_path
+                FROM public.database_app_userdatatelegram u
+                LEFT JOIN hub_user_profiles p ON p.user_id = u.id
+                WHERE u.phone_number=%s
+                LIMIT 1
+                """,
                 (phone,)
             )
             row = cur.fetchone()
@@ -44,14 +66,21 @@ def get_user_by_phone(phone):
             return {
                 "id": row[0], "telegram_id": row[1], "name": row[2],
                 "phone_number": row[3], "username": row[4],
-                "role": "admin" if (row[4] or "").lower() == "admin" else "user"
+                "role": "admin" if (row[4] or "").lower() == "admin" else "user",
+                "avatar_path": row[5]
             }
 
 def get_user_by_id(user_id):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, telegram_id, name, phone_number, username FROM public.database_app_userdatatelegram WHERE id=%s LIMIT 1",
+                """
+                SELECT u.id, u.telegram_id, u.name, u.phone_number, u.username, p.avatar_path
+                FROM public.database_app_userdatatelegram u
+                LEFT JOIN hub_user_profiles p ON p.user_id = u.id
+                WHERE u.id=%s
+                LIMIT 1
+                """,
                 (user_id,)
             )
             row = cur.fetchone()
@@ -60,7 +89,8 @@ def get_user_by_id(user_id):
             return {
                 "id": row[0], "telegram_id": row[1], "name": row[2],
                 "phone_number": row[3], "username": row[4],
-                "role": "admin" if (row[4] or "").lower() == "admin" else "user"
+                "role": "admin" if (row[4] or "").lower() == "admin" else "user",
+                "avatar_path": row[5]
             }
 
 def send_telegram_code(chat_id, code):
@@ -217,6 +247,14 @@ def delete_contract(contract_id):
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        os.path.join(app.static_folder, 'branding'),
+        'hub-favicon.png',
+        mimetype='image/png'
+    )
+
 @app.route("/api/contracts/search", methods=["GET"])
 def search_contracts():
     q = request.args.get("q", "").strip()
@@ -226,6 +264,29 @@ def search_contracts():
             rows = cur.fetchall()
             names = [r[0] for r in rows]
     return jsonify({"ok": True, "names": names})
+
+@app.route("/api/contracts/<int:contract_id>/users", methods=["GET"])
+def contract_users(contract_id):
+    if session.get("role") != "admin":
+        return jsonify({"ok": False, "error": "Доступ заборонено"}), 403
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT u.id, u.name, u.phone_number
+                FROM user_services us
+                JOIN public.database_app_userdatatelegram u ON u.id = us.user_id
+                WHERE us.contract_id = %s
+                ORDER BY u.name
+                """,
+                (contract_id,)
+            )
+            rows = cur.fetchall()
+            users = [
+                {"id": r[0], "name": r[1], "phone_number": r[2]}
+                for r in rows
+            ]
+    return jsonify({"ok": True, "users": users, "count": len(users)})
 
 # ─────────────────────────────────────────
 # АДМІН СТОРІНКА
@@ -357,6 +418,12 @@ def profile():
         return redirect("/login")
     return render_template("profile.html")
 
+@app.route("/workers", methods=["GET"])
+def workers_page():
+    if not session.get("user_id"):
+        return redirect("/login")
+    return render_template("workers.html")
+
 @app.route("/api/profile", methods=["PUT"])
 def update_profile():
     user_id = session.get("user_id")
@@ -374,6 +441,101 @@ def update_profile():
             )
             conn.commit()
     return jsonify({"ok": True})
+
+@app.route("/api/profile/avatar", methods=["PUT"])
+def update_profile_avatar():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"ok": False}), 401
+    file = request.files.get("avatar")
+    if not file or not file.filename:
+        return jsonify({"ok": False, "error": "Файл не обрано"}), 400
+    safe_name = secure_filename(file.filename or "")
+    ext = ""
+    if '.' in safe_name:
+        ext = safe_name.rsplit('.', 1)[1].lower()
+
+    if ext not in ALLOWED_EXTENSIONS:
+        mime_to_ext = {
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "jpg",
+        }
+        ext = mime_to_ext.get((file.mimetype or "").lower(), "")
+
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"ok": False, "error": "Невірний формат файлу. Дозволено: PNG/JPG/JPEG/GIF"}), 400
+    filename = f"avatar_{user_id}_{int(time.time())}.{ext}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO hub_user_profiles (user_id, avatar_path, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (user_id) DO UPDATE
+                SET avatar_path = EXCLUDED.avatar_path, updated_at = NOW()
+                """,
+                (user_id, filename)
+            )
+            conn.commit()
+
+    return jsonify({"ok": True, "avatar_path": filename})
+
+@app.route("/api/workers", methods=["GET"])
+def get_workers():
+    if not session.get("user_id"):
+        return jsonify({"ok": False}), 401
+    search = request.args.get("search", "").strip()
+    position = request.args.get("position", "").strip()
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            query = """
+                SELECT u.id, u.name, u.phone_number, u.username, p.avatar_path
+                FROM public.database_app_userdatatelegram u
+                LEFT JOIN hub_user_profiles p ON p.user_id = u.id
+                WHERE 1=1
+            """
+            params = []
+
+            if search:
+                query += """
+                    AND (
+                        u.name ILIKE %s
+                        OR u.phone_number ILIKE %s
+                        OR u.username ILIKE %s
+                    )
+                """
+                like = f"%{search}%"
+                params.extend([like, like, like])
+
+            if position:
+                query += " AND u.username ILIKE %s"
+                params.append(f"%{position}%")
+
+            query += " ORDER BY u.name"
+            cur.execute(
+                query,
+                params
+            )
+            rows = cur.fetchall()
+            workers = [
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "phone_number": r[2],
+                    "username": r[3],
+                    "position": ("@" + r[3]) if r[3] else "Не вказано",
+                    "is_admin": (r[3] or "").lower() == "admin",
+                    "avatar_path": r[4],
+                }
+                for r in rows
+            ]
+    return jsonify({"ok": True, "workers": workers})
 
 if __name__ == "__main__":
     app.run(debug=True, port=1234)

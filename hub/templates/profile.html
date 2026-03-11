@@ -4,22 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Профіль — МІМК HUB</title>
+  <link rel="icon" type="image/png" href="/static/branding/hub-favicon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 </head>
 <body>
 
   <nav class="navbar">
-    <span class="navbar-title">МІМК HUB</span>
+    <a href="/" class="navbar-title nav-home-link"><img src="/static/branding/hub-logo.png" alt="МІМК HUB" class="brand-logo">МІМК HUB</a>
     <div class="navbar-right">
       <a href="/" class="nav-btn">
         <span class="material-icons-round" style="font-size:16px">arrow_back</span>
         Головна
       </a>
-      <button class="theme-toggle" id="themeToggle">
-        <span class="material-icons-round">dark_mode</span>
-      </button>
+      <a href="/workers" class="nav-btn">
+        <span class="material-icons-round" style="font-size:16px">groups</span>
+        Робітники
+      </a>
     </div>
   </nav>
 
@@ -28,7 +32,16 @@
 
       <!-- АВАТАР -->
       <div class="profile-avatar">
+        <img id="profileAvatarImg" class="profile-avatar-img hidden" src="" alt="Аватар" />
         <span id="avatarLetter">?</span>
+      </div>
+
+      <div class="profile-field">
+        <label><span class="material-icons-round" style="font-size:14px">photo_camera</span> Фото профілю</label>
+        <div class="profile-photo-row">
+          <input id="profileAvatar" type="file" accept="image/*" />
+          <button id="saveAvatarBtn" type="button"><span class="material-icons-round" style="font-size:16px">upload</span></button>
+        </div>
       </div>
 
       <!-- ІМ'Я (редагується) -->
@@ -76,7 +89,21 @@
     </div>
   </div>
 
+  <div id="avatarCropModal" class="modal hidden">
+    <div class="modal-content modal-wide">
+      <h3>Обрізати фото профілю</h3>
+      <div class="avatar-crop-wrap">
+        <img id="avatarCropImage" src="" alt="Crop avatar" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="saveAvatarCropBtn">Застосувати</button>
+        <button type="button" id="closeAvatarCropBtn">Скасувати</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/ui.js"></script>
+  <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script src="/static/profile.js"></script>
 </body>
 </html>

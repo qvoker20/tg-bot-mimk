@@ -399,37 +399,31 @@ async def handle_text(update: Update, context: CallbackContext):
     if context.user_data.get("waiting_for_help_request"):
         context.user_data["waiting_for_help_request"] = False  # Скидаємо стан
 
-        # Ідентифікатор групового чату та thread_id для "Сервіс"
-        group_chat_id = -1002597813419  # Замініть на реальний chat_id вашої групи
-        thread_id = 4  # Вкажіть потрібний thread_id для гілки "Сервіс"
+        group_chat_id = -1002597813419
+        thread_id = 4
 
-        # Отримуємо інформацію про користувача
         user = update.message.from_user
         full_name = user_data[0] if user_data else user.first_name
-        user_link = f'<a href="tel:{user_data[2]}">{full_name}</a>'
-# ...existing code...
+        phone = user_data[2] if user_data and len(user_data) > 2 else "не вказано"
 
-        # Формуємо повідомлення
         message = (
-            f"❗️ <b>Новий запит на допомогу</b> ❗️\n"
-            f"👤 <b>Від користувача:</b> {user_link}\n"
+            f"❗️ Новий запит на допомогу ❗️\n"
+            f"👤 Користувач: {full_name} (id: {user.id})\n"
+            f"📞 Телефон: {phone}\n"
         )
         if text:
-            message += f"📄 <b>Текст запиту:</b> {text}"
+            message += f"📄 Текст запиту: {text}"
 
-        # Надсилаємо текстове повідомлення до групи у потрібну гілку
         try:
             await context.bot.send_message(
                 chat_id=group_chat_id,
                 text=message,
-                parse_mode="HTML",
-                message_thread_id=thread_id  # Додаємо thread_id для гілки "Сервіс"
+                message_thread_id=thread_id
             )
+            await update.message.reply_text("✅ Ваш запит на допомогу успішно надіслано.")
         except Exception as e:
-            logging.error(f"Не вдалося надіслати текстове повідомлення до групи: {e}")
-
-        # Підтвердження для користувача
-        await update.message.reply_text("Ваш запит на допомогу успішно надіслано.")
+            logging.exception(f"Не вдалося надіслати запит у сервіс-чат: {e}")
+            await update.message.reply_text("⚠️ Не вдалося надіслати запит. Спробуйте пізніше або зверніться до адміністратора.")
         return
 
     # Додаємо обробку для prod_search (Пошук закупки за замовленням)

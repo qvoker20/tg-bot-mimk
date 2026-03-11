@@ -199,28 +199,34 @@ if (siteCards) {
     document.getElementById('cardDetailCredsLogin').textContent = '';
     document.getElementById('cardDetailCredsPassword').textContent = '';
 
-    credsBtn.classList.remove('hidden');
-    credsBtn.setAttribute('data-open', '0');
-    credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">key</span> Мої дані';
-    credsBtn.onclick = async (e) => {
-      e.stopPropagation();
-      if (credsBtn.getAttribute('data-open') === '1') {
-        credsPanel.classList.add('hidden');
-        credsBtn.setAttribute('data-open', '0');
-        credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">key</span> Мої дані';
-        return;
-      }
-      showLoader();
-      const r = await fetch('/api/my-service/' + c.id);
-      const data = await r.json();
-      hideLoader();
-      if (!data.ok) { showToast('Немає даних для цього сервісу', 'error'); return; }
-      document.getElementById('cardDetailCredsLogin').textContent = data.login || '—';
-      document.getElementById('cardDetailCredsPassword').textContent = data.password || '—';
-      credsPanel.classList.remove('hidden');
-      credsBtn.setAttribute('data-open', '1');
-      credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">visibility_off</span> Сховати';
-    };
+    if (c.service_type === 'sheet') {
+      credsBtn.classList.add('hidden');
+      credsPanel.classList.add('hidden');
+      credsBtn.onclick = null;
+    } else {
+      credsBtn.classList.remove('hidden');
+      credsBtn.setAttribute('data-open', '0');
+      credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">key</span> Мої дані';
+      credsBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (credsBtn.getAttribute('data-open') === '1') {
+          credsPanel.classList.add('hidden');
+          credsBtn.setAttribute('data-open', '0');
+          credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">key</span> Мої дані';
+          return;
+        }
+        showLoader();
+        const r = await fetch('/api/my-service/' + c.id);
+        const data = await r.json();
+        hideLoader();
+        if (!data.ok) { showToast('Немає даних для цього сервісу', 'error'); return; }
+        document.getElementById('cardDetailCredsLogin').textContent = data.login || '—';
+        document.getElementById('cardDetailCredsPassword').textContent = data.password || '—';
+        credsPanel.classList.remove('hidden');
+        credsBtn.setAttribute('data-open', '1');
+        credsBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px">visibility_off</span> Сховати';
+      };
+    }
 
     if (currentRole === 'admin') {
       adminActions.classList.remove('hidden');
@@ -377,6 +383,7 @@ if (siteCards) {
     document.getElementById('editDescription').value = unescape(description);
     document.getElementById('editServiceType').value = service_type;
     document.getElementById('editModal').classList.remove('hidden');
+    loadConnectedUsers(id);
   };
   document.getElementById('closeEditModal').addEventListener('click', () => {
     document.getElementById('editModal').classList.add('hidden');
@@ -398,6 +405,36 @@ if (siteCards) {
       showToast(data.error || 'Помилка', 'error');
     }
   });
+
+  async function loadConnectedUsers(contractId) {
+    const countEl = document.getElementById('editUsersCount');
+    const listEl = document.getElementById('editUsersList');
+    if (!countEl || !listEl) return;
+
+    listEl.textContent = 'Завантаження...';
+    const r = await fetch('/api/contracts/' + contractId + '/users');
+    const data = await r.json();
+
+    if (!data.ok) {
+      countEl.textContent = '0';
+      listEl.textContent = 'Не вдалося завантажити';
+      return;
+    }
+
+    countEl.textContent = data.count || 0;
+    if (!data.users || !data.users.length) {
+      listEl.textContent = 'Немає підключень';
+      return;
+    }
+
+    listEl.innerHTML = data.users
+      .map(user => {
+        const name = user.name || '—';
+        const phone = user.phone_number || '';
+        return `<div class="service-users-item"><span>${name}</span><span>${phone}</span></div>`;
+      })
+      .join('');
+  }
 
   window.deleteContract = async function(id) {
     if (!confirm('Видалити сервіс?')) return;

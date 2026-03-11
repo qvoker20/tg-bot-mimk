@@ -1,24 +1,5 @@
-// ─── THEME ───
-const savedTheme = localStorage.getItem('theme') || 'light';
-document.documentElement.setAttribute('data-theme', savedTheme);
-
-function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme');
-  const next = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.querySelector('.material-icons-round').textContent = next === 'dark' ? 'light_mode' : 'dark_mode';
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('themeToggle');
-  if (btn) {
-    const cur = document.documentElement.getAttribute('data-theme');
-    btn.querySelector('.material-icons-round').textContent = cur === 'dark' ? 'light_mode' : 'dark_mode';
-    btn.addEventListener('click', toggleTheme);
-  }
-});
+// ─── THEME (always dark) ───
+document.documentElement.setAttribute('data-theme', 'dark');
 
 // ─── TOAST ───
 function createToastContainer() {
