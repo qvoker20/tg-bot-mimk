@@ -7,12 +7,58 @@ if (sendCodeBtn) {
   const codeEl = document.getElementById('code');
   const msgEl = document.getElementById('msg');
   const codeBlockEl = document.getElementById('codeBlock');
+  const PHONE_PREFIX = '+380';
+
+  function formatPhoneWithPrefix(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+
+    if (digits.startsWith('380')) {
+      digits = digits.slice(3);
+    } else if (digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+
+    digits = digits.slice(0, 9);
+    return PHONE_PREFIX + digits;
+  }
+
+  function isValidUaPhone(value) {
+    return /^\+380\d{9}$/.test(value || '');
+  }
+
+  phoneEl.value = PHONE_PREFIX;
+  if (codeEl) {
+    codeEl.addEventListener('input', () => {
+      codeEl.value = (codeEl.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+  }
+
+  phoneEl.addEventListener('focus', () => {
+    if (!phoneEl.value || !phoneEl.value.startsWith(PHONE_PREFIX)) {
+      phoneEl.value = PHONE_PREFIX;
+    }
+    setTimeout(() => phoneEl.setSelectionRange(phoneEl.value.length, phoneEl.value.length), 0);
+  });
+
+  phoneEl.addEventListener('input', () => {
+    phoneEl.value = formatPhoneWithPrefix(phoneEl.value);
+  });
 
   sendCodeBtn.addEventListener('click', async () => {
     msgEl.textContent = '';
     sendCodeBtn.disabled = true;
     sendCodeBtn.textContent = 'Надсилаю...';
-    const phone_number = phoneEl.value.trim();
+    const phone_number = formatPhoneWithPrefix(phoneEl.value);
+    phoneEl.value = phone_number;
+
+    if (!isValidUaPhone(phone_number)) {
+      sendCodeBtn.disabled = false;
+      sendCodeBtn.textContent = 'Надіслати код';
+      msgEl.textContent = 'Введіть номер у форматі +380XXXXXXXXX';
+      msgEl.style.color = '#e53935';
+      return;
+    }
+
     const r = await fetch('/api/auth/request-code', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -33,7 +79,13 @@ if (sendCodeBtn) {
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     msgEl.textContent = '';
-    const phone_number = phoneEl.value.trim();
+    const phone_number = formatPhoneWithPrefix(phoneEl.value);
+    phoneEl.value = phone_number;
+    if (!isValidUaPhone(phone_number)) {
+      msgEl.textContent = 'Введіть номер у форматі +380XXXXXXXXX';
+      msgEl.style.color = '#e53935';
+      return;
+    }
     const code = codeEl.value.trim();
     const btn = document.getElementById('loginBtn');
     btn.disabled = true;
@@ -140,12 +192,13 @@ if (siteCards) {
   function createCard(c) {
     const card = document.createElement('div');
     card.className = 'contract-card';
+    const cardDesc = c.description ? `<p class="card-description">${c.description}</p>` : '';
     card.innerHTML = `
       ${c.image ? `<div class="card-img-wrap"><img src="/uploads/${c.image}" alt="${c.name}"></div>` : '<div class="card-no-img"><span class="material-icons-round">dns</span></div>'}
       <div class="card-body">
         <span class="card-type-badge">${c.service_type === 'sheet' ? '<span class="material-icons-round" style="font-size:12px">table_chart</span> Таблиця' : '<span class="material-icons-round" style="font-size:12px">language</span> Сайт'}</span>
         <h4>${c.name}</h4>
-        ${c.description ? `<p>${c.description}</p>` : ''}
+        ${cardDesc}
       </div>
       <div class="card-footer">
         <span class="card-open-hint"><span class="material-icons-round" style="font-size:13px">touch_app</span> Натисни щоб відкрити</span>

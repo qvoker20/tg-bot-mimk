@@ -355,6 +355,7 @@ body {
   font-size: 11px;
   color: var(--text2);
   line-height: 1.4;
+  white-space: pre-line;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -424,7 +425,13 @@ body {
   letter-spacing: 0.5px;
 }
 .card-detail-body h2 { font-size: 22px; font-weight: 700; color: var(--text); }
-.card-detail-body > p { font-size: 14px; color: var(--text2); line-height: 1.6; }
+.card-detail-body > p {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .card-detail-actions { display: flex; gap: 10px; }
 .card-detail-actions .card-link-btn,
 .card-detail-actions .card-creds-btn { flex: 1; padding: 12px; font-size: 14px; }

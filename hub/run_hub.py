@@ -45,7 +45,12 @@ def ensure_hub_tables():
 ensure_hub_tables()
 
 def normalize_phone(phone):
-    return "".join([c for c in phone if c.isdigit() or c == "+"])
+    digits = "".join([c for c in str(phone) if c.isdigit()])
+    if digits.startswith("380") and len(digits) == 12:
+        return "+" + digits
+    if digits.startswith("0") and len(digits) == 10:
+        return "+38" + digits
+    return ""
 
 def get_user_by_phone(phone):
     with get_db() as conn:
@@ -124,6 +129,8 @@ def login():
 def request_code():
     data = request.get_json()
     phone = normalize_phone(data.get("phone_number", ""))
+    if not phone:
+        return jsonify({"ok": False, "error": "Невірний формат телефону. Використовуйте +380XXXXXXXXX"}), 400
     user = get_user_by_phone(phone)
     if not user:
         return jsonify({"ok": False, "error": "Користувача не знайдено"}), 404
@@ -141,6 +148,8 @@ def request_code():
 def verify():
     data = request.get_json()
     phone = normalize_phone(data.get("phone_number", ""))
+    if not phone:
+        return jsonify({"ok": False, "error": "Невірний формат телефону. Використовуйте +380XXXXXXXXX"}), 400
     code = str(data.get("code", "")).strip()
     record = CODES.get(phone)
     if not record or time.time() > record["expires_at"]:
@@ -254,6 +263,16 @@ def favicon():
         'hub-favicon.png',
         mimetype='image/png'
     )
+
+
+@app.route('/branding-logo')
+def branding_logo():
+    branding_dir = os.path.join(app.static_folder, 'branding')
+    for name in ('hub-logo.png', 'hub-logo.PNG', 'hub-logo.jpg', 'hub-logo.jpeg', 'hub-logo.webp'):
+        full_path = os.path.join(branding_dir, name)
+        if os.path.exists(full_path):
+            return send_from_directory(branding_dir, name)
+    return ('', 404)
 
 @app.route("/api/contracts/search", methods=["GET"])
 def search_contracts():

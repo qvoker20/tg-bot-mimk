@@ -118,7 +118,7 @@ def send_pass_request_email(to_email: str, visitor_name: str, vehicle_plate: str
     if not to_email:
         raise RuntimeError("Не вказано email отримувача")
 
-    title = f"Перепустка на {visit_date_text} {visitor_name or '—'} {vehicle_plate or '—'}"
+    title = f"Перепустка на {visit_date_text} {vehicle_plate or '—'}"
 
     body = (
         f"{title}\n"

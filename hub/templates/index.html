@@ -16,10 +16,14 @@
     <div class="login-card">
 
       <div class="login-logo">
-        <img src="/static/branding/hub-logo.png" alt="МІМК HUB" class="login-logo-img">
+        <img src="/branding-logo?v=3" alt="МІМК HUB" class="login-logo-img">
       </div>
       <div class="login-title">МІМК HUB</div>
       <div class="login-sub">Введіть номер телефону для входу</div>
+      <div class="login-sub" style="margin-top:4px; font-size:13px; line-height:1.45; color:#9aa0c0;">
+        Для входу ви маєте бути зареєстровані в Telegram-боті за цим номером.<br>
+        Код підтвердження прийде в чат із ботом.
+      </div>
 
       <div class="input-group">
         <label><span class="material-icons-round" style="font-size:14px;vertical-align:middle">phone</span> Номер телефону</label>
@@ -34,7 +38,7 @@
       <div id="codeBlock" class="hidden" style="display:flex;flex-direction:column;gap:12px">
         <div class="input-group">
           <label><span class="material-icons-round" style="font-size:14px;vertical-align:middle">pin</span> Код з Telegram</label>
-          <input id="code" placeholder="6 цифр" type="number" maxlength="6" />
+          <input id="code" placeholder="6 цифр" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" />
         </div>
         <button id="loginBtn" class="btn-primary">
           <span class="material-icons-round" style="font-size:18px">login</span>
