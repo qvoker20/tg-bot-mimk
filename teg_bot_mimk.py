@@ -28,7 +28,7 @@ from handlers.admin_handlers_custom import (
     notify_admin_about_restriction, admin_change_role_callback_handler
 )
 from handlers.assemblers_handlers import show_assemblers_menu, assembler_button_handler
-from handlers.logistics_handlers import show_logistics_menu, logistics_button_handler
+from handlers.logistics_handlers import show_logistics_menu, logistics_button_handler, logistics_text_input
 from handlers.assemblers_handlers import show_assemblers_menu, assembler_button_handler
 from utils.db_utils import get_user_data
 from googleapiclient.http import MediaFileUpload
@@ -45,6 +45,43 @@ PG_CONN = {
     "user": os.environ.get("PG_USER"),
     "password": os.environ.get("PG_PASSWORD")
 }
+
+CONSTRUCTOR_ALLOWED_ROLES = {
+    "конструктор",
+    "керівник конструктор приват",
+    "керівник конструктор тендер",
+    "головний конструктор",
+    "admin",
+}
+
+def has_constructor_access(role: str | None) -> bool:
+    if not role:
+        return False
+    return role.strip().casefold() in {r.casefold() for r in CONSTRUCTOR_ALLOWED_ROLES}
+
+ZAMIRNYKAM_ALLOWED_ROLES = {
+    "замірник",
+    "admin",
+}
+
+def has_zamirnykam_access(role: str | None) -> bool:
+    if not role:
+        return False
+    return role.strip().casefold() in {r.casefold() for r in ZAMIRNYKAM_ALLOWED_ROLES}
+
+def get_user_role(user_id: int):
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT username FROM database_app_userdatatelegram WHERE telegram_id = %s",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_pg_connection():
     return psycopg2.connect(**PG_CONN)
@@ -64,8 +101,8 @@ def get_user_data(user_id):
         conn.close()
 
 
-OPENAI_API_KEY = "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"
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Глобальний словник для зберігання корист
 # увачів і їхніх запитів
@@ -93,27 +130,25 @@ async def start(update: Update, context: CallbackContext):
     full_name, telegram_id, phone_number = user_data
 
     # Дізнаємось username (роль) користувача
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "SELECT username FROM database_app_userdatatelegram WHERE telegram_id = %s",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        username = row[0] if row else None
-    finally:
-        cursor.close()
-        conn.close()
+    username = get_user_role(user_id)
 
     # Формуємо меню
     # Формуємо меню
+    first_row = ["Заміри"]
+    if has_zamirnykam_access(username):
+        first_row.append("Замірникам")
+
+    third_row = ["Збиральникам"]
+    if has_constructor_access(username):
+        third_row.insert(0, "Конструктор")
+
     keyboard = [
-        ["Заміри", "Замірникам"],
+        first_row,
         ["Виробництво", "Логістика"],
-        ["Конструктор","Збиральникам"]
+        ["MIM-K HUB"],
+        third_row
     ]
-    if username == "admin":
+    if (username or "").strip().casefold() == "admin":
         keyboard.append(["Admin"])
 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -290,6 +325,10 @@ async def handle_text(update: Update, context: CallbackContext):
     if handled:
         return
 
+    handled = await logistics_text_input(update, context)
+    if handled:
+        return
+
     if context.user_data.get("waiting_for_adaptation_request"):
         # Скидаємо стан
         context.user_data["waiting_for_adaptation_request"] = False
@@ -463,6 +502,10 @@ async def handle_text(update: Update, context: CallbackContext):
         return
 
     if context.user_data.get("ai_mode") in ("sales", "add_knowledge"):
+        if openai_client is None:
+            context.user_data.pop("ai_mode", None)
+            await update.message.reply_text("AI MIM-K тимчасово вимкнено.")
+            return
         await handle_mimk_ai_text(update, context, openai_client)
         return
     
@@ -536,7 +579,7 @@ async def handle_text(update: Update, context: CallbackContext):
         cursor.execute("DELETE FROM database_app_userdatatelegram WHERE telegram_id = %s", (telegram_id,))
         cconn.commit()
         cursor.close()
-        conn.close()
+        cconn.close()
         await update.message.reply_text("Користувача видалено (якщо існував).")
         context.user_data.pop("admin_delete")
         return
@@ -664,6 +707,10 @@ async def handle_text(update: Update, context: CallbackContext):
         return
     # Обробка кнопки "Замірникам🛠"
     if text == "Замірникам":
+        username = get_user_role(user_id)
+        if not has_zamirnykam_access(username):
+            await update.message.reply_text("🚫 Доступно тільки для замірника або admin 🚫")
+            return
         await show_zamirnykam_menu(update, context)
         return
     
@@ -675,25 +722,37 @@ async def handle_text(update: Update, context: CallbackContext):
         await show_logistics_menu(update, context)
         return
 
+    if text == "MIM-K HUB":
+        hub_message = (
+            "🌐 <b>MIM-K HUB</b>\n\n"
+            "Це корпоративний сайт, де зібрані всі сервіси та Google-таблиці нашої компанії.\n\n"
+            "<b>Як увійти:</b>\n"
+            "1) Введіть свій номер телефону\n"
+            "2) Отримайте код підтвердження\n"
+            "3) Увійдіть у систему\n\n"
+            "У HUB ви також знайдете інформацію про наших робітників і їхні контакти, щоб швидко зв'язатися з потрібною людиною."
+        )
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Відкрити", url="https://hub.mim-k.website/")]]
+        )
+        await update.message.reply_text(
+            hub_message,
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+        return
+
     if text == "AI MIM-K":
+        if openai_client is None:
+            await update.message.reply_text("AI MIM-K вимкнено для цього бота.")
+            return
         # Перевірка доступу по username
         user_data = get_user_data(user_id)
         if not user_data:
             await update.message.reply_text("У вас немає доступу до цього розділу.")
             return
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "SELECT username FROM database_app_userdatatelegram WHERE telegram_id = %s",
-                (user_id,)
-            )
-            row = cursor.fetchone()
-            username = row[0] if row else None
-        finally:
-            cursor.close()
-            conn.close()
-        if username not in ("admin", "adminpre"):
+        username = get_user_role(user_id)
+        if (username or "").strip().casefold() not in ("admin", "adminpre"):
             await update.message.reply_text("🚫 У вас немає доступу до AI MIM-K 🚫")
             return
         await show_mimk_ai(update, context)
@@ -705,40 +764,17 @@ async def handle_text(update: Update, context: CallbackContext):
             if not user_data:
                 await update.message.reply_text("У вас немає доступу до цього розділу.")
                 return
-            conn = get_pg_connection()
-            cursor = conn.cursor()
-            try:
-                cursor.execute(
-                    "SELECT username FROM database_app_userdatatelegram WHERE telegram_id = %s",
-                    (user_id,)
-                )
-                row = cursor.fetchone()
-                username = row[0] if row else None
-            finally:
-                cursor.close()
-                conn.close()
-            if username not in ("admin"):
+            username = get_user_role(user_id)
+            if (username or "").strip().casefold() != "admin":
                 await update.message.reply_text("🚫 У вас немає доступу до цього розділу 🚫")
                 return
             await show_admin_menu(update, context)
             return
 
     if text == "Конструктор":
-    # Отримуємо роль користувача з бази
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "SELECT username FROM database_app_userdatatelegram WHERE telegram_id = %s",
-                (user_id,)
-            )
-            row = cursor.fetchone()
-            username = row[0] if row else None
-        finally:
-            cursor.close()
-            conn.close()
-
-        if username not in ("конструктор", "admin", "adminpre"):
+        # Отримуємо роль користувача з бази
+        username = get_user_role(user_id)
+        if not has_constructor_access(username):
             await update.message.reply_text("🚫 Доступно тільки для конструкторів 🚫")
             return
         # Створюємо кнопку для переходу на профіль перевірки
@@ -792,7 +828,7 @@ def main():
     application.add_handler(CallbackQueryHandler(assembler_button_handler, pattern='^(asm_.*)$'))
     application.add_handler(CallbackQueryHandler(
         logistics_button_handler,
-        pattern='^(logistics_request|logistics_driver_profile|logistics_menu_back|logistics_back)$'
+        pattern='^(logistics_request|logistics_driver_profile|logistics_menu_back|logistics_back|lp_.*)$'
     ))
     job_queue = application.job_queue
 

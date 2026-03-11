@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+DEFAULT_SERVICE_CHAT_ID = -1002597813419
+DEFAULT_SERVICE_THREAD_ID = 4
+
 PG_CONN = {
     'host': os.environ.get("PG_HOST"),
     'port': int(os.environ.get("PG_PORT")),
@@ -629,7 +632,7 @@ async def help_request_confirm(update: Update, context: CallbackContext):
 
     if action == "help_cancel":
         context.user_data.pop("pending_help_request_text", None)
-        context.user_data.pop("waiting_for_help_request", None)  # не чекаємо новий текст
+        context.user_data.pop("waiting_for_help_request", None)
         await query.edit_message_text("❌ Запит скасовано.")
         return
 
@@ -638,7 +641,37 @@ async def help_request_confirm(update: Update, context: CallbackContext):
             await query.edit_message_text("⚠️ Немає тексту запиту для відправки.")
             return
 
-        # ... ваша відправка в групу ...
-        context.user_data.pop("pending_help_request_text", None)
-        context.user_data.pop("waiting_for_help_request", None)
-        await query.edit_message_text("✅ Запит відправлено.")
+        service_chat_id_raw = os.getenv("SERVICE_CHAT_ID")
+        service_thread_id_raw = os.getenv("SERVICE_THREAD_ID")
+
+        try:
+            service_chat_id = int(service_chat_id_raw) if service_chat_id_raw else DEFAULT_SERVICE_CHAT_ID
+        except ValueError:
+            logging.warning("Некоректний SERVICE_CHAT_ID у .env, використовую fallback")
+            service_chat_id = DEFAULT_SERVICE_CHAT_ID
+
+        try:
+            service_thread_id = int(service_thread_id_raw) if service_thread_id_raw else DEFAULT_SERVICE_THREAD_ID
+        except ValueError:
+            logging.warning("Некоректний SERVICE_THREAD_ID у .env, використовую fallback")
+            service_thread_id = DEFAULT_SERVICE_THREAD_ID
+
+        user = query.from_user
+        msg = (
+            "❗️ Новий запит на допомогу (Сервіс замірів)\n"
+            f"👤 Користувач: {user.full_name} (id: {user.id})\n"
+            f"📝 Текст: {pending_text}"
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=service_chat_id,
+                text=msg,
+                message_thread_id=service_thread_id if service_thread_id else None
+            )
+            context.user_data.pop("pending_help_request_text", None)
+            context.user_data.pop("waiting_for_help_request", None)
+            await query.edit_message_text("✅ Запит відправлено.")
+        except Exception:
+            logging.exception("Не вдалося відправити запит у сервіс-чат")
+            await query.edit_message_text("⚠️ Не вдалося відправити запит. Спробуйте пізніше.")

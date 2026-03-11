@@ -173,7 +173,7 @@
   </div>
 
   <nav class="navbar navbar-expand-lg navbar-dark px-3">
-    <a class="navbar-brand" href="{{ url_for('index') }}">
+    <a class="navbar-brand" href="{% if current_role == 'adminpre' %}{{ url_for('pass_requests') }}{% else %}{{ url_for('index') }}{% endif %}">
       <i class="bi bi-shield-lock-fill me-2"></i>Адмін
     </a>
 
@@ -183,6 +183,16 @@
 
     <div id="navBar" class="collapse navbar-collapse">
       <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='pass_requests' %}active{% endif %}"
+             href="{{ url_for('pass_requests') }}">
+            <i class="bi bi-person-vcard-fill me-1"></i>Заявки на пропуск
+            {% if pending_pass_requests_count and pending_pass_requests_count > 0 %}
+              <span class="badge bg-light text-dark ms-1">{{ pending_pass_requests_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+        {% if current_role == 'admin' %}
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='index' %}active{% endif %}" href="{{ url_for('index') }}">
             <i class="bi bi-people-fill me-1"></i>Користувачі
@@ -205,6 +215,7 @@
             <i class="bi bi-megaphone-fill me-1"></i>Оголошення
           </a>
         </li>
+        {% endif %}
       </ul>
 
       <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">

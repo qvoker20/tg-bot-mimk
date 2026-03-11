@@ -7,7 +7,9 @@ import requests
 import random
 import os
 import json
+import smtplib
 from datetime import datetime
+from email.mime.text import MIMEText
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 # ---------------- CONFIG ----------------
@@ -26,6 +28,18 @@ PG_CONN = {
 }
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.ukr.net")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "")
+PASS_REQUEST_DEFAULT_EMAIL = os.environ.get("PASS_REQUEST_DEFAULT_EMAIL", "").strip()
+
+PASS_STATUS_LABELS = {
+    "new": "нова",
+    "forwarded": "передано",
+    "cancelled": "скасовано",
+}
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -34,6 +48,124 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def get_db_connection():
     return psycopg2.connect(**PG_CONN)
+
+def is_logged_in() -> bool:
+    return bool(session.get("is_admin"))
+
+def is_super_admin() -> bool:
+    return session.get("role") == "admin"
+
+def is_pre_admin() -> bool:
+    return session.get("role") == "adminpre"
+
+def is_pass_operator() -> bool:
+    return session.get("role") in {"admin", "adminpre", "логіст", "логістика", "закупівля"}
+
+def _format_pass_date(value) -> str:
+    if value is None:
+        return "—"
+    if hasattr(value, "strftime"):
+        return value.strftime("%d.%m.%Y")
+    try:
+        return datetime.fromisoformat(str(value)).strftime("%d.%m.%Y")
+    except Exception:
+        return str(value)
+
+
+def ensure_pass_requests_audit_columns():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_by_telegram_id BIGINT")
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_by_name TEXT")
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_by_role TEXT")
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP")
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS cancel_reason TEXT")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_current_operator_identity() -> tuple[int | None, str, str]:
+    operator_id = session.get("admin_telegram_id")
+    operator_role = (session.get("role") or "").strip()
+    operator_name = ""
+
+    if operator_id is not None:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT COALESCE(name, '') FROM database_app_userdatatelegram WHERE telegram_id = %s LIMIT 1",
+                (int(operator_id),)
+            )
+            row = cur.fetchone()
+            operator_name = (row[0] if row else "") or ""
+        finally:
+            cur.close()
+            conn.close()
+
+    if not operator_name:
+        operator_name = f"ID {operator_id}" if operator_id is not None else "Невідомо"
+
+    return (int(operator_id) if operator_id is not None else None, operator_name, operator_role)
+
+def send_pass_request_email(to_email: str, visitor_name: str, vehicle_plate: str | None, visit_date_text: str):
+    if not SMTP_USER or not SMTP_PASSWORD or not SMTP_FROM:
+        raise RuntimeError("SMTP не налаштовано: потрібні SMTP_USER, SMTP_PASSWORD, SMTP_FROM")
+
+    if not to_email:
+        raise RuntimeError("Не вказано email отримувача")
+
+    title = f"Перепустка на {visit_date_text} {visitor_name or '—'} {vehicle_plate or '—'}"
+
+    body = (
+        f"{title}\n"
+        f"Особа:  {visitor_name or '—'}\n\n"
+        f"Авто: {vehicle_plate or '—'}\n\n"
+        "Компанія \"MIM-K\"\n"
+        "Киев, бул. Вацлава Гавела,16, корпус 4\n"
+        "тел.:(044) 599-81-12\n"
+        "http://mim-k.com.ua/\n"
+    )
+
+    msg = MIMEText(body, _subtype="plain", _charset="utf-8")
+    msg["Subject"] = title
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+
+
+def notify_requester_status_change(
+    requester_telegram_id: int | None,
+    request_id: int,
+    status_code: str,
+    visitor_name: str,
+    vehicle_plate: str,
+    visit_date_text: str,
+    processed_by: str | None = None,
+    cancel_reason: str | None = None,
+):
+    if not requester_telegram_id:
+        return
+
+    status_text = PASS_STATUS_LABELS.get(status_code, status_code)
+    text = (
+        f"🛂 <b>Оновлення заявки #{request_id}</b>\n\n"
+        f"<b>Статус:</b> {status_text}\n"
+        f"<b>Особа:</b> {visitor_name or '—'}\n"
+        f"<b>Авто:</b> {vehicle_plate or '—'}\n"
+        f"<b>Дата:</b> {visit_date_text}"
+    )
+    if processed_by:
+        text += f"\n<b>Опрацював:</b> {processed_by}"
+    if status_code == "cancelled" and cancel_reason:
+        text += f"\n<b>Причина скасування:</b> {cancel_reason}"
+    send_telegram_message(requester_telegram_id, text)
 
 # --- NEW: лічильник активних заявок ---
 def get_pending_requests_count() -> int:
@@ -51,10 +183,26 @@ def get_pending_requests_count() -> int:
         cur.close()
         conn.close()
 
+def get_pending_pass_requests_count() -> int:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT COUNT(*) FROM logistics_pass_requests WHERE status = 'new'"
+        )
+        return cur.fetchone()[0]
+    except Exception:
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
 @app.context_processor
 def inject_counts():
     return {
-        "pending_requests_count": get_pending_requests_count()
+        "pending_requests_count": get_pending_requests_count(),
+        "pending_pass_requests_count": get_pending_pass_requests_count(),
+        "current_role": session.get("role")
     }
 
 
@@ -141,27 +289,30 @@ def login():
             flash("Невірний формат телефону", "danger")
             return redirect(url_for("login"))
 
-        # Перевірка в базі: тільки admin
+        # Перевірка в базі: admin + adminpre
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT telegram_id
+            SELECT telegram_id, LOWER(TRIM(COALESCE(username, '')))
             FROM database_app_userdatatelegram
-            WHERE phone_number = %s AND username = 'admin'
+            WHERE phone_number = %s
+              AND LOWER(TRIM(COALESCE(username, ''))) IN ('admin', 'adminpre', 'логіст', 'логістика', 'закупівля')
             LIMIT 1
         """, (phone,))
         row = cur.fetchone()
         cur.close(); conn.close()
 
         if not row:
-            flash("Вхід дозволено лише для admin!", "danger")
+            flash("Вхід дозволено лише для admin/adminpre/логістика/закупівля!", "danger")
             return redirect(url_for("login"))
 
         telegram_id = row[0]
+        role = row[1]
         code = random.randint(100000, 999999)
         session["login_code"] = str(code)
         session["phone"] = phone
         session["admin_telegram_id"] = telegram_id  # Зберігаємо id адміна
+        session["login_role"] = role
 
         send_telegram_message(
             telegram_id,
@@ -185,9 +336,12 @@ def verify():
         if code == session.get("login_code"):
             session.pop("login_code", None)
             session["is_admin"] = True
+            session["role"] = session.pop("login_role", "admin")
             if remember:
                 session.permanent = True  # Запам'ятати сесію
             flash("Вхід дозволено", "success")
+            if session.get("role") == "adminpre":
+                return redirect(url_for("pass_requests"))
             return redirect(url_for("index"))
 
         flash("Невірний код", "danger")
@@ -205,8 +359,11 @@ def logout():
 
 @app.route("/")
 def index():
-    if not session.get("is_admin"):
+    if not is_logged_in():
         return redirect(url_for("login"))
+    if not is_super_admin():
+        flash("Недостатньо прав для цього розділу", "danger")
+        return redirect(url_for("pass_requests"))
 
     search_name = request.args.get("search_name", "").strip()
     search_id = request.args.get("search_id", "").strip()
@@ -266,8 +423,11 @@ def index():
 
 @app.route("/user_action", methods=["POST"])
 def user_action():
-    if not session.get("is_admin"):
+    if not is_logged_in():
         return redirect(url_for("login"))
+    if not is_super_admin():
+        flash("Недостатньо прав для цієї дії", "danger")
+        return redirect(url_for("pass_requests"))
 
     action = request.form.get("action")
     selected_users = request.form.getlist("selected_users")
@@ -339,8 +499,11 @@ def user_action():
 
 @app.route("/registration_requests")
 def registration_requests():
-    if not session.get("is_admin"):
+    if not is_logged_in():
         return redirect(url_for("login"))
+    if not is_super_admin():
+        flash("Недостатньо прав для цього розділу", "danger")
+        return redirect(url_for("pass_requests"))
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -374,8 +537,11 @@ def registration_requests():
 
 @app.route("/process_registration", methods=["POST"])
 def process_registration():
-    if not session.get("is_admin"):
+    if not is_logged_in():
         return redirect(url_for("login"))
+    if not is_super_admin():
+        flash("Недостатньо прав для цієї дії", "danger")
+        return redirect(url_for("pass_requests"))
 
     action = request.form.get("action")
     if action and action.startswith("delete_"):
@@ -473,8 +639,11 @@ def process_registration():
 
 @app.route("/announcements", methods=["GET", "POST"])
 def announcements():
-    if not session.get("is_admin"):
+    if not is_logged_in():
         return redirect(url_for("login"))
+    if not is_super_admin():
+        flash("Недостатньо прав для цього розділу", "danger")
+        return redirect(url_for("pass_requests"))
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -597,6 +766,200 @@ def announcements():
 
     cur.close(); conn.close()
     return render_template("announcements.html", roles=roles, users=users, history=history)
+
+
+@app.route("/pass_requests")
+def pass_requests():
+    if not is_logged_in():
+        return redirect(url_for("login"))
+    if not is_pass_operator():
+        flash("Недостатньо прав для цього розділу", "danger")
+        return redirect(url_for("logout"))
+
+    search_vehicle = request.args.get("search_vehicle", "").strip()
+    status_filter = request.args.get("status", "").strip().lower()
+    if status_filter and status_filter not in PASS_STATUS_LABELS:
+        status_filter = ""
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        ensure_pass_requests_audit_columns()
+        query = """
+            SELECT id, requester_name, requester_username, pass_type,
+                   vehicle_plate, vehicle_brand, visitor_full_name,
+                   visit_date, date_mode, visit_date_from, visit_date_to,
+                   status, created_at,
+                   processed_by_telegram_id, processed_by_name, processed_by_role,
+                   processed_at, cancel_reason
+            FROM logistics_pass_requests
+            WHERE 1=1
+        """
+        params: list[str] = []
+
+        if search_vehicle:
+            query += " AND COALESCE(vehicle_plate, '') ILIKE %s"
+            params.append(f"%{search_vehicle}%")
+
+        if status_filter:
+            query += " AND status = %s"
+            params.append(status_filter)
+
+        query += " ORDER BY created_at DESC LIMIT 300"
+        cur.execute(query, params)
+        rows = cur.fetchall()
+    except Exception as e:
+        rows = []
+        flash(f"Не вдалося завантажити заявки на пропуск: {e}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template(
+        "pass_requests.html",
+        requests_list=rows,
+        default_target_email=PASS_REQUEST_DEFAULT_EMAIL,
+        search_vehicle=search_vehicle,
+        status_filter=status_filter,
+        status_labels=PASS_STATUS_LABELS,
+    )
+
+
+@app.route("/pass_requests/action", methods=["POST"])
+def pass_request_action():
+    if not is_logged_in():
+        return redirect(url_for("login"))
+    if not is_pass_operator():
+        flash("Недостатньо прав для цієї дії", "danger")
+        return redirect(url_for("pass_requests"))
+
+    action = request.form.get("action", "").strip()
+    request_id = request.form.get("request_id", "").strip()
+    target_email = request.form.get("target_email", "").strip()
+    cancel_reason = request.form.get("cancel_reason", "").strip()
+    if not target_email:
+        target_email = PASS_REQUEST_DEFAULT_EMAIL
+
+    if not request_id.isdigit():
+        flash("Невірний ID заявки", "danger")
+        return redirect(url_for("pass_requests"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        ensure_pass_requests_audit_columns()
+        operator_telegram_id, operator_name, operator_role = get_current_operator_identity()
+
+        cur.execute(
+            """
+             SELECT id, pass_type, vehicle_plate, visitor_full_name,
+                 date_mode, visit_date, visit_date_from, visit_date_to, status,
+                 requester_telegram_id
+            FROM logistics_pass_requests
+            WHERE id = %s
+            """,
+            (int(request_id),)
+        )
+        row = cur.fetchone()
+        if not row:
+            flash("Заявку не знайдено", "danger")
+            return redirect(url_for("pass_requests"))
+
+        _, pass_type, vehicle_plate, visitor_name, date_mode, visit_date, visit_date_from, visit_date_to, current_status, requester_telegram_id = row
+
+        if current_status != "new":
+            flash(f"Заявка #{request_id} вже має статус '{PASS_STATUS_LABELS.get(current_status, current_status)}' і недоступна для дій", "warning")
+            return redirect(url_for("pass_requests"))
+
+        if date_mode == "range":
+            visit_date_text = f"{_format_pass_date(visit_date_from)} — {_format_pass_date(visit_date_to)}"
+        else:
+            visit_date_text = _format_pass_date(visit_date_from or visit_date)
+
+        if action == "cancel":
+            if not cancel_reason:
+                flash("Для скасування заявки вкажіть причину", "danger")
+                return redirect(url_for("pass_requests"))
+
+            cur.execute(
+                """
+                UPDATE logistics_pass_requests
+                SET status = 'cancelled',
+                    processed_by_telegram_id = %s,
+                    processed_by_name = %s,
+                    processed_by_role = %s,
+                    processed_at = NOW(),
+                    cancel_reason = %s
+                WHERE id = %s
+                """,
+                (operator_telegram_id, operator_name, operator_role, cancel_reason, int(request_id)),
+            )
+            conn.commit()
+            notify_requester_status_change(
+                requester_telegram_id=requester_telegram_id,
+                request_id=int(request_id),
+                status_code="cancelled",
+                visitor_name=visitor_name or "—",
+                vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
+                visit_date_text=visit_date_text,
+                processed_by=f"{operator_name} ({operator_role or 'роль не вказана'})",
+                cancel_reason=cancel_reason,
+            )
+            flash(f"Заявку #{request_id} скасовано", "warning")
+            return redirect(url_for("pass_requests"))
+
+        if action == "forward":
+            if not target_email:
+                flash("Вкажіть email або задайте PASS_REQUEST_DEFAULT_EMAIL у .env", "danger")
+                return redirect(url_for("pass_requests"))
+
+            send_pass_request_email(
+                to_email=target_email,
+                visitor_name=visitor_name or "—",
+                vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
+                visit_date_text=visit_date_text,
+            )
+
+            if current_status == "new":
+                cur.execute(
+                    """
+                    UPDATE logistics_pass_requests
+                    SET status = 'forwarded',
+                        processed_by_telegram_id = %s,
+                        processed_by_name = %s,
+                        processed_by_role = %s,
+                        processed_at = NOW(),
+                        cancel_reason = NULL
+                    WHERE id = %s
+                    """,
+                    (operator_telegram_id, operator_name, operator_role, int(request_id)),
+                )
+                conn.commit()
+            notify_requester_status_change(
+                requester_telegram_id=requester_telegram_id,
+                request_id=int(request_id),
+                status_code="forwarded",
+                visitor_name=visitor_name or "—",
+                vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
+                visit_date_text=visit_date_text,
+                processed_by=f"{operator_name} ({operator_role or 'роль не вказана'})",
+            )
+            flash(f"Заявку #{request_id} передано на пошту {target_email}", "success")
+            return redirect(url_for("pass_requests"))
+
+        flash("Невідома дія", "danger")
+        return redirect(url_for("pass_requests"))
+    except smtplib.SMTPAuthenticationError:
+        conn.rollback()
+        flash("SMTP 535: невірний логін/пароль або пошта заборонила вхід сторонньому застосунку", "danger")
+        return redirect(url_for("pass_requests"))
+    except Exception as e:
+        conn.rollback()
+        flash(f"Помилка обробки заявки: {e}", "danger")
+        return redirect(url_for("pass_requests"))
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ---------------- RUN ----------------
