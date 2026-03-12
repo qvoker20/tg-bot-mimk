@@ -10,39 +10,44 @@
 
     <style>
       body{
-        background: #e5e5e5;
+        background: #f4f6fb;
         min-height: 100vh;
         display: flex;
         align-items: center;
+        justify-content: center;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #1f2937;
       }
       .card{
-        border-radius: 20px;
-        border: none;
-        box-shadow: 0 20px 60px rgba(0,0,0,.2);
-        backdrop-filter: blur(10px);
-        background: rgba(255,255,255,.95);
+        border-radius: 16px;
+        border: 1px solid #e7ecf3;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
+        background: #fff;
       }
       .btn-primary{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border: none;
-        transition: transform .2s;
+        background: #2f58b7;
+        border-color: #2f58b7;
       }
       .btn-primary:hover{
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(102,126,234,.4);
+        background: #274aa0;
+        border-color: #274aa0;
       }
       .form-control:focus{
-        border-color: #667eea;
-        box-shadow: 0 0 0 .2rem rgba(102,126,234,.25);
+        border-color: #4a70c8;
+        box-shadow: 0 0 0 .2rem rgba(74, 112, 200, .15);
+      }
+      .auth-shell{
+        width: 100%;
+        max-width: 480px;
+        padding: 1rem;
       }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="auth-shell">
     <div class="row justify-content-center">
-        <div class="col-md-5 col-11">
+        <div class="col-12">
             <div class="card shadow">
                 <div class="card-body p-4">
                     <div class="text-center mb-4">
@@ -63,7 +68,7 @@
                     <form method="post">
                         <div class="mb-3">
                             <label class="form-label">Номер телефону</label>
-                            <input type="text" name="phone" class="form-control" required placeholder="380667289321 або 0667289321">
+                        <input id="phoneInput" type="tel" name="phone" class="form-control" required placeholder="XXXXXXXXX" value="+380" maxlength="13" pattern="\+380\d{9}">
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Увійти</button>
                     </form>
@@ -72,6 +77,58 @@
         </div>
     </div>
 </div>
+
+<script>
+  (function () {
+    const phoneInput = document.getElementById('phoneInput');
+    if (!phoneInput) return;
+
+    const PREFIX = '+380';
+
+    function normalize(value) {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (digits.startsWith('380')) {
+        digits = digits.slice(3);
+      } else if (digits.startsWith('0')) {
+        digits = digits.slice(1);
+      }
+      return PREFIX + digits.slice(0, 9);
+    }
+
+    phoneInput.addEventListener('focus', () => {
+      if (!phoneInput.value.startsWith(PREFIX)) {
+        phoneInput.value = PREFIX;
+      }
+      setTimeout(() => phoneInput.setSelectionRange(phoneInput.value.length, phoneInput.value.length), 0);
+    });
+
+    phoneInput.addEventListener('input', () => {
+      phoneInput.value = normalize(phoneInput.value);
+    });
+
+    phoneInput.addEventListener('keydown', (e) => {
+      const start = phoneInput.selectionStart || 0;
+      const end = phoneInput.selectionEnd || 0;
+      const isDelete = e.key === 'Backspace' || e.key === 'Delete';
+
+      if (isDelete && start <= PREFIX.length) {
+        e.preventDefault();
+        phoneInput.setSelectionRange(PREFIX.length, PREFIX.length);
+      }
+
+      if (start < PREFIX.length && end < PREFIX.length && e.key.length === 1) {
+        e.preventDefault();
+        phoneInput.setSelectionRange(PREFIX.length, PREFIX.length);
+      }
+    });
+
+    phoneInput.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      phoneInput.value = normalize(text);
+    });
+  })();
+</script>
 
 </body>
 </html>

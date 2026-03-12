@@ -5,16 +5,21 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
-      <h5 class="mb-0 text-dark">
+      <h5 class="section-title">
         <i class="bi bi-megaphone-fill text-primary me-2"></i>Оголошення
       </h5>
-      <div class="text-muted small">Виберіть ролі або конкретних користувачів та введіть повідомлення</div>
+      <div class="section-hint">Виберіть ролі або конкретних користувачів та введіть повідомлення</div>
     </div>
 
     <!-- ВАЖЛИВО: enctype для файлів -->
     <form method="post" enctype="multipart/form-data">
+      <div class="mb-3 form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="sendAll" name="send_all" value="1">
+        <label class="form-check-label" for="sendAll"><b>Відправити всім користувачам</b></label>
+      </div>
+
       <!-- 1) Відправка по ролях -->
-      <div class="mb-3">
+      <div class="mb-3" id="rolesBlock">
         <label class="form-label">
           <i class="bi bi-shield me-1"></i>Виберіть ролі (можна кілька)
         </label>
@@ -36,12 +41,17 @@
       </div>
 
       <!-- 2) Конкретні користувачі -->
-      <div class="mb-3">
+      <div class="mb-3" id="usersBlock">
         <label class="form-label">
           <i class="bi bi-person me-1"></i>Користувачі (необов'язково)
         </label>
         <input class="form-control mb-2" id="userSearch"
                placeholder="Пошук по імені / ролі / Telegram ID">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="selectAllVisibleBtn">Вибрати всіх видимих</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelectedBtn">Очистити вибір</button>
+          <span class="small text-muted align-self-center">Вибрано: <b id="selectedUsersCount">0</b></span>
+        </div>
         <select class="form-select" id="targetUsers" name="target_users" multiple size="6">
           {% for u in users %}
           <option value="{{ u[0] }}">
@@ -74,21 +84,24 @@
         </div>
       </div>
 
-      <button type="submit" class="btn btn-success">
+      <button type="submit" class="btn btn-success btn-mobile-full">
         <i class="bi bi-send-fill me-1"></i>Надіслати оголошення
       </button>
     </form>
 
-    <h6 class="mt-4 mb-2 text-secondary"><i class="bi bi-clock-history me-1"></i>Історія оголошень</h6>
-    <div class="card mb-3">
-      <div class="card-body p-2" style="max-height: 300px; overflow-y: auto;">
+    <h6 class="section-title mt-4 mb-2"><i class="bi bi-clock-history me-1 text-primary"></i>Історія оголошень</h6>
+    <div class="card mb-0">
+      <div class="card-body p-2" style="max-height: 320px; overflow-y: auto;">
         {% if history %}
         <ul class="list-group list-group-flush">
           {% for msg, roles, sent_at in history %}
-          <li class="list-group-item small">
+          <li class="list-group-item small row-click history-item"
+              data-message="{{ msg|e }}"
+              data-roles="{{ roles|e }}"
+              data-sent-at="{{ sent_at.strftime('%d.%m.%Y %H:%M') if sent_at else '—' }}">
             <b>{{ sent_at.strftime('%d.%m.%Y %H:%M') }}</b> &mdash;
             <span class="text-muted">{{ roles }}</span><br>
-            {{ msg }}
+            <span class="clip-text">{{ msg }}</span>
           </li>
           {% endfor %}
         </ul>
@@ -99,14 +112,76 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Оголошення з історії</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Надіслано: <span id="historySentAt">—</span></div>
+        <div class="small text-muted mb-3">Отримувачі: <span id="historyRoles">—</span></div>
+        <div id="historyMessage" style="white-space: pre-wrap; word-break: break-word;"></div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
   // Фільтр по користувачах (імʼя / роль / ID)
   (function () {
+    const sendAll = document.getElementById('sendAll');
+    const rolesBlock = document.getElementById('rolesBlock');
+    const usersBlock = document.getElementById('usersBlock');
     const searchInput = document.getElementById('userSearch');
     const select = document.getElementById('targetUsers');
+    const selectAllVisibleBtn = document.getElementById('selectAllVisibleBtn');
+    const clearSelectedBtn = document.getElementById('clearSelectedBtn');
+    const selectedUsersCount = document.getElementById('selectedUsersCount');
+    const historyModalEl = document.getElementById('historyModal');
+    const historyModal = historyModalEl ? new bootstrap.Modal(historyModalEl) : null;
+
+    function updateSelectedCount() {
+      if (!select || !selectedUsersCount) return;
+      selectedUsersCount.textContent = String(Array.from(select.selectedOptions).length);
+    }
+
+    function syncSendAllState() {
+      const isAll = !!sendAll?.checked;
+      const roleInputs = rolesBlock ? rolesBlock.querySelectorAll('input[name="roles"]') : [];
+
+      roleInputs.forEach((el) => {
+        el.disabled = isAll;
+        if (isAll) el.checked = false;
+      });
+
+      if (searchInput) {
+        searchInput.disabled = isAll;
+        if (isAll) searchInput.value = '';
+      }
+
+      if (select) {
+        select.disabled = isAll;
+        if (isAll) {
+          Array.from(select.options).forEach((opt) => {
+            opt.selected = false;
+            opt.hidden = false;
+          });
+        }
+      }
+
+      if (selectAllVisibleBtn) selectAllVisibleBtn.disabled = isAll;
+      if (clearSelectedBtn) clearSelectedBtn.disabled = isAll;
+
+      if (rolesBlock) rolesBlock.classList.toggle('opacity-50', isAll);
+      if (usersBlock) usersBlock.classList.toggle('opacity-50', isAll);
+      updateSelectedCount();
+    }
+
     if (!searchInput || !select) return;
 
     searchInput.addEventListener('input', function () {
@@ -114,6 +189,37 @@
       Array.from(select.options).forEach(function (opt) {
         const text = opt.text.toLowerCase();
         opt.hidden = q && !text.includes(q);
+      });
+    });
+
+    selectAllVisibleBtn?.addEventListener('click', function () {
+      Array.from(select.options).forEach((opt) => {
+        if (!opt.hidden) {
+          opt.selected = true;
+        }
+      });
+      updateSelectedCount();
+    });
+
+    clearSelectedBtn?.addEventListener('click', function () {
+      Array.from(select.options).forEach((opt) => {
+        opt.selected = false;
+      });
+      updateSelectedCount();
+    });
+
+    select.addEventListener('change', updateSelectedCount);
+    sendAll?.addEventListener('change', syncSendAllState);
+    updateSelectedCount();
+    syncSendAllState();
+
+    document.querySelectorAll('.history-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        if (!historyModal) return;
+        document.getElementById('historySentAt').textContent = item.dataset.sentAt || '—';
+        document.getElementById('historyRoles').textContent = item.dataset.roles || '—';
+        document.getElementById('historyMessage').textContent = item.dataset.message || '—';
+        historyModal.show();
       });
     });
   })();

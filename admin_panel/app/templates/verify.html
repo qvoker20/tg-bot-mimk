@@ -10,43 +10,48 @@
 
     <style>
       body{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #f4f6fb;
         min-height: 100vh;
         display: flex;
         align-items: center;
+                justify-content: center;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                color: #1f2937;
       }
       .card{
-        border-radius: 20px;
-        border: none;
-        box-shadow: 0 20px 60px rgba(0,0,0,.2);
-        backdrop-filter: blur(10px);
-        background: rgba(255,255,255,.95);
+                border-radius: 16px;
+                border: 1px solid #e7ecf3;
+                box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
+                background: #fff;
       }
       .btn-success{
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        border: none;
-        transition: transform .2s;
+                background: #0f9c6a;
+                border-color: #0f9c6a;
       }
       .btn-success:hover{
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(79,172,254,.4);
+                background: #0c855a;
+                border-color: #0c855a;
       }
       .form-control:focus{
-        border-color: #4facfe;
-        box-shadow: 0 0 0 .2rem rgba(79,172,254,.25);
+                border-color: #4a70c8;
+                box-shadow: 0 0 0 .2rem rgba(74, 112, 200, .15);
       }
       .form-check-input:checked{
-        background-color: #4facfe;
-        border-color: #4facfe;
+                background-color: #2f58b7;
+                border-color: #2f58b7;
+            }
+            .auth-shell{
+                width: 100%;
+                max-width: 480px;
+                padding: 1rem;
       }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5 col-11">
+<div class="auth-shell">
+        <div class="row justify-content-center">
+                <div class="col-12">
             <div class="card shadow">
                 <div class="card-body p-4">
                     <div class="text-center mb-4">

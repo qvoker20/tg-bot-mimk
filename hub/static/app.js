@@ -44,7 +44,7 @@ if (sendCodeBtn) {
     phoneEl.value = formatPhoneWithPrefix(phoneEl.value);
   });
 
-  sendCodeBtn.addEventListener('click', async () => {
+  async function requestCode() {
     msgEl.textContent = '';
     sendCodeBtn.disabled = true;
     sendCodeBtn.textContent = 'Надсилаю...';
@@ -56,7 +56,7 @@ if (sendCodeBtn) {
       sendCodeBtn.textContent = 'Надіслати код';
       msgEl.textContent = 'Введіть номер у форматі +380XXXXXXXXX';
       msgEl.style.color = '#e53935';
-      return;
+      return false;
     }
 
     const r = await fetch('/api/auth/request-code', {
@@ -70,21 +70,27 @@ if (sendCodeBtn) {
     if (!data.ok) {
       msgEl.textContent = data.error || 'Помилка';
       msgEl.style.color = '#e53935';
-      return;
+      return false;
     }
     codeBlockEl.classList.remove('hidden');
     msgEl.textContent = '✅ Код надіслано у Telegram';
     msgEl.style.color = '#2e7d32';
-  });
+    return true;
+  }
 
-  document.getElementById('loginBtn').addEventListener('click', async () => {
+  async function loginWithCode() {
+    if (codeBlockEl.classList.contains('hidden')) {
+      await requestCode();
+      return;
+    }
+
     msgEl.textContent = '';
     const phone_number = formatPhoneWithPrefix(phoneEl.value);
     phoneEl.value = phone_number;
     if (!isValidUaPhone(phone_number)) {
       msgEl.textContent = 'Введіть номер у форматі +380XXXXXXXXX';
       msgEl.style.color = '#e53935';
-      return;
+      return false;
     }
     const code = codeEl.value.trim();
     const btn = document.getElementById('loginBtn');
@@ -101,10 +107,33 @@ if (sendCodeBtn) {
     if (!data.ok) {
       msgEl.textContent = data.error || 'Помилка';
       msgEl.style.color = '#e53935';
-      return;
+      return false;
     }
     window.location.href = '/';
+    return true;
+  }
+
+  sendCodeBtn.addEventListener('click', requestCode);
+
+  document.getElementById('loginBtn').addEventListener('click', loginWithCode);
+
+  phoneEl.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (codeBlockEl.classList.contains('hidden')) {
+      await requestCode();
+    } else {
+      codeEl.focus();
+    }
   });
+
+  if (codeEl) {
+    codeEl.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      await loginWithCode();
+    });
+  }
 }
 
 // ─── MAIN PAGE ───

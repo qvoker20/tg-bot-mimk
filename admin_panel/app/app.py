@@ -669,6 +669,7 @@ def announcements():
     if request.method == "POST":
         selected_roles = request.form.getlist("roles")
         selected_user_ids = request.form.getlist("target_users")  # список telegram_id як str
+        send_all = request.form.get("send_all") == "1"
         message = request.form.get("message", "").strip()
 
         # кілька файлів
@@ -694,7 +695,17 @@ def announcements():
         recipients: list[int] = []
         history_roles_text = ""
 
-        if selected_user_ids:
+        if send_all:
+            cur.execute(
+                """
+                SELECT DISTINCT telegram_id
+                FROM database_app_userdatatelegram
+                WHERE telegram_id IS NOT NULL
+                """
+            )
+            recipients = [row[0] for row in cur.fetchall()]
+            history_roles_text = "all"
+        elif selected_user_ids:
             # розсилка тільки обраним користувачам
             for uid in selected_user_ids:
                 try:
@@ -716,6 +727,8 @@ def announcements():
             """, (selected_roles,))
             recipients = [row[0] for row in cur.fetchall()]
             history_roles_text = ", ".join(selected_roles)
+
+        recipients = sorted(set(recipients))
 
         if not recipients:
             flash("Не знайдено жодного отримувача.", "warning")
@@ -786,26 +799,40 @@ def pass_requests():
     try:
         ensure_pass_requests_audit_columns()
         query = """
-            SELECT id, requester_name, requester_username, pass_type,
-                   vehicle_plate, vehicle_brand, visitor_full_name,
-                   visit_date, date_mode, visit_date_from, visit_date_to,
-                   status, created_at,
-                   processed_by_telegram_id, processed_by_name, processed_by_role,
-                   processed_at, cancel_reason
-            FROM logistics_pass_requests
+            SELECT lpr.id,
+                   COALESCE(NULLIF(TRIM(u.name), ''), lpr.requester_name) AS requester_name,
+                   lpr.requester_username,
+                   lpr.pass_type,
+                   lpr.vehicle_plate,
+                   lpr.vehicle_brand,
+                   lpr.visitor_full_name,
+                   lpr.visit_date,
+                   lpr.date_mode,
+                   lpr.visit_date_from,
+                   lpr.visit_date_to,
+                   lpr.status,
+                   lpr.created_at,
+                   lpr.processed_by_telegram_id,
+                   lpr.processed_by_name,
+                   lpr.processed_by_role,
+                   lpr.processed_at,
+                   lpr.cancel_reason
+            FROM logistics_pass_requests lpr
+            LEFT JOIN database_app_userdatatelegram u
+              ON u.telegram_id = lpr.requester_telegram_id
             WHERE 1=1
         """
         params: list[str] = []
 
         if search_vehicle:
-            query += " AND COALESCE(vehicle_plate, '') ILIKE %s"
+            query += " AND COALESCE(lpr.vehicle_plate, '') ILIKE %s"
             params.append(f"%{search_vehicle}%")
 
         if status_filter:
-            query += " AND status = %s"
+            query += " AND lpr.status = %s"
             params.append(status_filter)
 
-        query += " ORDER BY created_at DESC LIMIT 300"
+        query += " ORDER BY lpr.created_at DESC LIMIT 300"
         cur.execute(query, params)
         rows = cur.fetchall()
     except Exception as e:

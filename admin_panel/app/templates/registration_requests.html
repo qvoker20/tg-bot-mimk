@@ -5,12 +5,12 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
-      <h5 class="mb-0 text-dark">
+      <h5 class="section-title">
         <i class="bi bi-file-earmark-plus-fill text-primary me-2"></i>
         Заявки на реєстрацію
         <span class="badge bg-primary ms-2">{{ count }}</span>
       </h5>
-      <div class="text-muted small">Відміть заявки, заповни дані і натисни “Зареєструвати”</div>
+      <div class="section-hint">Відміть заявки, заповни дані і натисни “Зареєструвати”</div>
     </div>
 
     <form method="post" action="{{ url_for('process_registration') }}">

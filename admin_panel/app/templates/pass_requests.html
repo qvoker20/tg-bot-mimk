@@ -5,11 +5,11 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
-      <h5 class="mb-0 text-dark">
+      <h5 class="section-title">
         <i class="bi bi-person-vcard-fill text-primary me-2"></i>
         Заявки на пропуск
       </h5>
-      <div class="text-muted small">Доступ: admin, adminpre, логістика, закупівля</div>
+      <div class="section-hint">Доступ: admin, adminpre, логістика, закупівля</div>
     </div>
 
     <form method="get" class="row g-2 mb-3 align-items-end">
@@ -26,14 +26,14 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-5 d-flex gap-2">
-        <button class="btn btn-primary" type="submit">Застосувати</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('pass_requests') }}">Скинути</a>
+      <div class="col-md-5 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary btn-mobile-full" type="submit">Застосувати</button>
+        <a class="btn btn-outline-secondary btn-mobile-full" href="{{ url_for('pass_requests') }}">Скинути</a>
       </div>
     </form>
 
     <div class="table-wrap border">
-      <table class="table table-hover align-middle table-sm" style="width: 100%;">
+      <table class="table table-hover align-middle table-sm table-uniform" style="width: 100%;">
         <thead>
           <tr>
             <th style="width: 70px;">ID</th>
@@ -70,12 +70,12 @@
                   <span class="badge bg-secondary">Для особи</span>
                 {% endif %}
               </td>
-              <td>{{ r[6] }}</td>
+              <td><span class="clip-text" title="{{ r[6] }}">{{ r[6] }}</span></td>
               <td>
                 {% if r[8] == 'range' %}
-                  {{ r[9] }} — {{ r[10] }}
+                  <span class="clip-text" title="{{ r[9] }} — {{ r[10] }}">{{ r[9] }} — {{ r[10] }}</span>
                 {% else %}
-                  {{ r[9] or r[7] }}
+                  <span class="clip-text" title="{{ r[9] or r[7] }}">{{ r[9] or r[7] }}</span>
                 {% endif %}
               </td>
               <td>
@@ -86,18 +86,21 @@
                 {% endif %}
               </td>
               <td>
-                {{ r[1] or '—' }}
+                <span class="clip-text" title="{{ r[1] or '—' }}">{{ r[1] or '—' }}</span>
                 {% if r[2] %}
-                <div class="small text-muted">@{{ r[2] }}</div>
+                {% set telegram_username = r[2].replace('@', '').strip() %}
+                <div class="small text-muted">
+                  <a href="https://t.me/{{ telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ telegram_username }}</a>
+                </div>
                 {% endif %}
               </td>
               <td class="text-nowrap">
                 <span class="badge {% if r[11] == 'new' %}bg-primary{% elif r[11] == 'forwarded' %}bg-success{% else %}bg-secondary{% endif %}">{{ status_labels.get(r[11], r[11]) }}</span>
               </td>
-              <td class="small">{{ processed_by }}</td>
-              <td class="small text-muted">{{ processed_at_text }}</td>
-              <td class="small">{{ cancel_reason_text }}</td>
-              <td class="small text-muted">{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}</td>
+              <td class="small"><span class="clip-text" title="{{ processed_by }}">{{ processed_by }}</span></td>
+              <td class="small text-muted"><span class="clip-text" title="{{ processed_at_text }}">{{ processed_at_text }}</span></td>
+              <td class="small"><span class="clip-text" title="{{ cancel_reason_text }}">{{ cancel_reason_text }}</span></td>
+              <td class="small text-muted"><span class="clip-text" title="{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}">{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}</span></td>
             </tr>
             {% endfor %}
           {% else %}
@@ -121,6 +124,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div id="modalCancelAlert" class="alert alert-danger py-2 px-3 mb-3 d-none" role="alert">
+          Для скасування заявки обов'язково вкажіть причину.
+        </div>
         <div class="row g-3">
           <div class="col-md-6"><b>Тип:</b> <span id="modalPassType"></span></div>
           <div class="col-md-6"><b>Статус:</b> <span id="modalStatus"></span></div>
@@ -138,8 +144,8 @@
           <input type="hidden" id="modalRequestId" name="request_id" value="">
           <input type="email" id="modalTargetEmail" name="target_email" class="form-control" style="max-width: 320px;" placeholder="email отримувача" value="{{ default_target_email or '' }}">
           <input type="text" id="modalCancelReason" name="cancel_reason" class="form-control" style="max-width: 320px;" placeholder="Причина скасування (обов'язково)">
-          <button type="submit" name="action" value="forward" id="modalForwardBtn" class="btn btn-success">Передати заявку</button>
-          <button type="submit" name="action" value="cancel" id="modalCancelBtn" class="btn btn-outline-danger">Скасувати</button>
+          <button type="submit" name="action" value="forward" id="modalForwardBtn" class="btn btn-success btn-mobile-full">Передати заявку</button>
+          <button type="submit" name="action" value="cancel" id="modalCancelBtn" class="btn btn-outline-danger btn-mobile-full">Скасувати</button>
         </form>
       </div>
     </div>
@@ -151,6 +157,16 @@
 <script>
   const modalActionForm = document.getElementById('modalActionForm');
   const modalCancelReason = document.getElementById('modalCancelReason');
+  const modalCancelAlert = document.getElementById('modalCancelAlert');
+  let lastAction = '';
+
+  function hideCancelAlert() {
+    modalCancelAlert.classList.add('d-none');
+  }
+
+  function showCancelAlert() {
+    modalCancelAlert.classList.remove('d-none');
+  }
 
   document.querySelectorAll('tr[data-request-id]').forEach((row) => {
     row.addEventListener('click', () => {
@@ -175,7 +191,21 @@
       document.getElementById('modalVehicle').textContent = vehicle;
       document.getElementById('modalDate').textContent = date;
       document.getElementById('modalCreated').textContent = created;
-      document.getElementById('modalRequester').textContent = requesterUsername ? `${requester} (@${requesterUsername})` : requester;
+      const modalRequesterEl = document.getElementById('modalRequester');
+      modalRequesterEl.textContent = requester || '—';
+      if (requesterUsername) {
+        const cleanUsername = requesterUsername.replace('@', '').trim();
+        if (cleanUsername) {
+          modalRequesterEl.append(' (');
+          const profileLink = document.createElement('a');
+          profileLink.href = `https://t.me/${cleanUsername}`;
+          profileLink.target = '_blank';
+          profileLink.rel = 'noopener noreferrer';
+          profileLink.textContent = `@${cleanUsername}`;
+          modalRequesterEl.appendChild(profileLink);
+          modalRequesterEl.append(')');
+        }
+      }
       document.getElementById('modalProcessedBy').textContent = processedBy || '—';
       document.getElementById('modalProcessedAt').textContent = processedAt || '—';
       document.getElementById('modalCancelReasonText').textContent = cancelReason || '—';
@@ -185,14 +215,34 @@
       document.getElementById('modalForwardBtn').disabled = !isEditable;
       document.getElementById('modalCancelBtn').disabled = !isEditable;
       modalCancelReason.value = '';
+      modalCancelReason.required = false;
+      hideCancelAlert();
     });
+  });
+
+  document.getElementById('modalForwardBtn').addEventListener('click', () => {
+    lastAction = 'forward';
+    modalCancelReason.required = false;
+    hideCancelAlert();
+  });
+
+  document.getElementById('modalCancelBtn').addEventListener('click', () => {
+    lastAction = 'cancel';
+    modalCancelReason.required = true;
+  });
+
+  modalCancelReason.addEventListener('input', () => {
+    if (modalCancelReason.value.trim()) {
+      hideCancelAlert();
+    }
   });
 
   modalActionForm.addEventListener('submit', (e) => {
     const submitter = e.submitter;
-    if (submitter && submitter.value === 'cancel' && !modalCancelReason.value.trim()) {
+    const action = submitter?.value || lastAction;
+    if (action === 'cancel' && !modalCancelReason.value.trim()) {
       e.preventDefault();
-      alert('Вкажіть причину скасування заявки.');
+      showCancelAlert();
       modalCancelReason.focus();
     }
   });
