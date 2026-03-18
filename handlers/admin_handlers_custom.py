@@ -2,7 +2,6 @@ import logging
 import sqlite3
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
-import chromadb
 from openai import OpenAI
 from datetime import timedelta, time, datetime, date
 from utils.db_utils import get_user_data

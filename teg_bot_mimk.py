@@ -22,7 +22,7 @@ from handlers.production_handlers import (
     show_production_menu,
     find_purchase_by_order_number, production_button_handler, find_by_nymber_order
 )
-from handlers.mimk_ai_handlers import show_mimk_ai, mimk_ai_button_handler, handle_mimk_ai_text  
+ 
 from handlers.admin_handlers_custom import (
     show_admin_menu, admin_button_handler, send_ai_log_pdf,
     notify_admin_about_restriction, admin_change_role_callback_handler
@@ -822,7 +822,6 @@ def main():
     application.add_handler(CallbackQueryHandler(help_request_confirm, pattern='^help_(send|cancel)$'))
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))  # Обробник для головного меню
-    application.add_handler(CallbackQueryHandler(mimk_ai_button_handler, pattern='^(ai_sales|ai_tech|ai_work)$'))
     application.add_handler(CallbackQueryHandler(admin_button_handler, pattern='^(admin_register|admin_delete|admin_users|admin_announce|admin_change_role)$'))
     application.add_handler(CallbackQueryHandler(admin_change_role_callback_handler, pattern='^(change_role_page_.*|change_role_select_.*|change_role_back)$'))
     application.add_handler(CallbackQueryHandler(assembler_button_handler, pattern='^(asm_.*)$'))
@@ -837,12 +836,12 @@ def main():
         time(hour=8, minute=30, tzinfo=local_timezone)  # Час запуску (8:00 ранку за локальним часом)
     )
 
-    # Додаємо періодичну перевірку змін (кожні 5 хвилин)
-    job_queue.run_repeating(
-        check_for_changes,  # Функція для перевірки змін
-        interval=timedelta(minutes=1),  # Інтервал перевірки
-        first=0  # Почати одразу після запуску
-    )
+    # # Додаємо періодичну перевірку змін (кожні 5 хвилин)
+    # job_queue.run_repeating(
+    #     check_for_changes,  # Функція для перевірки змін
+    #     interval=timedelta(minutes=1),  # Інтервал перевірки
+    #     first=0  # Почати одразу після запуску
+    # )
 
     application.run_polling()
     

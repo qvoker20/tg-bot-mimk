@@ -623,6 +623,28 @@ async def handle_help_request_input(update: Update, context: CallbackContext):
     )
     return True
 
+def get_user_profile(user_id, username):
+    try:
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+        # Приклад запиту: шукаємо за user_id або username
+        cursor.execute(
+    "SELECT name, phone_number FROM database_app_userdatatelegram WHERE telegram_id = %s OR username = %s",
+    (user_id, username)
+)
+        row = cursor.fetchone()
+        if row:
+            return row[0], row[1]  # name, phone
+        else:
+            return "Невідомо", "Невідомо"
+    except Exception as e:
+        logging.error(f"Помилка отримання профілю: {e}")
+        return "Невідомо", "Невідомо"
+    finally:
+        cursor.close()
+        conn.close()
+
+
 async def help_request_confirm(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
@@ -657,9 +679,14 @@ async def help_request_confirm(update: Update, context: CallbackContext):
             service_thread_id = DEFAULT_SERVICE_THREAD_ID
 
         user = query.from_user
+        name, phone = get_user_profile(user.id, user.username)
+        tg_username = f"@{user.username}" if user.username else "немає"
+
         msg = (
             "❗️ Новий запит на допомогу (Сервіс замірів)\n"
-            f"👤 Користувач: {user.full_name} (id: {user.id})\n"
+            f"👤 Користувач: {name}\n"
+            f"📞 Телефон: {phone}\n"
+            f"🔗 Профіль: {tg_username}\n"
             f"📝 Текст: {pending_text}"
         )
 
