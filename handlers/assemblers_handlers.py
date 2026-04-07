@@ -36,9 +36,12 @@ async def show_assemblers_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.message:
-        await update.message.reply_text("Меню для збиральників:", reply_markup=reply_markup)
+        sent_message = await update.message.reply_text("Меню для збиральників:", reply_markup=reply_markup)
+        context.user_data["assemblers_message_id"] = sent_message.message_id
     else:
         await update.callback_query.edit_message_text("Меню для збиральників:", reply_markup=reply_markup)
+        if update.callback_query and update.callback_query.message:
+            context.user_data["assemblers_message_id"] = update.callback_query.message.message_id
 
 
 async def assembler_button_handler(update: Update, context: CallbackContext):

@@ -9,17 +9,20 @@
         <i class="bi bi-person-vcard-fill text-primary me-2"></i>
         Заявки на пропуск
       </h5>
-      <div class="section-hint">Доступ: admin, adminpre, логістика, закупівля</div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="section-hint">Доступ: admin, adminpre, логістика, закупівля</div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createRequestModal">Створити заявку</button>
+      </div>
     </div>
 
-    <form method="get" class="row g-2 mb-3 align-items-end">
+    <form method="get" class="row g-2 mb-3 align-items-end" id="filtersForm">
       <div class="col-md-4">
         <label class="form-label mb-1">Пошук по авто</label>
-        <input type="text" name="search_vehicle" class="form-control" placeholder="Напр. КА5593РХ" value="{{ search_vehicle or '' }}">
+        <input type="text" name="search_vehicle" id="searchVehicleInput" class="form-control" placeholder="Напр. КА5593РХ" value="{{ search_vehicle or '' }}">
       </div>
       <div class="col-md-3">
         <label class="form-label mb-1">Фільтр статусу</label>
-        <select name="status" class="form-select">
+        <select name="status" id="statusFilterInput" class="form-select">
           <option value="">Усі статуси</option>
           {% for code, title in status_labels.items() %}
             <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ title }}</option>
@@ -36,75 +39,77 @@
       <table class="table table-hover align-middle table-sm table-uniform" style="width: 100%;">
         <thead>
           <tr>
-            <th style="width: 70px;">ID</th>
-            <th style="width: 90px;">Тип</th>
-            <th>ПІБ відвідувача</th>
-            <th style="width: 220px;">Дата візиту</th>
-            <th style="width: 90px;">Авто</th>
+            <th style="width: 90px;">ID</th>
+            <th style="width: 110px;">Тип</th>
+            <th>Особи</th>
+            <th style="width: 180px;">Дата візиту</th>
+            <th style="width: 110px;">Авто</th>
             <th style="width: 170px;">Хто створив</th>
             <th style="width: 120px;">Статус</th>
-            <th style="width: 190px;">Опрацював</th>
+            <th style="width: 170px;">Опрацював</th>
             <th style="width: 170px;">Опрацьовано</th>
             <th style="width: 220px;">Причина</th>
             <th style="width: 170px;">Створено</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="passRequestsBody">
           {% if requests_list %}
             {% for r in requests_list %}
-            {% if r[8] == 'range' %}
-              {% set date_text = ((r[9].strftime('%d.%m.%Y') if r[9] else '—') ~ ' — ' ~ (r[10].strftime('%d.%m.%Y') if r[10] else '—')) %}
-            {% else %}
-              {% set date_text = (r[9].strftime('%d.%m.%Y') if r[9] else (r[7].strftime('%d.%m.%Y') if r[7] else '—')) %}
-            {% endif %}
-            {% set processed_by = (r[14] or '') ~ ((' (' ~ r[15] ~ ')') if r[15] else '') %}
-            {% set processed_by = processed_by if processed_by.strip() else '—' %}
-            {% set processed_at_text = (r[16].strftime('%d.%m.%Y %H:%M') if r[16] else '—') %}
-            {% set cancel_reason_text = r[17] if r[17] else '—' %}
-            <tr class="row-click" data-request-id="{{ r[0] }}" data-visitor="{{ r[6] or '' }}" data-vehicle="{{ (r[4] if r[3] == 'vehicle' else '—') or '—' }}" data-status="{{ r[11] }}" data-status-label="{{ status_labels.get(r[11], r[11]) }}" data-pass-type="{{ 'Для авто' if r[3] == 'vehicle' else 'Для особи' }}" data-date="{{ date_text }}" data-requester="{{ r[1] or '—' }}" data-requester-username="{{ r[2] or '' }}" data-created="{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}" data-processed-by="{{ processed_by }}" data-processed-at="{{ processed_at_text }}" data-cancel-reason="{{ cancel_reason_text }}" data-bs-toggle="modal" data-bs-target="#requestModal">
-              <td class="font-monospace">{{ r[0] }}</td>
+            <tr class="row-click"
+                data-request-id="{{ r.first_request_id }}"
+                data-request-group-id="{{ r.request_group_id }}"
+                data-visitors="{{ (r.visitors|join('||'))|e }}"
+                data-visitors-text="{{ r.visitors_text|e }}"
+                data-persons-count="{{ r.persons_count }}"
+                data-vehicle="{{ r.vehicle_plate|e }}"
+                data-status="{{ r.status }}"
+                data-status-label="{{ status_labels.get(r.status, r.status) }}"
+                data-pass-type="{{ r.type_label }}"
+                data-date="{{ r.date_text|e }}"
+                data-date-mode="{{ r.date_mode }}"
+                data-date-from="{{ r.visit_date_from|e }}"
+                data-date-to="{{ r.visit_date_to|e }}"
+                data-requester="{{ r.requester_name|e }}"
+                data-requester-username="{{ r.requester_username|e }}"
+                data-created="{{ r.created_at_text|e }}"
+                data-processed-by="{{ r.processed_by|e }}"
+                data-processed-at="{{ r.processed_at_text|e }}"
+                data-cancel-reason="{{ r.cancel_reason|e }}"
+                data-bs-toggle="modal"
+                data-bs-target="#requestModal">
+              <td class="font-monospace">{{ r.first_request_id }}</td>
               <td>
-                {% if r[3] == 'vehicle' %}
+                {% if r.persons_count > 1 %}
+                  <span class="badge bg-warning text-dark">Група</span>
+                {% elif r.pass_type == 'vehicle' %}
                   <span class="badge bg-info text-dark">Для авто</span>
                 {% else %}
                   <span class="badge bg-secondary">Для особи</span>
                 {% endif %}
               </td>
-              <td><span class="clip-text" title="{{ r[6] }}">{{ r[6] }}</span></td>
+              <td><span class="clip-text" title="{{ r.visitors_text }}">{{ r.visitors_text }}</span></td>
+              <td><span class="clip-text" title="{{ r.date_text }}">{{ r.date_text }}</span></td>
+              <td>{{ r.vehicle_plate }}</td>
               <td>
-                {% if r[8] == 'range' %}
-                  <span class="clip-text" title="{{ r[9] }} — {{ r[10] }}">{{ r[9] }} — {{ r[10] }}</span>
-                {% else %}
-                  <span class="clip-text" title="{{ r[9] or r[7] }}">{{ r[9] or r[7] }}</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if r[3] == 'vehicle' %}
-                  {{ r[4] or '—' }}
-                {% else %}
-                  —
-                {% endif %}
-              </td>
-              <td>
-                <span class="clip-text" title="{{ r[1] or '—' }}">{{ r[1] or '—' }}</span>
-                {% if r[2] %}
-                {% set telegram_username = r[2].replace('@', '').strip() %}
+                <span class="clip-text" title="{{ r.requester_name }}">{{ r.requester_name }}</span>
+                {% if r.requester_username %}
+                {% set telegram_username = r.requester_username.replace('@', '').strip() %}
                 <div class="small text-muted">
                   <a href="https://t.me/{{ telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ telegram_username }}</a>
                 </div>
                 {% endif %}
               </td>
               <td class="text-nowrap">
-                <span class="badge {% if r[11] == 'new' %}bg-primary{% elif r[11] == 'forwarded' %}bg-success{% else %}bg-secondary{% endif %}">{{ status_labels.get(r[11], r[11]) }}</span>
+                <span class="badge {% if r.status == 'new' %}bg-primary{% elif r.status == 'forwarded' %}bg-success{% else %}bg-secondary{% endif %}">{{ status_labels.get(r.status, r.status) }}</span>
               </td>
-              <td class="small"><span class="clip-text" title="{{ processed_by }}">{{ processed_by }}</span></td>
-              <td class="small text-muted"><span class="clip-text" title="{{ processed_at_text }}">{{ processed_at_text }}</span></td>
-              <td class="small"><span class="clip-text" title="{{ cancel_reason_text }}">{{ cancel_reason_text }}</span></td>
-              <td class="small text-muted"><span class="clip-text" title="{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}">{{ r[12].strftime('%d.%m.%Y %H:%M') if r[12] else '—' }}</span></td>
+              <td class="small"><span class="clip-text" title="{{ r.processed_by }}">{{ r.processed_by }}</span></td>
+              <td class="small text-muted"><span class="clip-text" title="{{ r.processed_at_text }}">{{ r.processed_at_text }}</span></td>
+              <td class="small"><span class="clip-text" title="{{ r.cancel_reason }}">{{ r.cancel_reason }}</span></td>
+              <td class="small text-muted"><span class="clip-text" title="{{ r.created_at_text }}">{{ r.created_at_text }}</span></td>
             </tr>
             {% endfor %}
           {% else %}
-            <tr>
+            <tr id="emptyStateRow">
               <td colspan="11" class="text-center text-muted py-4">
                 Наразі заявок на пропуск немає
               </td>
@@ -113,6 +118,7 @@
         </tbody>
       </table>
     </div>
+    <div id="scrollLoader" class="text-center py-3 text-muted d-none">Завантаження...</div>
   </div>
 </div>
 
@@ -130,10 +136,10 @@
         <div class="row g-3">
           <div class="col-md-6"><b>Тип:</b> <span id="modalPassType"></span></div>
           <div class="col-md-6"><b>Статус:</b> <span id="modalStatus"></span></div>
-          <div class="col-md-6"><b>ПІБ:</b> <span id="modalVisitor"></span></div>
           <div class="col-md-6"><b>Авто:</b> <span id="modalVehicle"></span></div>
           <div class="col-md-6"><b>Дата:</b> <span id="modalDate"></span></div>
           <div class="col-md-6"><b>Створено:</b> <span id="modalCreated"></span></div>
+          <div class="col-12"><b>Особи:</b> <span id="modalVisitors"></span></div>
           <div class="col-12"><b>Хто створив:</b> <span id="modalRequester"></span></div>
           <div class="col-md-6"><b>Опрацював:</b> <span id="modalProcessedBy"></span></div>
           <div class="col-md-6"><b>Опрацьовано:</b> <span id="modalProcessedAt"></span></div>
@@ -142,12 +148,105 @@
 
         <form id="modalActionForm" method="post" action="{{ url_for('pass_request_action') }}" class="mt-3 d-flex flex-wrap gap-2 align-items-center">
           <input type="hidden" id="modalRequestId" name="request_id" value="">
-          <input type="email" id="modalTargetEmail" name="target_email" class="form-control" style="max-width: 320px;" placeholder="email отримувача" value="{{ default_target_email or '' }}">
-          <input type="text" id="modalCancelReason" name="cancel_reason" class="form-control" style="max-width: 320px;" placeholder="Причина скасування (обов'язково)">
+          <input type="hidden" id="modalRequestGroupId" name="request_group_id" value="">
+          <input type="email" id="modalTargetEmail" name="target_email" class="form-control" style="max-width: 280px;" placeholder="email отримувача" value="{{ default_target_email or '' }}">
+          <input type="text" id="modalCancelReason" name="cancel_reason" class="form-control" style="max-width: 280px;" placeholder="Причина скасування (обов'язково)">
           <button type="submit" name="action" value="forward" id="modalForwardBtn" class="btn btn-success btn-mobile-full">Передати заявку</button>
           <button type="submit" name="action" value="cancel" id="modalCancelBtn" class="btn btn-outline-danger btn-mobile-full">Скасувати</button>
+          <button type="button" id="openCloneModalBtn" class="btn btn-outline-primary btn-mobile-full" data-bs-toggle="modal" data-bs-target="#cloneRequestModal">Копія з новою датою</button>
         </form>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="createRequestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Створити заявку на перепустку</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('pass_request_create') }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Тип</label>
+              <select class="form-select" name="pass_type" id="createPassType" required>
+                <option value="person">Для особи</option>
+                <option value="vehicle">Для авто</option>
+              </select>
+            </div>
+            <div class="col-md-8" id="createVehicleWrap" style="display:none;">
+              <label class="form-label">Номер авто</label>
+              <input type="text" class="form-control" name="vehicle_plate" id="createVehicleInput" placeholder="AA1234BB">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Кількість осіб</label>
+              <input type="number" min="1" max="30" value="1" class="form-control" name="persons_count" id="createPersonsCount" required>
+            </div>
+            <div class="col-12" id="createPersonsFieldsWrap">
+              <label class="form-label">ПІБ осіб</label>
+              <div id="createPersonsFields" class="d-flex flex-column gap-2"></div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Тип дати</label>
+              <select class="form-select" name="date_mode" id="createDateMode" required>
+                <option value="single">На один день</option>
+                <option value="range">Від та до</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Дата ВІД</label>
+              <input type="date" class="form-control" name="visit_date_from" required>
+            </div>
+            <div class="col-md-4" id="createDateToWrap" style="display:none;">
+              <label class="form-label">Дата ДО</label>
+              <input type="date" class="form-control" name="visit_date_to" id="createDateToInput">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрити</button>
+          <button type="submit" class="btn btn-primary">Створити</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="cloneRequestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Копія заявки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('pass_request_clone') }}">
+        <div class="modal-body">
+          <input type="hidden" name="source_group_id" id="cloneSourceGroupId">
+          <div class="mb-3"><b>Особи:</b> <span id="cloneVisitorsLabel"></span></div>
+          <div class="mb-3">
+            <label class="form-label">Тип дати</label>
+            <select class="form-select" name="date_mode" id="cloneDateMode" required>
+              <option value="single">На один день</option>
+              <option value="range">Від та до</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Нова дата ВІД</label>
+            <input type="date" class="form-control" name="visit_date_from" required>
+          </div>
+          <div class="mb-2" id="cloneDateToWrap" style="display:none;">
+            <label class="form-label">Нова дата ДО</label>
+            <input type="date" class="form-control" name="visit_date_to" id="cloneDateToInput">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрити</button>
+          <button type="submit" class="btn btn-primary">Створити копію</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -155,10 +254,117 @@
 
 {% block scripts %}
 <script>
+  const tbody = document.getElementById('passRequestsBody');
+  const scrollLoader = document.getElementById('scrollLoader');
   const modalActionForm = document.getElementById('modalActionForm');
   const modalCancelReason = document.getElementById('modalCancelReason');
   const modalCancelAlert = document.getElementById('modalCancelAlert');
+  const searchVehicleInput = document.getElementById('searchVehicleInput');
+  const statusFilterInput = document.getElementById('statusFilterInput');
+  const createPersonsCount = document.getElementById('createPersonsCount');
+  const createPersonsFields = document.getElementById('createPersonsFields');
+
   let lastAction = '';
+  let offset = tbody.querySelectorAll('tr[data-request-id]').length;
+  let loading = false;
+  let hasMore = offset >= 20;
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function statusBadge(status, statusLabel) {
+    const cls = status === 'new' ? 'bg-primary' : (status === 'forwarded' ? 'bg-success' : 'bg-secondary');
+    return `<span class="badge ${cls}">${escapeHtml(statusLabel || status)}</span>`;
+  }
+
+  function typeBadge(item) {
+    if ((item.persons_count || 0) > 1) {
+      return '<span class="badge bg-warning text-dark">Група</span>';
+    }
+    if (item.pass_type === 'vehicle') {
+      return '<span class="badge bg-info text-dark">Для авто</span>';
+    }
+    return '<span class="badge bg-secondary">Для особи</span>';
+  }
+
+  function buildRow(item) {
+    const visitorsJoined = (item.visitors || []).join('||');
+    const username = (item.requester_username || '').replace('@', '').trim();
+    const requesterLink = username
+      ? `<div class="small text-muted"><a href="https://t.me/${escapeHtml(username)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(username)}</a></div>`
+      : '';
+
+    return `
+      <tr class="row-click"
+          data-request-id="${escapeHtml(item.first_request_id)}"
+          data-request-group-id="${escapeHtml(item.request_group_id)}"
+          data-visitors="${escapeHtml(visitorsJoined)}"
+          data-visitors-text="${escapeHtml(item.visitors_text || '—')}"
+          data-persons-count="${escapeHtml(item.persons_count || 0)}"
+          data-vehicle="${escapeHtml(item.vehicle_plate || '—')}"
+          data-status="${escapeHtml(item.status)}"
+          data-status-label="${escapeHtml(item.status)}"
+          data-pass-type="${escapeHtml(item.type_label || '')}"
+          data-date="${escapeHtml(item.date_text || '')}"
+          data-date-mode="${escapeHtml(item.date_mode || 'single')}"
+          data-date-from="${escapeHtml(item.visit_date_from || '')}"
+          data-date-to="${escapeHtml(item.visit_date_to || '')}"
+          data-requester="${escapeHtml(item.requester_name || '—')}"
+          data-requester-username="${escapeHtml(item.requester_username || '')}"
+          data-created="${escapeHtml(item.created_at_text || '—')}"
+          data-processed-by="${escapeHtml(item.processed_by || '—')}"
+          data-processed-at="${escapeHtml(item.processed_at_text || '—')}"
+          data-cancel-reason="${escapeHtml(item.cancel_reason || '—')}"
+          data-bs-toggle="modal"
+          data-bs-target="#requestModal">
+        <td class="font-monospace">${escapeHtml(item.first_request_id)}</td>
+        <td>${typeBadge(item)}</td>
+        <td><span class="clip-text" title="${escapeHtml(item.visitors_text || '—')}">${escapeHtml(item.visitors_text || '—')}</span></td>
+        <td><span class="clip-text" title="${escapeHtml(item.date_text || '—')}">${escapeHtml(item.date_text || '—')}</span></td>
+        <td>${escapeHtml(item.vehicle_plate || '—')}</td>
+        <td><span class="clip-text" title="${escapeHtml(item.requester_name || '—')}">${escapeHtml(item.requester_name || '—')}</span>${requesterLink}</td>
+        <td class="text-nowrap">${statusBadge(item.status, item.status)}</td>
+        <td class="small"><span class="clip-text" title="${escapeHtml(item.processed_by || '—')}">${escapeHtml(item.processed_by || '—')}</span></td>
+        <td class="small text-muted"><span class="clip-text" title="${escapeHtml(item.processed_at_text || '—')}">${escapeHtml(item.processed_at_text || '—')}</span></td>
+        <td class="small"><span class="clip-text" title="${escapeHtml(item.cancel_reason || '—')}">${escapeHtml(item.cancel_reason || '—')}</span></td>
+        <td class="small text-muted"><span class="clip-text" title="${escapeHtml(item.created_at_text || '—')}">${escapeHtml(item.created_at_text || '—')}</span></td>
+      </tr>
+    `;
+  }
+
+  async function loadMore() {
+    if (loading || !hasMore) return;
+    loading = true;
+    scrollLoader.classList.remove('d-none');
+
+    try {
+      const params = new URLSearchParams({
+        offset: String(offset),
+        search_vehicle: searchVehicleInput.value || '',
+        status: statusFilterInput.value || ''
+      });
+      const res = await fetch(`{{ url_for('pass_requests_chunk') }}?${params.toString()}`);
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+      const items = data.items || [];
+
+      const empty = document.getElementById('emptyStateRow');
+      if (empty && items.length > 0) empty.remove();
+
+      items.forEach((item) => {
+        tbody.insertAdjacentHTML('beforeend', buildRow(item));
+      });
+
+      offset += items.length;
+      hasMore = Boolean(data.has_more);
+    } catch (e) {
+      hasMore = false;
+    } finally {
+      loading = false;
+      scrollLoader.classList.add('d-none');
+    }
+  }
 
   function hideCancelAlert() {
     modalCancelAlert.classList.add('d-none');
@@ -168,56 +374,72 @@
     modalCancelAlert.classList.remove('d-none');
   }
 
-  document.querySelectorAll('tr[data-request-id]').forEach((row) => {
-    row.addEventListener('click', () => {
-      const requestId = row.dataset.requestId;
-      const visitor = row.dataset.visitor;
-      const vehicle = row.dataset.vehicle;
-      const statusCode = row.dataset.status;
-      const statusLabel = row.dataset.statusLabel;
-      const passType = row.dataset.passType;
-      const date = row.dataset.date;
-      const requester = row.dataset.requester;
-      const requesterUsername = row.dataset.requesterUsername;
-      const created = row.dataset.created;
-      const processedBy = row.dataset.processedBy;
-      const processedAt = row.dataset.processedAt;
-      const cancelReason = row.dataset.cancelReason;
+  tbody.addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-request-id]');
+    if (!row) return;
 
-      document.getElementById('modalReqId').textContent = `#${requestId}`;
-      document.getElementById('modalPassType').textContent = passType;
-      document.getElementById('modalStatus').textContent = statusLabel;
-      document.getElementById('modalVisitor').textContent = visitor;
-      document.getElementById('modalVehicle').textContent = vehicle;
-      document.getElementById('modalDate').textContent = date;
-      document.getElementById('modalCreated').textContent = created;
-      const modalRequesterEl = document.getElementById('modalRequester');
-      modalRequesterEl.textContent = requester || '—';
-      if (requesterUsername) {
-        const cleanUsername = requesterUsername.replace('@', '').trim();
-        if (cleanUsername) {
-          modalRequesterEl.append(' (');
-          const profileLink = document.createElement('a');
-          profileLink.href = `https://t.me/${cleanUsername}`;
-          profileLink.target = '_blank';
-          profileLink.rel = 'noopener noreferrer';
-          profileLink.textContent = `@${cleanUsername}`;
-          modalRequesterEl.appendChild(profileLink);
-          modalRequesterEl.append(')');
-        }
+    const requestId = row.dataset.requestId;
+    const requestGroupId = row.dataset.requestGroupId;
+    const visitors = (row.dataset.visitors || '').split('||').filter(Boolean);
+    const visitorsText = row.dataset.visitorsText || '—';
+    const statusCode = row.dataset.status;
+    const statusLabel = row.dataset.statusLabel;
+    const passType = row.dataset.passType;
+    const date = row.dataset.date;
+    const requester = row.dataset.requester;
+    const requesterUsername = row.dataset.requesterUsername;
+    const created = row.dataset.created;
+    const processedBy = row.dataset.processedBy;
+    const processedAt = row.dataset.processedAt;
+    const cancelReason = row.dataset.cancelReason;
+    const dateMode = row.dataset.dateMode || 'single';
+    const dateFrom = row.dataset.dateFrom || '';
+    const dateTo = row.dataset.dateTo || '';
+
+    document.getElementById('modalReqId').textContent = `#${requestId}`;
+    document.getElementById('modalPassType').textContent = passType;
+    document.getElementById('modalStatus').textContent = statusLabel;
+    document.getElementById('modalVisitors').textContent = visitorsText;
+    document.getElementById('modalVehicle').textContent = row.dataset.vehicle || '—';
+    document.getElementById('modalDate').textContent = date;
+    document.getElementById('modalCreated').textContent = created;
+
+    const modalRequesterEl = document.getElementById('modalRequester');
+    modalRequesterEl.textContent = requester || '—';
+    if (requesterUsername) {
+      const cleanUsername = requesterUsername.replace('@', '').trim();
+      if (cleanUsername) {
+        modalRequesterEl.append(' (');
+        const profileLink = document.createElement('a');
+        profileLink.href = `https://t.me/${cleanUsername}`;
+        profileLink.target = '_blank';
+        profileLink.rel = 'noopener noreferrer';
+        profileLink.textContent = `@${cleanUsername}`;
+        modalRequesterEl.appendChild(profileLink);
+        modalRequesterEl.append(')');
       }
-      document.getElementById('modalProcessedBy').textContent = processedBy || '—';
-      document.getElementById('modalProcessedAt').textContent = processedAt || '—';
-      document.getElementById('modalCancelReasonText').textContent = cancelReason || '—';
+    }
 
-      document.getElementById('modalRequestId').value = requestId;
-      const isEditable = statusCode === 'new';
-      document.getElementById('modalForwardBtn').disabled = !isEditable;
-      document.getElementById('modalCancelBtn').disabled = !isEditable;
-      modalCancelReason.value = '';
-      modalCancelReason.required = false;
-      hideCancelAlert();
-    });
+    document.getElementById('modalProcessedBy').textContent = processedBy || '—';
+    document.getElementById('modalProcessedAt').textContent = processedAt || '—';
+    document.getElementById('modalCancelReasonText').textContent = cancelReason || '—';
+
+    document.getElementById('modalRequestId').value = requestId;
+    document.getElementById('modalRequestGroupId').value = requestGroupId;
+
+    document.getElementById('cloneSourceGroupId').value = requestGroupId;
+    document.getElementById('cloneVisitorsLabel').textContent = visitorsText;
+    document.getElementById('cloneDateMode').value = dateMode;
+    document.getElementById('cloneDateToWrap').style.display = dateMode === 'range' ? '' : 'none';
+
+    const isEditable = statusCode === 'new';
+    document.getElementById('modalForwardBtn').disabled = !isEditable;
+    document.getElementById('modalCancelBtn').disabled = !isEditable;
+    document.getElementById('openCloneModalBtn').disabled = false;
+
+    modalCancelReason.value = '';
+    modalCancelReason.required = false;
+    hideCancelAlert();
   });
 
   document.getElementById('modalForwardBtn').addEventListener('click', () => {
@@ -244,6 +466,51 @@
       e.preventDefault();
       showCancelAlert();
       modalCancelReason.focus();
+    }
+  });
+
+  document.getElementById('createPassType').addEventListener('change', (e) => {
+    const isVehicle = e.target.value === 'vehicle';
+    document.getElementById('createVehicleWrap').style.display = isVehicle ? '' : 'none';
+    document.getElementById('createVehicleInput').required = isVehicle;
+  });
+
+  document.getElementById('createDateMode').addEventListener('change', (e) => {
+    const isRange = e.target.value === 'range';
+    document.getElementById('createDateToWrap').style.display = isRange ? '' : 'none';
+    document.getElementById('createDateToInput').required = isRange;
+  });
+
+  function rebuildPersonInputs() {
+    const count = Math.max(1, Math.min(30, parseInt(createPersonsCount.value || '1', 10)));
+    createPersonsCount.value = count;
+    createPersonsFields.innerHTML = '';
+
+    for (let i = 1; i <= count; i += 1) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = `person_${i}`;
+      input.required = true;
+      input.className = 'form-control';
+      input.placeholder = `ПІБ особи ${i}`;
+      createPersonsFields.appendChild(input);
+    }
+  }
+
+  createPersonsCount.addEventListener('input', rebuildPersonInputs);
+  rebuildPersonInputs();
+
+  document.getElementById('cloneDateMode').addEventListener('change', (e) => {
+    const isRange = e.target.value === 'range';
+    document.getElementById('cloneDateToWrap').style.display = isRange ? '' : 'none';
+    document.getElementById('cloneDateToInput').required = isRange;
+  });
+
+  window.addEventListener('scroll', () => {
+    if (!hasMore || loading) return;
+    const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
+    if (nearBottom) {
+      loadMore();
     }
   });
 </script>

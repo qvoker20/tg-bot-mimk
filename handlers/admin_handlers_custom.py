@@ -78,8 +78,11 @@ async def show_admin_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     if update.callback_query:
         await update.callback_query.edit_message_text("⬇️ Оберіть дію (Admin):", reply_markup=reply_markup)
+        if update.callback_query.message:
+            context.user_data["admin_message_id"] = update.callback_query.message.message_id
     else:
-        await update.message.reply_text("⬇️ Оберіть дію (Admin):", reply_markup=reply_markup)
+        sent_message = await update.message.reply_text("⬇️ Оберіть дію (Admin):", reply_markup=reply_markup)
+        context.user_data["admin_message_id"] = sent_message.message_id
 
 async def admin_button_handler(update: Update, context: CallbackContext):
     query = update.callback_query

@@ -1,10 +1,11 @@
 from flask import (
     Flask, render_template, request,
-    redirect, url_for, session, flash
+    redirect, url_for, session, flash, jsonify
 )
 import psycopg2
 import requests
 import random
+import uuid
 import os
 import json
 import smtplib
@@ -72,6 +73,121 @@ def _format_pass_date(value) -> str:
         return str(value)
 
 
+def _parse_date(value: str):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _group_type_label(pass_type: str, persons_count: int) -> str:
+    if persons_count > 1:
+        return "Група"
+    return "Для авто" if pass_type == "vehicle" else "Для особи"
+
+
+def _fetch_pass_request_groups(limit: int, offset: int, search_vehicle: str, status_filter: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        ensure_pass_requests_audit_columns()
+
+        params = []
+        where_parts = ["1=1"]
+        if search_vehicle:
+            where_parts.append("COALESCE(lpr.vehicle_plate, '') ILIKE %s")
+            params.append(f"%{search_vehicle}%")
+        if status_filter:
+            where_parts.append("lpr.status = %s")
+            params.append(status_filter)
+
+        where_sql = " AND ".join(where_parts)
+        params.extend([limit, offset])
+
+        cur.execute(
+            f"""
+            WITH grouped AS (
+                SELECT
+                    COALESCE(NULLIF(lpr.request_group_id, ''), lpr.id::text) AS request_group_id,
+                    MIN(lpr.id) AS first_request_id,
+                    MAX(COALESCE(NULLIF(TRIM(u.name), ''), lpr.requester_name)) AS requester_name,
+                    MAX(lpr.requester_username) AS requester_username,
+                    MAX(lpr.requester_telegram_id) AS requester_telegram_id,
+                    MAX(lpr.pass_type) AS pass_type,
+                    MAX(lpr.vehicle_plate) AS vehicle_plate,
+                    MAX(lpr.vehicle_brand) AS vehicle_brand,
+                    MAX(COALESCE(lpr.date_mode, 'single')) AS date_mode,
+                    MAX(lpr.visit_date) AS visit_date,
+                    MAX(lpr.visit_date_from) AS visit_date_from,
+                    MAX(lpr.visit_date_to) AS visit_date_to,
+                    MAX(lpr.status) AS status,
+                    MIN(lpr.created_at) AS created_at,
+                    MAX(lpr.processed_by_name) AS processed_by_name,
+                    MAX(lpr.processed_by_role) AS processed_by_role,
+                    MAX(lpr.processed_at) AS processed_at,
+                    MAX(lpr.cancel_reason) AS cancel_reason,
+                    COUNT(*)::INT AS persons_count,
+                    STRING_AGG(COALESCE(lpr.visitor_full_name, '—'), '||' ORDER BY lpr.id) AS visitors_joined
+                FROM logistics_pass_requests lpr
+                LEFT JOIN database_app_userdatatelegram u
+                    ON u.telegram_id = lpr.requester_telegram_id
+                WHERE {where_sql}
+                GROUP BY COALESCE(NULLIF(lpr.request_group_id, ''), lpr.id::text)
+            )
+            SELECT *
+            FROM grouped
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            params,
+        )
+
+        result = []
+        rows = cur.fetchall()
+        for row in rows:
+            visitors = [v for v in (row[19] or "").split("||") if v]
+            if row[8] == "range":
+                date_text = f"{_format_pass_date(row[10])} — {_format_pass_date(row[11])}"
+            else:
+                date_text = _format_pass_date(row[10] or row[9])
+
+            processed_by = ((row[14] or "") + (f" ({row[15]})" if row[15] else "")).strip() or "—"
+
+            item = {
+                "request_group_id": row[0],
+                "first_request_id": row[1],
+                "requester_name": row[2] or "—",
+                "requester_username": row[3] or "",
+                "requester_telegram_id": row[4],
+                "pass_type": row[5],
+                "vehicle_plate": row[6] or "—",
+                "vehicle_brand": row[7] or "",
+                "date_mode": row[8] or "single",
+                "visit_date": _format_pass_date(row[9]),
+                "visit_date_from": _format_pass_date(row[10]),
+                "visit_date_to": _format_pass_date(row[11]),
+                "status": row[12],
+                "created_at": row[13].isoformat() if row[13] else None,
+                "created_at_text": row[13].strftime("%d.%m.%Y %H:%M") if row[13] else "—",
+                "processed_by": processed_by,
+                "processed_at_text": row[16].strftime("%d.%m.%Y %H:%M") if row[16] else "—",
+                "cancel_reason": row[17] or "—",
+            }
+            item["persons_count"] = row[18] or len(visitors)
+            item["visitors"] = visitors
+            item["visitors_text"] = ", ".join(visitors) if visitors else "—"
+            item["date_text"] = date_text
+            item["type_label"] = _group_type_label(item["pass_type"], item["persons_count"])
+            result.append(item)
+
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+
 def ensure_pass_requests_audit_columns():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -81,6 +197,9 @@ def ensure_pass_requests_audit_columns():
         cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_by_role TEXT")
         cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP")
         cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS cancel_reason TEXT")
+        cur.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS request_group_id TEXT")
+        cur.execute("UPDATE logistics_pass_requests SET request_group_id = id::text WHERE request_group_id IS NULL")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_group ON logistics_pass_requests(request_group_id)")
         conn.commit()
     finally:
         cur.close()
@@ -111,18 +230,25 @@ def get_current_operator_identity() -> tuple[int | None, str, str]:
 
     return (int(operator_id) if operator_id is not None else None, operator_name, operator_role)
 
-def send_pass_request_email(to_email: str, visitor_name: str, vehicle_plate: str | None, visit_date_text: str):
+def send_pass_request_email(
+    to_email: str,
+    visitor_names: list[str],
+    vehicle_plate: str | None,
+    visit_date_text: str,
+):
     if not SMTP_USER or not SMTP_PASSWORD or not SMTP_FROM:
         raise RuntimeError("SMTP не налаштовано: потрібні SMTP_USER, SMTP_PASSWORD, SMTP_FROM")
 
     if not to_email:
         raise RuntimeError("Не вказано email отримувача")
 
-    title = f"Перепустка на {visit_date_text} {vehicle_plate or '—'}"
+    title = f"Перепустка на {visit_date_text}"
+    names_block = "\n".join([f"- {name}" for name in visitor_names]) if visitor_names else "- —"
 
     body = (
         f"{title}\n"
-        f"Особа:  {visitor_name or '—'}\n\n"
+        f"Кількість осіб: {len(visitor_names)}\n"
+        f"Особи:\n{names_block}\n\n"
         f"Авто: {vehicle_plate or '—'}\n\n"
         "Компанія \"MIM-K\"\n"
         "Киев, бул. Вацлава Гавела,16, корпус 4\n"
@@ -794,53 +920,11 @@ def pass_requests():
     if status_filter and status_filter not in PASS_STATUS_LABELS:
         status_filter = ""
 
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        ensure_pass_requests_audit_columns()
-        query = """
-            SELECT lpr.id,
-                   COALESCE(NULLIF(TRIM(u.name), ''), lpr.requester_name) AS requester_name,
-                   lpr.requester_username,
-                   lpr.pass_type,
-                   lpr.vehicle_plate,
-                   lpr.vehicle_brand,
-                   lpr.visitor_full_name,
-                   lpr.visit_date,
-                   lpr.date_mode,
-                   lpr.visit_date_from,
-                   lpr.visit_date_to,
-                   lpr.status,
-                   lpr.created_at,
-                   lpr.processed_by_telegram_id,
-                   lpr.processed_by_name,
-                   lpr.processed_by_role,
-                   lpr.processed_at,
-                   lpr.cancel_reason
-            FROM logistics_pass_requests lpr
-            LEFT JOIN database_app_userdatatelegram u
-              ON u.telegram_id = lpr.requester_telegram_id
-            WHERE 1=1
-        """
-        params: list[str] = []
-
-        if search_vehicle:
-            query += " AND COALESCE(lpr.vehicle_plate, '') ILIKE %s"
-            params.append(f"%{search_vehicle}%")
-
-        if status_filter:
-            query += " AND lpr.status = %s"
-            params.append(status_filter)
-
-        query += " ORDER BY lpr.created_at DESC LIMIT 300"
-        cur.execute(query, params)
-        rows = cur.fetchall()
+        rows = _fetch_pass_request_groups(limit=20, offset=0, search_vehicle=search_vehicle, status_filter=status_filter)
     except Exception as e:
         rows = []
         flash(f"Не вдалося завантажити заявки на пропуск: {e}", "danger")
-    finally:
-        cur.close()
-        conn.close()
 
     return render_template(
         "pass_requests.html",
@@ -850,6 +934,243 @@ def pass_requests():
         status_filter=status_filter,
         status_labels=PASS_STATUS_LABELS,
     )
+
+
+@app.route("/pass_requests/chunk")
+def pass_requests_chunk():
+    if not is_logged_in() or not is_pass_operator():
+        return jsonify({"items": [], "has_more": False}), 403
+
+    offset_raw = request.args.get("offset", "0").strip()
+    search_vehicle = request.args.get("search_vehicle", "").strip()
+    status_filter = request.args.get("status", "").strip().lower()
+    if status_filter and status_filter not in PASS_STATUS_LABELS:
+        status_filter = ""
+
+    try:
+        offset = int(offset_raw)
+    except Exception:
+        offset = 0
+
+    items = _fetch_pass_request_groups(limit=20, offset=offset, search_vehicle=search_vehicle, status_filter=status_filter)
+    return jsonify({"items": items, "has_more": len(items) == 20})
+
+
+def _resolve_group_id(cur, request_id: int) -> str | None:
+    cur.execute(
+        "SELECT COALESCE(NULLIF(request_group_id, ''), id::text) FROM logistics_pass_requests WHERE id = %s",
+        (request_id,),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _get_group_rows(cur, request_group_id: str):
+    cur.execute(
+        """
+        SELECT id,
+               COALESCE(NULLIF(request_group_id, ''), id::text) AS request_group_id,
+               pass_type,
+               vehicle_plate,
+               visitor_full_name,
+               COALESCE(date_mode, 'single') AS date_mode,
+               visit_date,
+               visit_date_from,
+               visit_date_to,
+               status,
+               requester_telegram_id
+        FROM logistics_pass_requests
+        WHERE COALESCE(NULLIF(request_group_id, ''), id::text) = %s
+        ORDER BY id
+        """,
+        (request_group_id,),
+    )
+    return cur.fetchall()
+
+
+@app.route("/pass_requests/create", methods=["POST"])
+def pass_request_create():
+    if not is_logged_in() or not is_pass_operator():
+        return redirect(url_for("login"))
+
+    pass_type = request.form.get("pass_type", "person").strip()
+    vehicle_plate = request.form.get("vehicle_plate", "").strip()
+    date_mode = request.form.get("date_mode", "single").strip()
+    visit_date_from = _parse_date(request.form.get("visit_date_from", "").strip())
+    visit_date_to = _parse_date(request.form.get("visit_date_to", "").strip())
+    persons_count_raw = request.form.get("persons_count", "").strip()
+    names = []
+    if persons_count_raw.isdigit():
+        persons_count = int(persons_count_raw)
+        for i in range(1, persons_count + 1):
+            val = request.form.get(f"person_{i}", "").strip()
+            if val:
+                names.append(val)
+    else:
+        persons_count = 0
+
+    if not names:
+        names_raw = request.form.get("visitor_names", "")
+        names = [line.strip() for line in names_raw.splitlines() if line.strip()]
+
+    if pass_type not in {"vehicle", "person"}:
+        flash("Невірний тип заявки", "danger")
+        return redirect(url_for("pass_requests"))
+    if pass_type == "vehicle" and not vehicle_plate:
+        flash("Для заявки на авто вкажіть номер авто", "danger")
+        return redirect(url_for("pass_requests"))
+    if not names:
+        flash("Вкажіть хоча б одну особу (по одній в рядку)", "danger")
+        return redirect(url_for("pass_requests"))
+    if persons_count and len(names) != persons_count:
+        flash("Заповніть ПІБ для кожної особи", "danger")
+        return redirect(url_for("pass_requests"))
+    if date_mode not in {"single", "range"}:
+        flash("Невірний режим дати", "danger")
+        return redirect(url_for("pass_requests"))
+    if not visit_date_from:
+        flash("Вкажіть дату ВІД", "danger")
+        return redirect(url_for("pass_requests"))
+    if date_mode == "single":
+        visit_date_to = visit_date_from
+    if date_mode == "range" and (not visit_date_to or visit_date_to < visit_date_from):
+        flash("Для діапазону вкажіть коректну дату ДО", "danger")
+        return redirect(url_for("pass_requests"))
+
+    operator_telegram_id, operator_name, operator_role = get_current_operator_identity()
+    request_group_id = str(uuid.uuid4())
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        ensure_pass_requests_audit_columns()
+        for full_name in names:
+            cur.execute(
+                """
+                INSERT INTO logistics_pass_requests (
+                    request_group_id,
+                    requester_telegram_id,
+                    requester_name,
+                    requester_username,
+                    pass_type,
+                    vehicle_plate,
+                    visitor_full_name,
+                    date_mode,
+                    visit_date_from,
+                    visit_date_to,
+                    visit_date,
+                    status
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'new')
+                """,
+                (
+                    request_group_id,
+                    operator_telegram_id,
+                    operator_name,
+                    operator_role,
+                    pass_type,
+                    vehicle_plate if pass_type == "vehicle" else None,
+                    full_name,
+                    date_mode,
+                    visit_date_from,
+                    visit_date_to,
+                    visit_date_from,
+                ),
+            )
+        conn.commit()
+        flash(f"Заявку створено. ID групи: {request_group_id}", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Помилка створення заявки: {e}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for("pass_requests"))
+
+
+@app.route("/pass_requests/clone", methods=["POST"])
+def pass_request_clone():
+    if not is_logged_in() or not is_pass_operator():
+        return redirect(url_for("login"))
+
+    source_group_id = request.form.get("source_group_id", "").strip()
+    date_mode = request.form.get("date_mode", "single").strip()
+    visit_date_from = _parse_date(request.form.get("visit_date_from", "").strip())
+    visit_date_to = _parse_date(request.form.get("visit_date_to", "").strip())
+
+    if not source_group_id:
+        flash("Не вказано ID групи для копіювання", "danger")
+        return redirect(url_for("pass_requests"))
+    if not visit_date_from:
+        flash("Вкажіть дату ВІД", "danger")
+        return redirect(url_for("pass_requests"))
+    if date_mode == "single":
+        visit_date_to = visit_date_from
+    if date_mode == "range" and (not visit_date_to or visit_date_to < visit_date_from):
+        flash("Для діапазону вкажіть коректну дату ДО", "danger")
+        return redirect(url_for("pass_requests"))
+
+    operator_telegram_id, operator_name, operator_role = get_current_operator_identity()
+    new_group_id = str(uuid.uuid4())
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        ensure_pass_requests_audit_columns()
+        source_rows = _get_group_rows(cur, source_group_id)
+        if not source_rows:
+            flash("Групу для копіювання не знайдено", "danger")
+            return redirect(url_for("pass_requests"))
+
+        pass_type = source_rows[0][2]
+        vehicle_plate = source_rows[0][3]
+        names = [r[4] for r in source_rows if r[4]]
+        if not names:
+            flash("У вихідній групі немає осіб", "danger")
+            return redirect(url_for("pass_requests"))
+
+        for full_name in names:
+            cur.execute(
+                """
+                INSERT INTO logistics_pass_requests (
+                    request_group_id,
+                    requester_telegram_id,
+                    requester_name,
+                    requester_username,
+                    pass_type,
+                    vehicle_plate,
+                    visitor_full_name,
+                    date_mode,
+                    visit_date_from,
+                    visit_date_to,
+                    visit_date,
+                    status
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'new')
+                """,
+                (
+                    new_group_id,
+                    operator_telegram_id,
+                    operator_name,
+                    operator_role,
+                    pass_type,
+                    vehicle_plate if pass_type == "vehicle" else None,
+                    full_name,
+                    date_mode,
+                    visit_date_from,
+                    visit_date_to,
+                    visit_date_from,
+                ),
+            )
+        conn.commit()
+        flash(f"Копію заявки створено. Нова група: {new_group_id}", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Помилка копіювання заявки: {e}", "danger")
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for("pass_requests"))
 
 
 @app.route("/pass_requests/action", methods=["POST"])
@@ -862,12 +1183,13 @@ def pass_request_action():
 
     action = request.form.get("action", "").strip()
     request_id = request.form.get("request_id", "").strip()
+    request_group_id = request.form.get("request_group_id", "").strip()
     target_email = request.form.get("target_email", "").strip()
     cancel_reason = request.form.get("cancel_reason", "").strip()
     if not target_email:
         target_email = PASS_REQUEST_DEFAULT_EMAIL
 
-    if not request_id.isdigit():
+    if not request_group_id and not request_id.isdigit():
         flash("Невірний ID заявки", "danger")
         return redirect(url_for("pass_requests"))
 
@@ -877,25 +1199,34 @@ def pass_request_action():
         ensure_pass_requests_audit_columns()
         operator_telegram_id, operator_name, operator_role = get_current_operator_identity()
 
-        cur.execute(
-            """
-             SELECT id, pass_type, vehicle_plate, visitor_full_name,
-                 date_mode, visit_date, visit_date_from, visit_date_to, status,
-                 requester_telegram_id
-            FROM logistics_pass_requests
-            WHERE id = %s
-            """,
-            (int(request_id),)
-        )
-        row = cur.fetchone()
-        if not row:
+        if not request_group_id:
+            request_group_id = _resolve_group_id(cur, int(request_id))
+
+        if not request_group_id:
             flash("Заявку не знайдено", "danger")
             return redirect(url_for("pass_requests"))
 
-        _, pass_type, vehicle_plate, visitor_name, date_mode, visit_date, visit_date_from, visit_date_to, current_status, requester_telegram_id = row
+        group_rows = _get_group_rows(cur, request_group_id)
+        if not group_rows:
+            flash("Групу заявки не знайдено", "danger")
+            return redirect(url_for("pass_requests"))
+
+        first_row = group_rows[0]
+        first_id = first_row[0]
+        pass_type = first_row[2]
+        vehicle_plate = first_row[3]
+        date_mode = first_row[5]
+        visit_date = first_row[6]
+        visit_date_from = first_row[7]
+        visit_date_to = first_row[8]
+        requester_telegram_id = first_row[10]
+        visitor_names = [r[4] for r in group_rows if r[4]]
+
+        statuses = {r[9] for r in group_rows}
+        current_status = statuses.pop() if len(statuses) == 1 else "mixed"
 
         if current_status != "new":
-            flash(f"Заявка #{request_id} вже має статус '{PASS_STATUS_LABELS.get(current_status, current_status)}' і недоступна для дій", "warning")
+            flash(f"Група {request_group_id} вже має статус '{PASS_STATUS_LABELS.get(current_status, current_status)}' і недоступна для дій", "warning")
             return redirect(url_for("pass_requests"))
 
         if date_mode == "range":
@@ -917,22 +1248,22 @@ def pass_request_action():
                     processed_by_role = %s,
                     processed_at = NOW(),
                     cancel_reason = %s
-                WHERE id = %s
+                WHERE COALESCE(NULLIF(request_group_id, ''), id::text) = %s
                 """,
-                (operator_telegram_id, operator_name, operator_role, cancel_reason, int(request_id)),
+                (operator_telegram_id, operator_name, operator_role, cancel_reason, request_group_id),
             )
             conn.commit()
             notify_requester_status_change(
                 requester_telegram_id=requester_telegram_id,
-                request_id=int(request_id),
+                request_id=int(first_id),
                 status_code="cancelled",
-                visitor_name=visitor_name or "—",
+                visitor_name=", ".join(visitor_names) or "—",
                 vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
                 visit_date_text=visit_date_text,
                 processed_by=f"{operator_name} ({operator_role or 'роль не вказана'})",
                 cancel_reason=cancel_reason,
             )
-            flash(f"Заявку #{request_id} скасовано", "warning")
+            flash(f"Групу {request_group_id} скасовано", "warning")
             return redirect(url_for("pass_requests"))
 
         if action == "forward":
@@ -942,7 +1273,7 @@ def pass_request_action():
 
             send_pass_request_email(
                 to_email=target_email,
-                visitor_name=visitor_name or "—",
+                visitor_names=visitor_names,
                 vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
                 visit_date_text=visit_date_text,
             )
@@ -957,21 +1288,21 @@ def pass_request_action():
                         processed_by_role = %s,
                         processed_at = NOW(),
                         cancel_reason = NULL
-                    WHERE id = %s
+                    WHERE COALESCE(NULLIF(request_group_id, ''), id::text) = %s
                     """,
-                    (operator_telegram_id, operator_name, operator_role, int(request_id)),
+                    (operator_telegram_id, operator_name, operator_role, request_group_id),
                 )
                 conn.commit()
             notify_requester_status_change(
                 requester_telegram_id=requester_telegram_id,
-                request_id=int(request_id),
+                request_id=int(first_id),
                 status_code="forwarded",
-                visitor_name=visitor_name or "—",
+                visitor_name=", ".join(visitor_names) or "—",
                 vehicle_plate=(vehicle_plate if pass_type == "vehicle" else "—"),
                 visit_date_text=visit_date_text,
                 processed_by=f"{operator_name} ({operator_role or 'роль не вказана'})",
             )
-            flash(f"Заявку #{request_id} передано на пошту {target_email}", "success")
+            flash(f"Групу {request_group_id} передано на пошту {target_email}", "success")
             return redirect(url_for("pass_requests"))
 
         flash("Невідома дія", "danger")

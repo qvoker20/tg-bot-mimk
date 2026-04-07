@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS logistics_pass_requests (
     id BIGSERIAL PRIMARY KEY,
+    request_group_id TEXT,
     requester_telegram_id BIGINT NOT NULL,
     requester_name TEXT,
     requester_username TEXT,
@@ -21,10 +22,12 @@ CREATE TABLE IF NOT EXISTS logistics_pass_requests (
 ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS date_mode TEXT;
 ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS visit_date_from DATE;
 ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS visit_date_to DATE;
+ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS request_group_id TEXT;
 
 UPDATE logistics_pass_requests SET date_mode = 'single' WHERE date_mode IS NULL;
 UPDATE logistics_pass_requests SET visit_date_from = visit_date WHERE visit_date_from IS NULL;
 UPDATE logistics_pass_requests SET visit_date_to = visit_date WHERE visit_date_to IS NULL;
+UPDATE logistics_pass_requests SET request_group_id = id::text WHERE request_group_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_visit_date
     ON logistics_pass_requests(visit_date);
@@ -40,6 +43,9 @@ CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_status
 
 CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_requester
     ON logistics_pass_requests(requester_telegram_id);
+
+CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_group
+    ON logistics_pass_requests(request_group_id);
 
 
 -- Варіант 2 (якщо потрібна окрема БД):

@@ -108,8 +108,60 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # увачів і їхніх запитів
 user_requests = {}
 
+INLINE_MESSAGE_ID_KEYS = (
+    "search_message_id",
+    "searchpre_message_id",
+    "mservice_message_id",
+    "zamiry_message_id",
+    "zamirnykam_message_id",
+    "production_message_id",
+    "logistics_message_id",
+    "assemblers_message_id",
+    "admin_message_id",
+    "mimk_ai_message_id",
+    "hub_message_id",
+    "constructor_message_id",
+)
+
 # Встановлюємо часову зону
 local_timezone = pytz.timezone("Europe/Kiev")
+
+
+async def hide_active_inline_keyboards(update: Update, context: CallbackContext):
+    """Прибирає inline-клавіатури з попередніх меню при переході до іншої дії."""
+    if not update.effective_chat:
+        return
+
+    chat_id = update.effective_chat.id
+    current_message_id = None
+    if update.message:
+        current_message_id = update.message.message_id
+    elif update.callback_query and update.callback_query.message:
+        current_message_id = update.callback_query.message.message_id
+
+    for key in INLINE_MESSAGE_ID_KEYS:
+        message_id = context.user_data.get(key)
+        if not message_id:
+            continue
+        if current_message_id and message_id == current_message_id:
+            continue
+
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=None,
+            )
+        except Exception:
+            # Повідомлення могло бути видалене/змінене раніше іншою гілкою логіки.
+            pass
+        finally:
+            context.user_data.pop(key, None)
+
+
+async def cleanup_inline_before_callback(update: Update, context: CallbackContext):
+    """Гарантує очищення старих inline-кнопок також перед callback-обробниками."""
+    await hide_active_inline_keyboards(update, context)
 
 # Оновлена функція /start
 async def start(update: Update, context: CallbackContext):
@@ -262,6 +314,8 @@ async def handle_text(update: Update, context: CallbackContext):
 
     user_id = update.message.from_user.id
     text = update.message.text.strip()
+
+    await hide_active_inline_keyboards(update, context)
 
     if text == "Пройти реєстрацію":
         context.user_data["reg_step"] = "last_name"
@@ -735,11 +789,12 @@ async def handle_text(update: Update, context: CallbackContext):
         reply_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton("Відкрити", url="https://hub.mim-k.website/")]]
         )
-        await update.message.reply_text(
+        sent_message = await update.message.reply_text(
             hub_message,
             parse_mode="HTML",
             reply_markup=reply_markup
         )
+        context.user_data["hub_message_id"] = sent_message.message_id
         return
 
     if text == "AI MIM-K":
@@ -782,10 +837,11 @@ async def handle_text(update: Update, context: CallbackContext):
             [InlineKeyboardButton("Профіль перевірки", url="https://script.google.com/macros/s/AKfycbxaTNhShNjyN8GIIJt5nHJrqqcnkHigjE-maJSXhpyDbLe3hpdBjEFIQIk87Jw90Fn1aA/exec")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
+        sent_message = await update.message.reply_text(
             "Оберіть дію:",
             reply_markup=reply_markup
         )
+        context.user_data["constructor_message_id"] = sent_message.message_id
         return
 
     if "loading_message_id" in context.user_data:
@@ -808,6 +864,7 @@ def main():
 
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
+    application.add_handler(CallbackQueryHandler(cleanup_inline_before_callback, pattern='.*'), group=-1)
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CallbackQueryHandler(registration_callback, pattern="^reg_"))
     application.add_handler(CallbackQueryHandler(button_search, pattern='^(specific|by_number|back)$'))

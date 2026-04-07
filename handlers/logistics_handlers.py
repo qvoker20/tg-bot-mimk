@@ -2,6 +2,7 @@ import os
 import logging
 import psycopg2
 import calendar
+import uuid
 from datetime import datetime, date 
 from typing import Optional
 from dotenv import load_dotenv
@@ -66,6 +67,7 @@ def ensure_pass_requests_table():
             """
             CREATE TABLE IF NOT EXISTS logistics_pass_requests (
                 id BIGSERIAL PRIMARY KEY,
+                request_group_id TEXT,
                 requester_telegram_id BIGINT NOT NULL,
                 requester_name TEXT,
                 requester_username TEXT,
@@ -82,12 +84,14 @@ def ensure_pass_requests_table():
             )
             """
         )
+        cursor.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS request_group_id TEXT")
         cursor.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS date_mode TEXT")
         cursor.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS visit_date_from DATE")
         cursor.execute("ALTER TABLE logistics_pass_requests ADD COLUMN IF NOT EXISTS visit_date_to DATE")
         cursor.execute("UPDATE logistics_pass_requests SET date_mode = 'single' WHERE date_mode IS NULL")
         cursor.execute("UPDATE logistics_pass_requests SET visit_date_from = visit_date WHERE visit_date_from IS NULL")
         cursor.execute("UPDATE logistics_pass_requests SET visit_date_to = visit_date WHERE visit_date_to IS NULL")
+        cursor.execute("UPDATE logistics_pass_requests SET request_group_id = id::text WHERE request_group_id IS NULL")
         cursor.execute(
             """
             ALTER TABLE logistics_pass_requests
@@ -99,6 +103,12 @@ def ensure_pass_requests_table():
             ALTER TABLE logistics_pass_requests
             ADD CONSTRAINT logistics_pass_requests_date_mode_check
             CHECK (date_mode IN ('single', 'range'))
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_logistics_pass_requests_group
+            ON logistics_pass_requests(request_group_id)
             """
         )
         conn.commit()
@@ -137,12 +147,14 @@ def build_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 def init_pass_flow(context: CallbackContext, pass_type: str):
-    context.user_data["logistics_state"] = "pass_plate" if pass_type == "vehicle" else "pass_name"
+    context.user_data["logistics_state"] = "pass_plate" if pass_type == "vehicle" else "pass_count"
     context.user_data["logistics_pass"] = {
         "pass_type": pass_type,
         "vehicle_plate": None,
         "vehicle_brand": None,
         "visitor_full_name": None,
+        "visitor_names": [],
+        "persons_count": None,
         "date_mode": None,
         "visit_date_from": None,
         "visit_date_to": None,
@@ -152,41 +164,131 @@ def clear_pass_flow(context: CallbackContext):
     context.user_data.pop("logistics_state", None)
     context.user_data.pop("logistics_pass", None)
 
-def save_pass_request(telegram_user, data: dict):
-    ensure_pass_requests_table()
+
+def clear_pass_history_flow(context: CallbackContext):
+    context.user_data.pop("lp_history_items", None)
+    context.user_data.pop("lp_history_index", None)
+
+
+def _serialize_request_row(row) -> dict:
+    return {
+        "id": row[0],
+        "request_group_id": row[1],
+        "pass_type": row[2],
+        "vehicle_plate": row[3],
+        "vehicle_brand": row[4],
+        "visitor_full_name": row[5],
+        "date_mode": row[6] or "single",
+        "visit_date_from": str(row[7]) if row[7] else None,
+        "visit_date_to": str(row[8]) if row[8] else None,
+        "created_at": str(row[9]) if row[9] else None,
+    }
+
+
+def get_user_pass_requests(user_id: int, limit: int = 20) -> list[dict]:
     conn = get_pg_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
-            INSERT INTO logistics_pass_requests (
-                requester_telegram_id,
-                requester_name,
-                requester_username,
-                pass_type,
-                vehicle_plate,
-                vehicle_brand,
-                visitor_full_name,
-                date_mode,
-                visit_date_from,
-                visit_date_to,
-                visit_date
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            SELECT id, request_group_id, pass_type, vehicle_plate, vehicle_brand, visitor_full_name,
+                   COALESCE(date_mode, 'single') AS date_mode,
+                   visit_date_from, visit_date_to, created_at
+            FROM logistics_pass_requests
+            WHERE requester_telegram_id = %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
             """,
-            (
-                telegram_user.id,
-                telegram_user.full_name,
-                telegram_user.username,
-                data.get("pass_type"),
-                data.get("vehicle_plate"),
-                data.get("vehicle_brand"),
-                data.get("visitor_full_name"),
-                data.get("date_mode") or "single",
-                data.get("visit_date_from"),
-                data.get("visit_date_to"),
-                data.get("visit_date_from"),
-            )
+            (user_id, limit)
         )
+        return [_serialize_request_row(row) for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _build_history_text(item: dict, index: int, total: int) -> str:
+    period_text = (
+        html.escape(item.get("visit_date_from") or "—")
+        if item.get("date_mode") == "single"
+        else f"{html.escape(item.get('visit_date_from') or '—')} — {html.escape(item.get('visit_date_to') or '—')}"
+    )
+
+    text = (
+        f"<b>🧾 Мої заявки на перепустку</b>\n"
+        f"<i>Заявка {index + 1} з {total}</i>\n\n"
+        f"<b>Тип:</b> {'Для авто' if item.get('pass_type') == 'vehicle' else 'Для особи'}\n"
+        f"<b>ПІБ:</b> {html.escape(item.get('visitor_full_name') or '—')}\n"
+        f"<b>Тип дати:</b> {'На один день' if item.get('date_mode') == 'single' else 'Від та до'}\n"
+        f"<b>Дата:</b> {period_text}\n"
+        f"<b>Створено:</b> {html.escape(item.get('created_at') or '—')}"
+    )
+    if item.get("pass_type") == "vehicle":
+        text += f"\n<b>Номер авто:</b> {html.escape(item.get('vehicle_plate') or '—')}"
+    return text
+
+
+def _build_history_keyboard(index: int, total: int) -> InlineKeyboardMarkup:
+    nav_row = []
+    if index < total - 1:
+        nav_row.append(InlineKeyboardButton("⬅️ Старіша", callback_data="lp_hist_prev"))
+    if index > 0:
+        nav_row.append(InlineKeyboardButton("➡️ Новіша", callback_data="lp_hist_next"))
+
+    rows = []
+    if nav_row:
+        rows.append(nav_row)
+    rows.append([InlineKeyboardButton("📅 Створити по цій заявці", callback_data="lp_clone_start")])
+    rows.append([InlineKeyboardButton("🔙 Назад", callback_data="logistics_menu_back")])
+    return InlineKeyboardMarkup(rows)
+
+def save_pass_request(telegram_user, data: dict):
+    ensure_pass_requests_table()
+    names = data.get("visitor_names") or []
+    if not names and data.get("visitor_full_name"):
+        names = [data.get("visitor_full_name")]
+    if not names:
+        raise ValueError("Не вказано жодної особи для перепустки")
+
+    request_group_id = data.get("request_group_id") or str(uuid.uuid4())
+    data["request_group_id"] = request_group_id
+
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+    try:
+        for full_name in names:
+            cursor.execute(
+                """
+                INSERT INTO logistics_pass_requests (
+                    request_group_id,
+                    requester_telegram_id,
+                    requester_name,
+                    requester_username,
+                    pass_type,
+                    vehicle_plate,
+                    vehicle_brand,
+                    visitor_full_name,
+                    date_mode,
+                    visit_date_from,
+                    visit_date_to,
+                    visit_date
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    request_group_id,
+                    telegram_user.id,
+                    telegram_user.full_name,
+                    telegram_user.username,
+                    data.get("pass_type"),
+                    data.get("vehicle_plate"),
+                    data.get("vehicle_brand"),
+                    full_name,
+                    data.get("date_mode") or "single",
+                    data.get("visit_date_from"),
+                    data.get("visit_date_to"),
+                    data.get("visit_date_from"),
+                )
+            )
         conn.commit()
     finally:
         cursor.close()
@@ -239,11 +341,18 @@ async def notify_pass_request_roles(context: CallbackContext, telegram_user, dat
         if data.get("date_mode") == "single"
         else f"{html.escape(str(data.get('visit_date_from') or '—'))} — {html.escape(str(data.get('visit_date_to') or '—'))}"
     )
+    visitor_names = data.get("visitor_names") or []
+    if not visitor_names and data.get("visitor_full_name"):
+        visitor_names = [data.get("visitor_full_name")]
+    persons_count = data.get("persons_count") or len(visitor_names)
+    names_text = "\n".join([f"• {html.escape(str(name))}" for name in visitor_names]) if visitor_names else "—"
 
     text = (
         "🛂 <b>Нова заявка на перепустку</b>\n\n"
+        f"<b>ID групи:</b> <code>{html.escape(str(data.get('request_group_id') or '—'))}</code>\n"
         f"<b>Тип:</b> {'Для авто' if data.get('pass_type') == 'vehicle' else 'Для особи'}\n"
-        f"<b>ПІБ відвідувача:</b> {html.escape(data.get('visitor_full_name') or '—')}\n"
+        f"<b>Кількість осіб:</b> {persons_count}\n"
+        f"<b>Особи:</b>\n{names_text}\n"
         f"<b>Тип дати:</b> {'На один день' if data.get('date_mode') == 'single' else 'Від та до'}\n"
         f"<b>Дата:</b> {period_text}\n"
         f"<b>Хто подав:</b> {html.escape(telegram_user.full_name or '—')}"
@@ -262,6 +371,7 @@ async def notify_pass_request_roles(context: CallbackContext, telegram_user, dat
 
 async def show_logistics_menu(update: Update, context: CallbackContext):
     keyboard = [
+        [InlineKeyboardButton("Мої заявки на перепустку", callback_data="lp_my_requests")],
         [InlineKeyboardButton("Подати заявку на перепустку", callback_data="lp_pass_start")],
         [InlineKeyboardButton("Подати заявку", callback_data="logistics_request")],
         [InlineKeyboardButton("Профіль водія", callback_data="logistics_driver_profile")],
@@ -270,11 +380,12 @@ async def show_logistics_menu(update: Update, context: CallbackContext):
     
     # Якщо це нове повідомлення
     if update.message:
-        await update.message.reply_text(
+        sent_message = await update.message.reply_text(
             "<b>Логістика та автопарк</b>\nОберіть необхідну дію:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
         )
+        context.user_data["logistics_message_id"] = sent_message.message_id
     # Якщо це редагування попереднього (наприклад, кнопка "Назад" з іншого меню)
     elif update.callback_query:
         await update.callback_query.edit_message_text(
@@ -282,6 +393,8 @@ async def show_logistics_menu(update: Update, context: CallbackContext):
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
         )
+        if update.callback_query.message:
+            context.user_data["logistics_message_id"] = update.callback_query.message.message_id
 
 async def logistics_button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -295,8 +408,88 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
         await query.edit_message_text("❌ Подачу заявки на перепустку скасовано.")
         return
 
+    if query.data == "lp_my_requests":
+        ensure_pass_requests_table()
+        items = get_user_pass_requests(query.from_user.id)
+        if not items:
+            await query.edit_message_text(
+                "ℹ️ У вас ще немає поданих заявок на перепустку.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Назад", callback_data="logistics_menu_back")]
+                ])
+            )
+            return
+
+        context.user_data["lp_history_items"] = items
+        context.user_data["lp_history_index"] = 0
+        current = items[0]
+        await query.edit_message_text(
+            _build_history_text(current, 0, len(items)),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_history_keyboard(0, len(items))
+        )
+        return
+
+    if query.data in ("lp_hist_prev", "lp_hist_next"):
+        items = context.user_data.get("lp_history_items") or []
+        if not items:
+            await query.edit_message_text("⚠️ Історія недоступна. Відкрийте розділ ще раз.")
+            return
+
+        idx = int(context.user_data.get("lp_history_index", 0))
+        if query.data == "lp_hist_prev" and idx < len(items) - 1:
+            idx += 1
+        if query.data == "lp_hist_next" and idx > 0:
+            idx -= 1
+
+        context.user_data["lp_history_index"] = idx
+        current = items[idx]
+        await query.edit_message_text(
+            _build_history_text(current, idx, len(items)),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_history_keyboard(idx, len(items))
+        )
+        return
+
+    if query.data == "lp_clone_start":
+        items = context.user_data.get("lp_history_items") or []
+        idx = int(context.user_data.get("lp_history_index", 0))
+        if not items or idx < 0 or idx >= len(items):
+            await query.edit_message_text("⚠️ Не вдалося знайти заявку для копіювання. Спробуйте ще раз.")
+            return
+
+        base = items[idx]
+        init_pass_flow(context, base.get("pass_type") or "person")
+        pass_data = context.user_data.get("logistics_pass", {})
+        pass_data["vehicle_plate"] = base.get("vehicle_plate")
+        pass_data["vehicle_brand"] = base.get("vehicle_brand")
+        pass_data["visitor_full_name"] = base.get("visitor_full_name")
+        pass_data["visitor_names"] = [base.get("visitor_full_name")] if base.get("visitor_full_name") else []
+        pass_data["persons_count"] = 1 if base.get("visitor_full_name") else 0
+        pass_data["date_mode"] = base.get("date_mode") or "single"
+        pass_data["request_group_id"] = str(uuid.uuid4())
+
+        if pass_data["date_mode"] == "single":
+            context.user_data["logistics_state"] = "pass_date"
+            today = date.today()
+            await query.edit_message_text(
+                "📅 Оберіть <b>нову дату</b> для заявки (копія):",
+                parse_mode=ParseMode.HTML,
+                reply_markup=build_calendar_keyboard(today.year, today.month)
+            )
+        else:
+            context.user_data["logistics_state"] = "pass_date_from"
+            today = date.today()
+            await query.edit_message_text(
+                "📅 Оберіть <b>нову дату ВІД</b> для заявки (копія):",
+                parse_mode=ParseMode.HTML,
+                reply_markup=build_calendar_keyboard(today.year, today.month)
+            )
+        return
+
     if query.data == "lp_pass_start":
         clear_pass_flow(context)
+        context.user_data["logistics_pass_request_group_id"] = str(uuid.uuid4())
         keyboard = [
             [InlineKeyboardButton("🚗 Для авто", callback_data="lp_type_vehicle")],
             [InlineKeyboardButton("🧍 Для особи", callback_data="lp_type_person")],
@@ -316,7 +509,7 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
 
     if query.data == "lp_type_person":
         init_pass_flow(context, "person")
-        await query.edit_message_text("🧍 Вкажіть ПІБ особи, на яку потрібно зробити перепустку:")
+        await query.edit_message_text("👥 Вкажіть кількість осіб:")
         return
 
     if query.data == "lp_date_single":
@@ -406,11 +599,16 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
             if pass_data.get("date_mode") == "single"
             else f"{html.escape(pass_data['visit_date_from'] or '—')} — {html.escape(pass_data['visit_date_to'] or '—')}"
         )
+        visitor_names = pass_data.get("visitor_names") or []
+        persons_count = pass_data.get("persons_count") or len(visitor_names)
+        names_text = "\n".join([f"• {html.escape(str(name))}" for name in visitor_names]) if visitor_names else "—"
 
         summary = (
             "🔎 <b>Перевірте заявку на перепустку:</b>\n\n"
+            f"<b>ID групи:</b> <code>{html.escape(str(pass_data.get('request_group_id') or '—'))}</code>\n"
             f"<b>Тип:</b> {'Для авто' if pass_data['pass_type'] == 'vehicle' else 'Для особи'}\n"
-            f"<b>ПІБ:</b> {html.escape(pass_data['visitor_full_name'] or '—')}\n"
+            f"<b>Кількість осіб:</b> {persons_count}\n"
+            f"<b>Особи:</b>\n{names_text}\n"
             f"<b>Тип дати:</b> {'На один день' if pass_data.get('date_mode') == 'single' else 'Від та до'}\n"
             f"<b>Дата:</b> {period_text}"
         )
@@ -433,7 +631,13 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
 
     if query.data == "lp_confirm":
         pass_data = context.user_data.get("logistics_pass")
-        if not pass_data or not pass_data.get("visit_date_from") or not pass_data.get("visit_date_to"):
+        visitor_names = pass_data.get("visitor_names") if pass_data else []
+        if (
+            not pass_data
+            or not pass_data.get("visit_date_from")
+            or not pass_data.get("visit_date_to")
+            or not visitor_names
+        ):
             await query.edit_message_text("⚠️ Сесія подачі заявки завершена. Почніть знову.")
             clear_pass_flow(context)
             return
@@ -452,11 +656,15 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
             if pass_data.get("date_mode") == "single"
             else f"{html.escape(pass_data['visit_date_from'] or '—')} — {html.escape(pass_data['visit_date_to'] or '—')}"
         )
+        persons_count = pass_data.get("persons_count") or len(visitor_names)
+        names_text = "\n".join([f"• {html.escape(str(name))}" for name in visitor_names]) if visitor_names else "—"
 
         summary = (
             "✅ <b>Заявку на перепустку збережено</b>\n\n"
+            f"<b>ID групи:</b> <code>{html.escape(str(pass_data.get('request_group_id') or '—'))}</code>\n"
             f"<b>Тип:</b> {'Для авто' if pass_data['pass_type'] == 'vehicle' else 'Для особи'}\n"
-            f"<b>ПІБ:</b> {html.escape(pass_data['visitor_full_name'] or '—')}\n"
+            f"<b>Кількість осіб:</b> {persons_count}\n"
+            f"<b>Особи:</b>\n{names_text}\n"
             f"<b>Тип дати:</b> {'На один день' if pass_data.get('date_mode') == 'single' else 'Від та до'}\n"
             f"<b>Дата:</b> {period_text}"
         )
@@ -500,6 +708,7 @@ async def logistics_button_handler(update: Update, context: CallbackContext):
 
     # Обробка повернення в меню логістики
     if query.data == "logistics_menu_back":
+        clear_pass_history_flow(context)
         await show_logistics_menu(update, context)
         return
 
@@ -523,14 +732,42 @@ async def logistics_text_input(update: Update, context: CallbackContext) -> bool
         clear_pass_flow(context)
         return False
 
+    if not pass_data.get("request_group_id"):
+        pass_data["request_group_id"] = context.user_data.get("logistics_pass_request_group_id") or str(uuid.uuid4())
+
     if state == "pass_plate":
         pass_data["vehicle_plate"] = value
+        context.user_data["logistics_state"] = "pass_count"
+        await update.message.reply_text("👥 Вкажіть кількість осіб:")
+        return True
+
+    if state == "pass_count":
+        if not value.isdigit() or int(value) <= 0:
+            await update.message.reply_text("⚠️ Введіть коректну кількість осіб (ціле число більше 0).")
+            return True
+
+        count = int(value)
+        if count > 30:
+            await update.message.reply_text("⚠️ Максимум 30 осіб за одну заявку. Вкажіть менше число.")
+            return True
+
+        pass_data["persons_count"] = count
+        pass_data["visitor_names"] = []
         context.user_data["logistics_state"] = "pass_name"
-        await update.message.reply_text("🧍 Вкажіть ПІБ особи, на яку потрібно зробити перепустку:")
+        await update.message.reply_text(f"🧍 Вкажіть ПІБ особи 1 з {count}:")
         return True
 
     if state == "pass_name":
-        pass_data["visitor_full_name"] = value
+        names = pass_data.get("visitor_names") or []
+        names.append(value)
+        pass_data["visitor_names"] = names
+        pass_data["visitor_full_name"] = names[0] if names else None
+
+        target = pass_data.get("persons_count") or 1
+        if len(names) < target:
+            await update.message.reply_text(f"🧍 Вкажіть ПІБ особи {len(names) + 1} з {target}:")
+            return True
+
         context.user_data["logistics_state"] = "pass_date_type"
         keyboard = [
             [InlineKeyboardButton("📅 На один день", callback_data="lp_date_single")],
