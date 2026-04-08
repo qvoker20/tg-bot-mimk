@@ -35,7 +35,7 @@
       </div>
     </form>
 
-    <div class="table-wrap border">
+    <div id="passTableWrap" class="table-wrap border">
       <table class="table table-hover align-middle table-sm table-uniform" style="width: 100%;">
         <thead>
           <tr>
@@ -255,6 +255,7 @@
 {% block scripts %}
 <script>
   const tbody = document.getElementById('passRequestsBody');
+  const tableWrap = document.getElementById('passTableWrap');
   const scrollLoader = document.getElementById('scrollLoader');
   const modalActionForm = document.getElementById('modalActionForm');
   const modalCancelReason = document.getElementById('modalCancelReason');
@@ -268,6 +269,7 @@
   let offset = tbody.querySelectorAll('tr[data-request-id]').length;
   let loading = false;
   let hasMore = offset >= 20;
+  const STATUS_LABELS = {{ status_labels|tojson }};
 
   function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -276,6 +278,10 @@
   function statusBadge(status, statusLabel) {
     const cls = status === 'new' ? 'bg-primary' : (status === 'forwarded' ? 'bg-success' : 'bg-secondary');
     return `<span class="badge ${cls}">${escapeHtml(statusLabel || status)}</span>`;
+  }
+
+  function statusLabel(code) {
+    return STATUS_LABELS[code] || code;
   }
 
   function typeBadge(item) {
@@ -304,7 +310,7 @@
           data-persons-count="${escapeHtml(item.persons_count || 0)}"
           data-vehicle="${escapeHtml(item.vehicle_plate || '—')}"
           data-status="${escapeHtml(item.status)}"
-          data-status-label="${escapeHtml(item.status)}"
+          data-status-label="${escapeHtml(statusLabel(item.status))}"
           data-pass-type="${escapeHtml(item.type_label || '')}"
           data-date="${escapeHtml(item.date_text || '')}"
           data-date-mode="${escapeHtml(item.date_mode || 'single')}"
@@ -324,7 +330,7 @@
         <td><span class="clip-text" title="${escapeHtml(item.date_text || '—')}">${escapeHtml(item.date_text || '—')}</span></td>
         <td>${escapeHtml(item.vehicle_plate || '—')}</td>
         <td><span class="clip-text" title="${escapeHtml(item.requester_name || '—')}">${escapeHtml(item.requester_name || '—')}</span>${requesterLink}</td>
-        <td class="text-nowrap">${statusBadge(item.status, item.status)}</td>
+        <td class="text-nowrap">${statusBadge(item.status, statusLabel(item.status))}</td>
         <td class="small"><span class="clip-text" title="${escapeHtml(item.processed_by || '—')}">${escapeHtml(item.processed_by || '—')}</span></td>
         <td class="small text-muted"><span class="clip-text" title="${escapeHtml(item.processed_at_text || '—')}">${escapeHtml(item.processed_at_text || '—')}</span></td>
         <td class="small"><span class="clip-text" title="${escapeHtml(item.cancel_reason || '—')}">${escapeHtml(item.cancel_reason || '—')}</span></td>
@@ -363,6 +369,23 @@
     } finally {
       loading = false;
       scrollLoader.classList.add('d-none');
+      setTimeout(maybeLoadMore, 0);
+    }
+  }
+
+  function isNearBottomWindow() {
+    return window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
+  }
+
+  function isNearBottomContainer() {
+    if (!tableWrap) return false;
+    return tableWrap.scrollTop + tableWrap.clientHeight >= tableWrap.scrollHeight - 120;
+  }
+
+  function maybeLoadMore() {
+    if (!hasMore || loading) return;
+    if (isNearBottomWindow() || isNearBottomContainer()) {
+      loadMore();
     }
   }
 
@@ -506,12 +529,11 @@
     document.getElementById('cloneDateToInput').required = isRange;
   });
 
-  window.addEventListener('scroll', () => {
-    if (!hasMore || loading) return;
-    const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
-    if (nearBottom) {
-      loadMore();
-    }
-  });
+  window.addEventListener('scroll', maybeLoadMore, { passive: true });
+  window.addEventListener('resize', maybeLoadMore);
+  if (tableWrap) {
+    tableWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
+  }
+  setTimeout(maybeLoadMore, 0);
 </script>
 {% endblock %}
