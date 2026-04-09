@@ -99,7 +99,7 @@ def is_role_allowed(role: str) -> bool:
     return (role or "").strip().lower() in ALLOWED_ROLES
 
 
-def send_telegram_code(chat_id: int, code: str, phone_380: str, where_text: str):
+def send_telegram_code(chat_id: int, code: str, phone_380: str):
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN не налаштований")
 
@@ -107,26 +107,26 @@ def send_telegram_code(chat_id: int, code: str, phone_380: str, where_text: str)
     text = (
         "🔐 Вхід у виробництво!\n"
         f"Телефон: +{phone_380}\n"
-        f"Куди вхід: {where_text}\n\n"
-        f"Код входу: {code}\n"
+        "Код входу (натисніть, щоб скопіювати):\n"
+        f"<code>{code}</code>\n"
         f"Дійсний {CODE_TTL_SECONDS // 60} хв."
     )
     response = requests.post(
         url,
-        json={"chat_id": int(chat_id), "text": text},
+        json={"chat_id": int(chat_id), "text": text, "parse_mode": "HTML"},
         timeout=12,
     )
     response.raise_for_status()
 
 
-def issue_code(phone_380: str, user: dict[str, Any], where_text: str):
+def issue_code(phone_380: str, user: dict[str, Any]):
     code = str(random.randint(100000, 999999))
     LOGIN_CODES[phone_380] = {
         "code": code,
         "expires_at": time.time() + CODE_TTL_SECONDS,
         "user": user,
     }
-    send_telegram_code(int(user["telegram_id"]), code, phone_380, where_text)
+    send_telegram_code(int(user["telegram_id"]), code, phone_380)
 
 
 def verify_code(phone_380: str, code: str):

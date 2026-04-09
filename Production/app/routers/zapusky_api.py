@@ -316,6 +316,7 @@ async def production_launches(
     request: Request,
     order_number: str = "",
     status_filter: str = "",
+    hidden_mode: str = "visible",
     offset: int = 0,
     limit: int = 80,
 ):
@@ -345,6 +346,7 @@ async def production_launches(
             launch_pairs = {(o, l) for (o, l) in launch_pairs if search in o.lower()}
 
         status_filter_norm = _safe_text(status_filter).lower()
+        hidden_mode_norm = _safe_text(hidden_mode).lower()
 
         cur.execute(
             f"""
@@ -389,7 +391,10 @@ async def production_launches(
             details = detail_stats.get((order_num, launch), {})
 
             is_hidden = bool(reg.get("hidden", False))
-            if is_hidden:
+            if hidden_mode_norm == "hidden":
+                if not is_hidden:
+                    continue
+            elif is_hidden:
                 continue
 
             is_uploaded = bool(reg.get("details_uploaded", False))

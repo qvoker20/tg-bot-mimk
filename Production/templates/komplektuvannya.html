@@ -29,7 +29,6 @@
 			<tbody id="ordersBody"></tbody>
 		</table>
 	</div>
-	<p id="ordersLoading" class="muted hidden">Підвантаження замовлень...</p>
 </section>
 
 <div id="launchesModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="launchesModalTitle">
@@ -77,7 +76,6 @@
 				<tbody id="launchesBody"></tbody>
 			</table>
 		</div>
-		<p id="launchesLoading" class="muted hidden">Підвантаження запусків...</p>
 	</div>
 </div>
 
@@ -106,7 +104,7 @@
 			<span class="muted">У буфері: <strong id="bufferCount">0</strong></span>
 		</div>
 
-		<div id="scanLoading" class="msg info hidden">Збереження на сервер...</div>
+		<div id="scanLoading" class="d-flex align-items-center gap-2 text-secondary small hidden"><span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span><span>Збереження...</span></div>
 		<div id="scanMsg" class="msg"></div>
 
 		<div class="komplekt-details-grid">
@@ -165,7 +163,6 @@
 	const ordersSearch = document.getElementById('ordersSearch');
 	const ordersBody = document.getElementById('ordersBody');
 	const ordersWrap = document.getElementById('ordersWrap');
-	const ordersLoading = document.getElementById('ordersLoading');
 
 	const launchesModal = document.getElementById('launchesModal');
 	const launchesModalTitle = document.getElementById('launchesModalTitle');
@@ -176,7 +173,6 @@
 	const launchStatusFilterGroup = document.getElementById('launchStatusFilterGroup');
 	const launchesMsg = document.getElementById('launchesMsg');
 	const launchesListWrap = document.getElementById('launchesListWrap');
-	const launchesLoading = document.getElementById('launchesLoading');
 	const goKomplektBtn = document.getElementById('goKomplektBtn');
 	const viewLaunchDetailsBtn = document.getElementById('viewLaunchDetailsBtn');
 	const launchesBody = document.getElementById('launchesBody');
@@ -225,13 +221,15 @@
 
 	function showLaunchesMsg(text, type = 'info') {
 		launchesMsg.textContent = text;
-		launchesMsg.className = `msg ${type}`;
+		const cls = type === 'error' ? 'alert-danger' : (type === 'ok' ? 'alert-success' : 'alert-secondary');
+		launchesMsg.className = `alert ${cls} py-2 px-3`;
 		launchesMsg.classList.toggle('hidden', !text);
 	}
 
 	function showScanTopMsg(text, type = 'info') {
 		scanTopMsg.textContent = text;
-		scanTopMsg.className = `msg ${type}`;
+		const cls = type === 'error' ? 'alert-danger' : (type === 'ok' ? 'alert-success' : 'alert-secondary');
+		scanTopMsg.className = `alert ${cls} py-2 px-3`;
 		scanTopMsg.classList.toggle('hidden', !text);
 	}
 
@@ -245,7 +243,8 @@
 
 	function showScanMsg(text, type = 'info') {
 		scanMsg.textContent = text;
-		scanMsg.className = `msg ${type}`;
+		const cls = type === 'error' ? 'alert-danger' : (type === 'ok' ? 'alert-success' : 'alert-secondary');
+		scanMsg.className = `alert ${cls} py-2 px-3`;
 	}
 
 	function renderProgressBar(percent) {
@@ -273,15 +272,11 @@
 	}
 
 	function showLoader(message) {
-		if (typeof window.showGlobalLoading === 'function') {
-			window.showGlobalLoading(message);
-		}
+		void message;
 	}
 
 	function hideLoader() {
-		if (typeof window.hideGlobalLoading === 'function') {
-			window.hideGlobalLoading();
-		}
+		return;
 	}
 
 	function openOverlay(overlay) {
@@ -413,7 +408,6 @@
 		}
 
 		orderLoading = true;
-		ordersLoading.classList.remove('hidden');
 
 		const params = new URLSearchParams({
 			search: ordersSearch.value.trim(),
@@ -433,10 +427,8 @@
 			renderOrderRows(items, !reset);
 			orderOffset = Number(data.next_offset || (orderOffset + items.length));
 			orderHasMore = Boolean(data.has_more);
-			ordersLoading.classList.toggle('hidden', !orderHasMore);
 		} catch (err) {
-			ordersLoading.classList.remove('hidden');
-			ordersLoading.textContent = err.message || 'Помилка завантаження';
+			showLaunchesMsg(err.message || 'Помилка завантаження замовлень', 'error');
 			orderHasMore = false;
 		} finally {
 			hideLoader();
@@ -497,7 +489,6 @@
 		}
 
 		launchLoading = true;
-		launchesLoading.classList.remove('hidden');
 
 		const params = new URLSearchParams({
 			search_launch: launchSearch.value.trim(),
@@ -517,7 +508,6 @@
 			renderLaunchRows(data.items || [], !reset);
 			launchOffset = Number(data.next_offset || (launchOffset + (data.items || []).length));
 			launchHasMore = Boolean(data.has_more);
-			launchesLoading.classList.toggle('hidden', !launchHasMore);
 		} catch (err) {
 			launchesBody.innerHTML = `<tr><td colspan="11">${esc(err.message || 'Помилка завантаження запусків')}</td></tr>`;
 			launchHasMore = false;

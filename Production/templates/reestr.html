@@ -135,6 +135,10 @@
 	const pageSize = 50;
 	let hasMore = true;
 	let loading = false;
+	let searchDebounceTimer = null;
+	let loadController = null;
+	let loadRequestId = 0;
+	let isComposingSearch = false;
 
 	const launchColumns = [
 		['launch', 'Запуск', 'launch-col core-col'],
@@ -154,8 +158,8 @@
 		['cut_meters', 'Порізка метри'],
 		['drilling_qty', 'Присадка кількість'],
 		['cut_operator', 'Порізка виконавець'],
-		['cut_done', 'Порізка true/false', 'process-col process-start'],
-		['edge_done', 'Поклейка true/false', 'process-col'],
+		['cut_done', 'Порізка', 'process-col process-start'],
+		['edge_done', 'Поклейка', 'process-col'],
 		['drilling_done', 'Присадка', 'process-col'],
 		['curvilinear', 'Криволінійка', 'process-col'],
 		['formatter', 'Форматнік', 'process-col'],
@@ -350,6 +354,12 @@
 		if (loading) return;
 		if (!hasMore && !reset) return;
 
+		const requestId = ++loadRequestId;
+		if (loadController) {
+			loadController.abort();
+		}
+		loadController = new AbortController();
+
 		if (reset) {
 			offset = 0;
 			hasMore = true;
@@ -367,8 +377,15 @@
 				...getCurrentFilters(),
 			});
 
-			const res = await fetch(`/api/reestr/orders/chunk?${params.toString()}`);
+			const res = await fetch(`/api/reestr/orders/chunk?${params.toString()}`, {
+				signal: loadController.signal,
+			});
 			const data = await res.json();
+
+			if (requestId !== loadRequestId) {
+				return;
+			}
+
 			if (!res.ok || !data.ok) {
 				throw new Error(data.error || 'Помилка завантаження');
 			}
@@ -378,11 +395,16 @@
 			offset = Number(data.next_offset || offset);
 			hasMore = Boolean(data.has_more);
 		} catch (err) {
+			if (err?.name === 'AbortError') {
+				return;
+			}
 			emptyMsg.classList.remove('hidden');
 			emptyMsg.textContent = `Не вдалося завантажити реєстр: ${err.message}`;
 			hasMore = false;
 		} finally {
-			loading = false;
+			if (requestId === loadRequestId) {
+				loading = false;
+			}
 		}
 	}
 
@@ -404,7 +426,23 @@
 	});
 
 	const reloadFromTop = () => loadOrdersChunk({ reset: true });
-	orderSearch.addEventListener('input', reloadFromTop);
+	orderSearch.addEventListener('compositionstart', () => {
+		isComposingSearch = true;
+	});
+	orderSearch.addEventListener('compositionend', () => {
+		isComposingSearch = false;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = setTimeout(() => {
+			reloadFromTop();
+		}, 220);
+	});
+	orderSearch.addEventListener('input', () => {
+		if (isComposingSearch) return;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = setTimeout(() => {
+			reloadFromTop();
+		}, 220);
+	});
 	overallStatusFilter.addEventListener('change', reloadFromTop);
 	launchStatusFilter.addEventListener('change', reloadFromTop);
 	orderMaterialFilter.addEventListener('change', reloadFromTop);

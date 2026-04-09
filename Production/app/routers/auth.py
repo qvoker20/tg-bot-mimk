@@ -35,12 +35,8 @@ async def request_code(payload: RequestCodePayload, request: Request):
             status_code=400,
         )
 
-    ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
-    user_agent = request.headers.get("user-agent", "")[:120]
-    where_text = f"Production Web, IP: {ip}, UA: {user_agent or '-'}"
-
     try:
-        issue_code(phone_380, user, where_text)
+        issue_code(phone_380, user)
     except Exception as exc:
         LOGIN_CODES.pop(phone_380, None)
         return JSONResponse(

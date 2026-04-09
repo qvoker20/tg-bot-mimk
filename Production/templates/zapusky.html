@@ -16,6 +16,11 @@
 		<button type="button" class="status-chip" data-status="needs_upload">Потрібен файл</button>
 		<button type="button" class="status-chip" data-status="uploaded">Завантажено</button>
 	</div>
+	<div id="hiddenFilterGroup" class="status-segment" role="tablist" aria-label="Видимість запусків">
+		<button type="button" class="status-chip active" data-hidden-mode="visible">Видимі</button>
+		<button type="button" class="status-chip" data-hidden-mode="hidden">Приховані</button>
+	</div>
+	<div id="launchesSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status" aria-hidden="true"></div>
 	{% if is_admin_hide %}
 	<div id="adminBulkTools" class="zapusky-toolbar hidden" style="margin:0;">
 		<button id="bulkHideBtn" class="btn" type="button">Приховати вибрані замовлення</button>
@@ -41,10 +46,9 @@
 	</table>
 </div>
 <p id="launchesEmpty" class="muted hidden">Немає запусків для відображення.</p>
-<p id="launchesLoading" class="muted hidden">Підвантаження...</p>
 
 <div id="uploadModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle">
-	<div class="modal-box">
+	<div class="modal-box modal-upload">
 		<div class="modal-header-row">
 			<h3 id="uploadModalTitle">Завантаження деталей запуску</h3>
 			<button id="closeUploadModalBtn" class="btn-toggle" type="button">Закрити</button>
@@ -67,7 +71,7 @@
 			<button id="uploadBtn" class="btn primary" type="button" disabled>Завантажити і записати</button>
 		</div>
 
-		<div id="uploadMsg" class="msg"></div>
+		<div id="uploadMsg" class="alert alert-secondary py-2 px-3" role="alert"></div>
 
 		<div id="previewWrap" class="hidden">
 			<h4>Попередній перегляд деталей</h4>
@@ -89,6 +93,19 @@
 	</div>
 </div>
 
+<div id="replaceConfirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="replaceConfirmTitle">
+	<div class="modal-box modal-confirm">
+		<div class="modal-header-row">
+			<h3 id="replaceConfirmTitle">Підтвердження</h3>
+		</div>
+		<p id="replaceConfirmText" class="muted">Деталі для цього запуску вже завантажені. Підтвердити перезапис?</p>
+		<div class="confirm-actions">
+			<button id="replaceConfirmNo" class="btn" type="button">Скасувати</button>
+			<button id="replaceConfirmYes" class="btn primary" type="button">Перезаписати</button>
+		</div>
+	</div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs" type="module"></script>
 <script>
 	let pdfjsLib = null;
@@ -103,6 +120,8 @@
 
 	const orderInput = document.getElementById('orderInput');
 	const statusFilterGroup = document.getElementById('statusFilterGroup');
+	const hiddenFilterGroup = document.getElementById('hiddenFilterGroup');
+	const launchesSpinner = document.getElementById('launchesSpinner');
 	const closeUploadModalBtn = document.getElementById('closeUploadModalBtn');
 	const uploadModal = document.getElementById('uploadModal');
 	const dropZone = document.getElementById('dropZone');
@@ -123,8 +142,11 @@
 
 	const launchesBody = document.getElementById('launchesBody');
 	const launchesEmpty = document.getElementById('launchesEmpty');
-	const launchesLoading = document.getElementById('launchesLoading');
 	const launchesWrap = document.querySelector('.zapusky-main-wrap');
+	const replaceConfirmModal = document.getElementById('replaceConfirmModal');
+	const replaceConfirmText = document.getElementById('replaceConfirmText');
+	const replaceConfirmNo = document.getElementById('replaceConfirmNo');
+	const replaceConfirmYes = document.getElementById('replaceConfirmYes');
 
 	let selectedFile = null;
 	let selectedOrderNumber = '';
@@ -132,10 +154,27 @@
 	let parsedPayload = null;
 	let canManageHidden = false;
 	let statusFilterValue = '';
+	let hiddenModeValue = 'visible';
 	let pageOffset = 0;
 	const pageLimit = 80;
 	let hasMore = true;
 	let isLoading = false;
+	let replaceConfirmResolver = null;
+
+	function toast(text, level = 'primary') {
+		if (typeof window.appToast === 'function') {
+			window.appToast(text, level);
+		}
+	}
+
+	function setBusy(v) {
+		if (typeof window.appSetBusy === 'function') {
+			window.appSetBusy(!!v);
+		}
+		if (launchesSpinner) {
+			launchesSpinner.classList.toggle('d-none', !v);
+		}
+	}
 
 	function esc(v) {
 		return String(v || '')
@@ -147,7 +186,8 @@
 
 	function showMsg(text, type = 'info') {
 		uploadMsg.textContent = text;
-		uploadMsg.className = `msg ${type}`;
+		const cls = type === 'error' ? 'alert-danger' : (type === 'ok' ? 'alert-success' : 'alert-secondary');
+		uploadMsg.className = `alert ${cls} py-2 px-3`;
 	}
 
 	function setSelection(order, launch) {
@@ -165,6 +205,26 @@
 	function closeModal() {
 		uploadModal.classList.add('hidden');
 		document.body.classList.remove('modal-open');
+	}
+
+	function askReplaceConfirm(text) {
+		return new Promise((resolve) => {
+			replaceConfirmResolver = resolve;
+			replaceConfirmText.textContent = text || 'Деталі для цього запуску вже завантажені. Підтвердити перезапис?';
+			replaceConfirmModal.classList.remove('hidden');
+			document.body.classList.add('modal-open');
+		});
+	}
+
+	function closeReplaceConfirm(answer) {
+		replaceConfirmModal.classList.add('hidden');
+		if (uploadModal.classList.contains('hidden')) {
+			document.body.classList.remove('modal-open');
+		}
+		if (replaceConfirmResolver) {
+			replaceConfirmResolver(!!answer);
+			replaceConfirmResolver = null;
+		}
 	}
 
 	function resetUploadState() {
@@ -256,31 +316,38 @@
 		}
 
 		isLoading = true;
-		launchesLoading.classList.remove('hidden');
+		setBusy(true);
 
 		const params = new URLSearchParams({
 			status_filter: statusFilterValue,
+			hidden_mode: hiddenModeValue,
 			order_number: orderInput.value.trim(),
 			offset: String(pageOffset),
 			limit: String(pageLimit),
 		});
-		const res = await fetch(`/api/zapusky/production-launches?${params.toString()}`);
-		const data = await res.json();
-		if (!res.ok || !data.ok) {
-			launchesEmpty.classList.remove('hidden');
-			launchesEmpty.textContent = data.error || 'Не вдалося завантажити дані';
-			launchesLoading.classList.add('hidden');
-			isLoading = false;
-			return;
-		}
+		try {
+			const res = await fetch(`/api/zapusky/production-launches?${params.toString()}`);
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				launchesEmpty.classList.remove('hidden');
+				launchesEmpty.textContent = data.error || 'Не вдалося завантажити дані';
+				toast(data.error || 'Не вдалося завантажити дані', 'danger');
+				return;
+			}
 
-		canManageHidden = Boolean(data.can_manage_hidden);
-		const items = data.items || [];
-		renderLaunches(items, !reset);
-		pageOffset = Number(data.next_offset || (pageOffset + items.length));
-		hasMore = Boolean(data.has_more);
-		launchesLoading.classList.toggle('hidden', !hasMore);
-		isLoading = false;
+			canManageHidden = Boolean(data.can_manage_hidden);
+			const items = data.items || [];
+			renderLaunches(items, !reset);
+			pageOffset = Number(data.next_offset || (pageOffset + items.length));
+			hasMore = Boolean(data.has_more);
+		} catch (err) {
+			launchesEmpty.classList.remove('hidden');
+			launchesEmpty.textContent = 'Помилка завантаження';
+			toast('Помилка завантаження запусків', 'danger');
+		} finally {
+			setBusy(false);
+			isLoading = false;
+		}
 	}
 
 	function maybeLoadMore() {
@@ -304,9 +371,10 @@
 			});
 			const data = await res.json();
 			if (!res.ok || !data.ok) {
-				alert(data.error || 'Не вдалося приховати замовлення');
+				toast(data.error || 'Не вдалося приховати замовлення', 'danger');
 				return;
 			}
+			toast('Замовлення приховано', 'primary');
 			await loadLaunches(true);
 			return;
 		}
@@ -332,7 +400,7 @@
 		const uniqueOrders = [...new Set(selected)];
 
 		if (!uniqueOrders.length) {
-			alert('Оберіть рядки із замовленнями для приховування');
+			toast('Оберіть рядки із замовленнями для приховування', 'warning');
 			return;
 		}
 
@@ -343,9 +411,10 @@
 		});
 		const data = await res.json();
 		if (!res.ok || !data.ok) {
-			alert(data.error || 'Не вдалося приховати вибрані замовлення');
+			toast(data.error || 'Не вдалося приховати вибрані замовлення', 'danger');
 			return;
 		}
+		toast('Вибрані замовлення приховано', 'primary');
 
 		await loadLaunches(true);
 	});
@@ -355,7 +424,7 @@
 	hideSearchedOrderBtn.addEventListener('click', async () => {
 		const order = orderInput.value.trim();
 		if (!order) {
-			alert('Введіть номер замовлення у пошук');
+			toast('Введіть номер замовлення у пошук', 'warning');
 			return;
 		}
 
@@ -366,9 +435,10 @@
 		});
 		const data = await res.json();
 		if (!res.ok || !data.ok) {
-			alert(data.error || 'Не вдалося приховати замовлення');
+			toast(data.error || 'Не вдалося приховати замовлення', 'danger');
 			return;
 		}
+		toast('Замовлення приховано', 'primary');
 
 		await loadLaunches(true);
 	});
@@ -445,6 +515,7 @@
 
 		showMsg('Парсинг PDF у браузері...', 'info');
 		try {
+			setBusy(true);
 			const text = await extractPdfText(selectedFile);
 			const parsed = parseOrderLaunch(text);
 			const details = parseDetails(text);
@@ -488,6 +559,8 @@
 			console.error(err);
 			showMsg(err?.message || 'Помилка парсингу PDF', 'error');
 			uploadBtn.disabled = true;
+		} finally {
+			setBusy(false);
 		}
 	}
 
@@ -499,6 +572,7 @@
 
 		uploadBtn.disabled = true;
 		showMsg('Записуємо дані в БД...', 'info');
+		setBusy(true);
 
 		try {
 			const res = await fetch('/api/zapusky/upload-details', {
@@ -510,7 +584,7 @@
 
 			if (!res.ok || !data.ok) {
 				if (res.status === 409 && data.code === 'already_uploaded') {
-					const shouldReplace = window.confirm(data.error || 'Деталі вже завантажені. Перезаписати?');
+					const shouldReplace = await askReplaceConfirm(data.error || 'Деталі вже завантажені. Підтвердити перезапис.');
 					if (shouldReplace) {
 						const retryPayload = { ...parsedPayload, force_replace: true };
 						const retryRes = await fetch('/api/zapusky/upload-details', {
@@ -526,19 +600,31 @@
 						showMsg(`Перезаписано. Замовлення: ${retryData.order_number}, запуск: ${retryData.launch}, деталей: ${retryData.details_count}`, 'ok');
 						renderPreview(retryData.details || []);
 						await loadLaunches(true);
+						toast('Деталі оновлено', 'success');
+						closeModal();
+						resetUploadState();
 						return;
 					}
+					toast('Перезапис скасовано', 'secondary');
+					showMsg('Перезапис скасовано користувачем.', 'info');
+					return;
 				}
 				showMsg(data.error || 'Помилка завантаження', 'error');
+				toast(data.error || 'Помилка завантаження', 'danger');
 				return;
 			}
 
 			showMsg(`Збережено. Замовлення: ${data.order_number}, запуск: ${data.launch}, деталей: ${data.details_count}`, 'ok');
 			renderPreview(data.details || []);
 			await loadLaunches(true);
+			toast('Деталі завантажено', 'success');
+			closeModal();
+			resetUploadState();
 		} catch (err) {
 			showMsg('Сервер недоступний', 'error');
+			toast('Сервер недоступний', 'danger');
 		} finally {
+			setBusy(false);
 			uploadBtn.disabled = !parsedPayload;
 		}
 	});
@@ -574,6 +660,13 @@
 	});
 
 	closeUploadModalBtn.addEventListener('click', closeModal);
+	replaceConfirmNo.addEventListener('click', () => closeReplaceConfirm(false));
+	replaceConfirmYes.addEventListener('click', () => closeReplaceConfirm(true));
+	replaceConfirmModal.addEventListener('click', (e) => {
+		if (e.target === replaceConfirmModal) {
+			closeReplaceConfirm(false);
+		}
+	});
 	uploadModal.addEventListener('click', (e) => {
 		if (e.target === uploadModal) closeModal();
 	});
@@ -592,6 +685,17 @@
 
 		statusFilterValue = btn.getAttribute('data-status') || '';
 		Array.from(statusFilterGroup.querySelectorAll('.status-chip')).forEach((chip) => {
+			chip.classList.remove('active');
+		});
+		btn.classList.add('active');
+		await loadLaunches(true);
+	});
+	hiddenFilterGroup.addEventListener('click', async (e) => {
+		const btn = e.target.closest('[data-hidden-mode]');
+		if (!btn) return;
+
+		hiddenModeValue = btn.getAttribute('data-hidden-mode') || 'visible';
+		Array.from(hiddenFilterGroup.querySelectorAll('.status-chip')).forEach((chip) => {
 			chip.classList.remove('active');
 		});
 		btn.classList.add('active');
