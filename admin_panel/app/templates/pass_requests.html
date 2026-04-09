@@ -16,9 +16,13 @@
     </div>
 
     <form method="get" class="row g-2 mb-3 align-items-end" id="filtersForm">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label mb-1">Пошук по авто</label>
         <input type="text" name="search_vehicle" id="searchVehicleInput" class="form-control" placeholder="Напр. КА5593РХ" value="{{ search_vehicle or '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label mb-1">Пошук по особі</label>
+        <input type="text" name="search_person" id="searchPersonInput" class="form-control" placeholder="Напр. Іваненко Іван" value="{{ search_person or '' }}">
       </div>
       <div class="col-md-3">
         <label class="form-label mb-1">Фільтр статусу</label>
@@ -29,7 +33,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-5 d-flex gap-2 flex-wrap">
+      <div class="col-md-3 d-flex gap-2 flex-wrap flex-md-nowrap">
         <button class="btn btn-primary btn-mobile-full" type="submit">Застосувати</button>
         <a class="btn btn-outline-secondary btn-mobile-full" href="{{ url_for('pass_requests') }}">Скинути</a>
       </div>
@@ -261,6 +265,7 @@
   const modalCancelReason = document.getElementById('modalCancelReason');
   const modalCancelAlert = document.getElementById('modalCancelAlert');
   const searchVehicleInput = document.getElementById('searchVehicleInput');
+  const searchPersonInput = document.getElementById('searchPersonInput');
   const statusFilterInput = document.getElementById('statusFilterInput');
   const createPersonsCount = document.getElementById('createPersonsCount');
   const createPersonsFields = document.getElementById('createPersonsFields');
@@ -348,6 +353,7 @@
       const params = new URLSearchParams({
         offset: String(offset),
         search_vehicle: searchVehicleInput.value || '',
+        search_person: searchPersonInput.value || '',
         status: statusFilterInput.value || ''
       });
       const res = await fetch(`{{ url_for('pass_requests_chunk') }}?${params.toString()}`);

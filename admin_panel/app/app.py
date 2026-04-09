@@ -88,7 +88,7 @@ def _group_type_label(pass_type: str, persons_count: int) -> str:
     return "Для авто" if pass_type == "vehicle" else "Для особи"
 
 
-def _fetch_pass_request_groups(limit: int, offset: int, search_vehicle: str, status_filter: str):
+def _fetch_pass_request_groups(limit: int, offset: int, search_vehicle: str, search_person: str, status_filter: str):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -99,6 +99,9 @@ def _fetch_pass_request_groups(limit: int, offset: int, search_vehicle: str, sta
         if search_vehicle:
             where_parts.append("COALESCE(lpr.vehicle_plate, '') ILIKE %s")
             params.append(f"%{search_vehicle}%")
+        if search_person:
+            where_parts.append("COALESCE(lpr.visitor_full_name, '') ILIKE %s")
+            params.append(f"%{search_person}%")
         if status_filter:
             where_parts.append("lpr.status = %s")
             params.append(status_filter)
@@ -242,14 +245,17 @@ def send_pass_request_email(
     if not to_email:
         raise RuntimeError("Не вказано email отримувача")
 
+    clean_plate = (vehicle_plate or "").strip()
     title = f"Перепустка на {visit_date_text}"
+    if clean_plate and clean_plate != "—":
+        title = f"{title} | Авто: {clean_plate}"
     names_block = "\n".join([f"- {name}" for name in visitor_names]) if visitor_names else "- —"
 
     body = (
         f"{title}\n"
-        f"Кількість осіб: {len(visitor_names)}\n"
+        f"Кількість осіб до заявки: {len(visitor_names)}\n"
         f"Особи:\n{names_block}\n\n"
-        f"Авто: {vehicle_plate or '—'}\n\n"
+        f"Авто: {clean_plate or '—'}\n\n"
         "Компанія \"MIM-K\"\n"
         "Киев, бул. Вацлава Гавела,16, корпус 4\n"
         "тел.:(044) 599-81-12\n"
@@ -916,12 +922,19 @@ def pass_requests():
         return redirect(url_for("logout"))
 
     search_vehicle = request.args.get("search_vehicle", "").strip()
+    search_person = request.args.get("search_person", "").strip()
     status_filter = request.args.get("status", "").strip().lower()
     if status_filter and status_filter not in PASS_STATUS_LABELS:
         status_filter = ""
 
     try:
-        rows = _fetch_pass_request_groups(limit=20, offset=0, search_vehicle=search_vehicle, status_filter=status_filter)
+        rows = _fetch_pass_request_groups(
+            limit=20,
+            offset=0,
+            search_vehicle=search_vehicle,
+            search_person=search_person,
+            status_filter=status_filter,
+        )
     except Exception as e:
         rows = []
         flash(f"Не вдалося завантажити заявки на пропуск: {e}", "danger")
@@ -931,6 +944,7 @@ def pass_requests():
         requests_list=rows,
         default_target_email=PASS_REQUEST_DEFAULT_EMAIL,
         search_vehicle=search_vehicle,
+        search_person=search_person,
         status_filter=status_filter,
         status_labels=PASS_STATUS_LABELS,
     )
@@ -943,6 +957,7 @@ def pass_requests_chunk():
 
     offset_raw = request.args.get("offset", "0").strip()
     search_vehicle = request.args.get("search_vehicle", "").strip()
+    search_person = request.args.get("search_person", "").strip()
     status_filter = request.args.get("status", "").strip().lower()
     if status_filter and status_filter not in PASS_STATUS_LABELS:
         status_filter = ""
@@ -952,7 +967,13 @@ def pass_requests_chunk():
     except Exception:
         offset = 0
 
-    items = _fetch_pass_request_groups(limit=20, offset=offset, search_vehicle=search_vehicle, status_filter=status_filter)
+    items = _fetch_pass_request_groups(
+        limit=20,
+        offset=offset,
+        search_vehicle=search_vehicle,
+        search_person=search_person,
+        status_filter=status_filter,
+    )
     return jsonify({"items": items, "has_more": len(items) == 20})
 
 
