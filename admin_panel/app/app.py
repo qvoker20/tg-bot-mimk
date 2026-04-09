@@ -1340,7 +1340,6 @@ def pass_request_action():
         cur.close()
         conn.close()
 
-
 # ---------------- RUN ----------------
 
 if __name__ == "__main__":

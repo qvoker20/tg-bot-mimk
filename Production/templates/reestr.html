@@ -1,0 +1,434 @@
+{% extends "layout.html" %}
+
+{% block container_class %}container-wide{% endblock %}
+{% block card_class %}card-wide{% endblock %}
+
+{% block content %}
+<h1>Реєстр</h1>
+<p class="muted">Натисніть на номер замовлення: запуски відкриються в модальному вікні у вигляді таблиці.</p>
+
+<div class="filters-row">
+	<input id="orderSearch" type="text" placeholder="Пошук за номером замовлення..." />
+	<select id="overallStatusFilter">
+		<option value="">Усі загальні статуси</option>
+		<option value="Завершено">Завершено</option>
+		<option value="В роботі">В роботі</option>
+	</select>
+	<select id="launchStatusFilter">
+		<option value="">Будь-який статус запуску</option>
+		<option value="Завершено">Завершено</option>
+		<option value="Передано">Передано</option>
+		<option value="Адаптація">Адаптація</option>
+		<option value="Виробництво">Виробництво</option>
+		<option value="Скасовано">Скасовано</option>
+		<option value="Пауза">Пауза</option>
+	</select>
+	<select id="orderMaterialFilter">
+		<option value="">Усі матеріали (замовлення)</option>
+	</select>
+</div>
+
+<div class="table-wrap reestr-main-wrap">
+	<table class="data-table" id="ordersTable">
+		<thead>
+			<tr>
+				<th>Номер замовлення</th>
+				<th>Дата подачі на виробництво</th>
+				<th>Днів у роботі</th>
+				<th>Загальний статус</th>
+				<th>Статуси запусків</th>
+				<th>Залишок порізки (м)</th>
+				<th>Залишок присадки</th>
+				<th>Кількість запусків</th>
+			</tr>
+		</thead>
+		<tbody id="ordersBody"></tbody>
+	</table>
+</div>
+
+<p id="emptyMsg" class="muted hidden">Дані не знайдено.</p>
+
+<div id="launchModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="launchModalTitle">
+	<div class="modal-box modal-wide">
+		<div class="modal-header-row">
+			<h3 id="launchModalTitle">Запуски замовлення</h3>
+			<button type="button" id="closeLaunchModal" class="btn-toggle">Закрити</button>
+		</div>
+		<div class="modal-subtitle" id="launchModalSubtitle"></div>
+		<div class="filters-row modal-filters-row">
+			<select id="modalLaunchStatusFilter">
+				<option value="">Усі статуси запусків</option>
+				<option value="Завершено">Завершено</option>
+				<option value="Передано">Передано</option>
+				<option value="Адаптація">Адаптація</option>
+				<option value="Виробництво">Виробництво</option>
+				<option value="Скасовано">Скасовано</option>
+				<option value="Пауза">Пауза</option>
+			</select>
+			<select id="modalMaterialFilter">
+				<option value="">Усі матеріали (запуски)</option>
+			</select>
+		</div>
+
+		<div class="nested-table-wrap modal-table-wrap">
+			<table class="nested-table" id="launchesModalTable">
+				<colgroup>
+					<col class="col-launch">
+					<col class="col-short">
+					<col class="col-short">
+					<col class="col-short">
+					<col class="col-service">
+					<col class="col-name">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+					<col class="col-mid">
+				</colgroup>
+				<thead>
+					<tr id="launchesHeadRow"></tr>
+				</thead>
+				<tbody id="launchesBody"></tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<script>
+	const ordersBody = document.getElementById('ordersBody');
+	const emptyMsg = document.getElementById('emptyMsg');
+	const orderSearch = document.getElementById('orderSearch');
+	const overallStatusFilter = document.getElementById('overallStatusFilter');
+	const launchStatusFilter = document.getElementById('launchStatusFilter');
+	const orderMaterialFilter = document.getElementById('orderMaterialFilter');
+	const launchModal = document.getElementById('launchModal');
+	const closeLaunchModal = document.getElementById('closeLaunchModal');
+	const launchModalTitle = document.getElementById('launchModalTitle');
+	const launchModalSubtitle = document.getElementById('launchModalSubtitle');
+	const modalLaunchStatusFilter = document.getElementById('modalLaunchStatusFilter');
+	const modalMaterialFilter = document.getElementById('modalMaterialFilter');
+	const launchesHeadRow = document.getElementById('launchesHeadRow');
+	const launchesBody = document.getElementById('launchesBody');
+	const reestrMainWrap = document.querySelector('.reestr-main-wrap');
+
+	let allOrders = [];
+	let orderMap = new Map();
+	let activeOrder = null;
+	let offset = 0;
+	const pageSize = 50;
+	let hasMore = true;
+	let loading = false;
+
+	const launchColumns = [
+		['launch', 'Запуск', 'launch-col core-col'],
+		['launches_before_part', 'Кількість запусків до частини', 'emph-col core-col'],
+		['part', 'Частина', 'emph-col core-col'],
+		['parts_total', 'Всього частин', 'emph-col core-col'],
+		['service', 'Сервіс', 'emph-col core-col core-end'],
+		['name', 'Назва', 'name-col'],
+		['material_type', 'Тип матеріалу'],
+		['adaptor', 'Адаптатор'],
+		['sheets_count', 'Кількість листів'],
+		['status', 'Статус', 'status-col'],
+		['days_in_production', 'Днів на виробництві', 'status-col'],
+		['sent_to_production', 'Передано на виробництво'],
+		['in_work_production', 'В роботі виробництво'],
+		['raw_materials', 'Забеспечення сировини'],
+		['cut_meters', 'Порізка метри'],
+		['drilling_qty', 'Присадка кількість'],
+		['cut_operator', 'Порізка виконавець'],
+		['cut_done', 'Порізка true/false', 'process-col process-start'],
+		['edge_done', 'Поклейка true/false', 'process-col'],
+		['drilling_done', 'Присадка', 'process-col'],
+		['curvilinear', 'Криволінійка', 'process-col'],
+		['formatter', 'Форматнік', 'process-col'],
+		['ties', 'Стяжки', 'process-col'],
+		['nesting', 'Нестінг', 'process-col process-end'],
+		['production_ready_date', 'Дата готовності виробництво'],
+		['transfer_to', 'Кому передати'],
+		['notes', 'Примітки'],
+		['source', 'Джерело'],
+	];
+
+	const STATUS_CLASS = {
+		'завершено': 'status-done',
+		'передано': 'status-sent',
+		'адаптація': 'status-adaptation',
+		'виробництво': 'status-production',
+		'скасовано': 'status-cancelled',
+		'пауза': 'status-paused',
+	};
+
+	const TASK_BOOL_KEYS = new Set([
+		'cut_done',
+		'edge_done',
+		'drilling_done',
+		'curvilinear',
+		'formatter',
+		'ties',
+		'nesting',
+	]);
+
+	function escapeHtml(value) {
+		return String(value || '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/\"/g, '&quot;');
+	}
+
+	function normalizeText(v) {
+		return String(v || '').trim().toLowerCase();
+	}
+
+	function updateSelectOptions(selectEl, values, defaultLabel) {
+		const current = selectEl.value;
+		const unique = Array.from(new Set((values || []).map((v) => String(v || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'uk'));
+		selectEl.innerHTML = `<option value="">${escapeHtml(defaultLabel)}</option>` + unique.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+		if (current && unique.includes(current)) {
+			selectEl.value = current;
+		}
+	}
+
+	function taskStateCell(rawValue) {
+		const v = normalizeText(rawValue);
+		if (!v) {
+			return '<span class="task-none">- Немає задачі</span>';
+		}
+		if (v === 'true' || v === '1' || v === 'yes' || v === 'так') {
+			return '<span class="task-true">✅ Виконано</span>';
+		}
+		if (v === 'false' || v === '0' || v === 'no' || v === 'ні') {
+			return '<span class="task-false">⏳ Черга</span>';
+		}
+		return escapeHtml(rawValue);
+	}
+
+	function renderStatusCounts(statusCounts) {
+		const entries = Object.entries(statusCounts || {});
+		if (!entries.length) return '<span class="muted">-</span>';
+
+		return entries
+			.sort((a, b) => b[1] - a[1])
+			.map(([status, count]) => {
+				const statusClass = STATUS_CLASS[normalizeText(status)] || '';
+				return `<span class="status-mark ${statusClass}">${escapeHtml(status)}: ${escapeHtml(count)}</span>`;
+			})
+			.join(' ');
+	}
+
+	function renderLaunchesModal(order) {
+		const statusFilter = normalizeText(modalLaunchStatusFilter.value);
+		const materialFilter = normalizeText(modalMaterialFilter.value);
+
+		const modalMaterials = (order.launches || []).map((l) => l.material_type || '').filter(Boolean);
+		updateSelectOptions(modalMaterialFilter, modalMaterials, 'Усі матеріали (запуски)');
+
+		const launches = (order.launches || []).filter((launch) => {
+			if (statusFilter && normalizeText(launch.status) !== statusFilter) return false;
+			if (materialFilter && !normalizeText(launch.material_type).includes(materialFilter)) return false;
+			return true;
+		});
+
+		launchModalTitle.textContent = `Запуски замовлення ${order.order_number}`;
+		launchModalSubtitle.textContent = `Кількість запусків: ${launches.length} | Залишок порізки: ${order.pending_cut_meters || '0'} | Залишок присадки: ${order.pending_drilling_qty || '0'}`;
+
+		launchesHeadRow.innerHTML = launchColumns
+			.map(([, title, cls]) => `<th class="${cls || ''}">${escapeHtml(title)}</th>`)
+			.join('');
+
+		launchesBody.innerHTML = launches.map((launch) => {
+			const cells = launchColumns.map(([key, , cls]) => {
+				const rawValue = launch[key] || '';
+				if (key === 'days_in_production') {
+					const days = launch.days_in_production;
+					if (days === null || days === undefined || days === '') {
+						return `<td class="${cls || ''}">-</td>`;
+					}
+					const isOver = Number(days) > 7;
+					return `<td class="${cls || ''}"><span class="${isOver ? 'prod-days-overdue' : 'metric-cell'}">${escapeHtml(days)}</span></td>`;
+				}
+				if (TASK_BOOL_KEYS.has(key)) {
+					return `<td class="${cls || ''}">${taskStateCell(rawValue)}</td>`;
+				}
+				if (key === 'status') {
+					const statusClass = STATUS_CLASS[String(rawValue).trim().toLowerCase()] || '';
+					return `<td class="${cls || ''}"><span class="status-mark ${statusClass}">${escapeHtml(rawValue)}</span></td>`;
+				}
+				return `<td class="${cls || ''}" title="${escapeHtml(rawValue)}">${escapeHtml(rawValue)}</td>`;
+			}).join('');
+
+			return `<tr>${cells}</tr>`;
+		}).join('');
+	}
+
+	function openLaunchModal(order) {
+		activeOrder = order;
+		modalLaunchStatusFilter.value = '';
+		modalMaterialFilter.innerHTML = '<option value="">Усі матеріали (запуски)</option>';
+		modalMaterialFilter.value = '';
+		renderLaunchesModal(order);
+		launchModal.classList.remove('hidden');
+		document.body.classList.add('modal-open');
+	}
+
+	function closeModal() {
+		launchModal.classList.add('hidden');
+		document.body.classList.remove('modal-open');
+		activeOrder = null;
+	}
+
+	function appendOrders(items) {
+		if (!items.length && !allOrders.length) {
+			emptyMsg.classList.remove('hidden');
+			return;
+		}
+		emptyMsg.classList.add('hidden');
+
+		items.forEach((item) => {
+			const key = String(item.order_number || '');
+			orderMap.set(key, item);
+			allOrders.push(item);
+
+			const overallClass = item.overall_status === 'Завершено' ? 'status-done' : 'status-production';
+			const overallBadge = `<span class="status-mark ${overallClass}">${escapeHtml(item.overall_status || 'В роботі')}</span>`;
+			const statusCountsHtml = renderStatusCounts(item.status_counts || {});
+			const pendingCut = escapeHtml(item.pending_cut_meters || '0');
+			const pendingDrilling = escapeHtml(item.pending_drilling_qty || '0');
+			const firstSubmitDate = escapeHtml(item.first_submit_date || '-');
+			const daysRaw = item.days_in_work;
+			const isOverdue = typeof daysRaw === 'number' && daysRaw > 7;
+			const daysInWork = (daysRaw === null || daysRaw === undefined)
+				? '-'
+				: escapeHtml(daysRaw);
+			const daysClass = isOverdue ? 'metric-cell metric-danger' : 'metric-cell';
+
+			const row = `
+				<tr>
+					<td><button class="link-btn" data-open-order="${escapeHtml(key)}">${escapeHtml(item.order_number)}</button></td>
+					<td>${firstSubmitDate}</td>
+					<td><span class="${daysClass}">${daysInWork}</span></td>
+					<td>${overallBadge}</td>
+					<td class="status-counts-cell">${statusCountsHtml}</td>
+					<td><span class="metric-cell">${pendingCut}</span></td>
+					<td><span class="metric-cell">${pendingDrilling}</span></td>
+					<td>${escapeHtml(item.launches_count)}</td>
+				</tr>
+			`;
+
+			ordersBody.insertAdjacentHTML('beforeend', row);
+		});
+	}
+
+	function getCurrentFilters() {
+		return {
+			search: (orderSearch.value || '').trim(),
+			overall_status: overallStatusFilter.value || '',
+			launch_status: launchStatusFilter.value || '',
+			material: orderMaterialFilter.value || '',
+		};
+	}
+
+	async function loadOrdersChunk({ reset = false } = {}) {
+		if (loading) return;
+		if (!hasMore && !reset) return;
+
+		if (reset) {
+			offset = 0;
+			hasMore = true;
+			allOrders = [];
+			orderMap = new Map();
+			ordersBody.innerHTML = '';
+			emptyMsg.classList.add('hidden');
+		}
+
+		loading = true;
+		try {
+			const params = new URLSearchParams({
+				offset: String(offset),
+				limit: String(pageSize),
+				...getCurrentFilters(),
+			});
+
+			const res = await fetch(`/api/reestr/orders/chunk?${params.toString()}`);
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				throw new Error(data.error || 'Помилка завантаження');
+			}
+
+			updateSelectOptions(orderMaterialFilter, data.materials || [], 'Усі матеріали (замовлення)');
+			appendOrders(data.items || []);
+			offset = Number(data.next_offset || offset);
+			hasMore = Boolean(data.has_more);
+		} catch (err) {
+			emptyMsg.classList.remove('hidden');
+			emptyMsg.textContent = `Не вдалося завантажити реєстр: ${err.message}`;
+			hasMore = false;
+		} finally {
+			loading = false;
+		}
+	}
+
+	function maybeLoadMore() {
+		if (!reestrMainWrap || loading || !hasMore) return;
+		if (reestrMainWrap.scrollTop + reestrMainWrap.clientHeight >= reestrMainWrap.scrollHeight - 120) {
+			loadOrdersChunk();
+		}
+	}
+
+	ordersBody.addEventListener('click', (e) => {
+		const btn = e.target.closest('[data-open-order]');
+		if (!btn) return;
+		const key = String(btn.getAttribute('data-open-order') || '');
+		const order = orderMap.get(key);
+		if (order) {
+			openLaunchModal(order);
+		}
+	});
+
+	const reloadFromTop = () => loadOrdersChunk({ reset: true });
+	orderSearch.addEventListener('input', reloadFromTop);
+	overallStatusFilter.addEventListener('change', reloadFromTop);
+	launchStatusFilter.addEventListener('change', reloadFromTop);
+	orderMaterialFilter.addEventListener('change', reloadFromTop);
+	modalLaunchStatusFilter.addEventListener('change', () => {
+		if (activeOrder) renderLaunchesModal(activeOrder);
+	});
+	modalMaterialFilter.addEventListener('change', () => {
+		if (activeOrder) renderLaunchesModal(activeOrder);
+	});
+	closeLaunchModal.addEventListener('click', closeModal);
+	launchModal.addEventListener('click', (e) => {
+		if (e.target === launchModal) {
+			closeModal();
+		}
+	});
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && activeOrder) {
+			closeModal();
+		}
+	});
+	if (reestrMainWrap) {
+		reestrMainWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
+	}
+
+	loadOrdersChunk({ reset: true });
+</script>
+{% endblock %}

@@ -1,0 +1,788 @@
+{% extends "layout.html" %}
+
+{% block container_class %}container-wide{% endblock %}
+{% block card_class %}card-wide{% endblock %}
+
+{% block content %}
+<h1>Комплектування</h1>
+<p class="muted">Одна таблиця замовлень. Натискаєте на замовлення, у модальному вікні обираєте запуск і переходите до комплектування.</p>
+
+<div class="zapusky-toolbar">
+	<input id="ordersSearch" type="text" class="input-inline" placeholder="Пошук замовлення" autocomplete="off">
+</div>
+
+<section>
+	<h3>Замовлення</h3>
+	<div class="table-wrap komplekt-wrap" id="ordersWrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Замовлення</th>
+					<th>Запусків</th>
+					<th>Всього деталей</th>
+					<th>Укомплектовано</th>
+					<th>Не укомплектовано</th>
+					<th>Прогрес</th>
+					<th>Статус</th>
+				</tr>
+			</thead>
+			<tbody id="ordersBody"></tbody>
+		</table>
+	</div>
+	<p id="ordersLoading" class="muted hidden">Підвантаження замовлень...</p>
+</section>
+
+<div id="launchesModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="launchesModalTitle">
+	<div class="modal-box modal-wide">
+		<div class="modal-header-row">
+			<h3 id="launchesModalTitle">Запуски замовлення</h3>
+			<button id="closeLaunchesModalBtn" class="btn-toggle" type="button">Закрити</button>
+		</div>
+
+		<div id="launchesMsg" class="msg hidden"></div>
+
+		<div class="selected-meta selected-meta-strong">
+			<div><strong>Замовлення:</strong> <span id="launchesModalOrder">-</span></div>
+			<div><strong>Обраний запуск:</strong> <span id="launchesModalSelectedLaunch">-</span></div>
+		</div>
+
+		<div class="zapusky-toolbar toolbar-aligned">
+			<input id="launchSearch" type="text" class="input-inline" placeholder="Пошук запуску" autocomplete="off">
+			<div id="launchStatusFilterGroup" class="status-segment" role="tablist" aria-label="Фільтр статусу запусків">
+				<button type="button" class="status-chip active" data-status="">Усі</button>
+				<button type="button" class="status-chip" data-status="in_progress">В роботі</button>
+				<button type="button" class="status-chip" data-status="completed">Укомплектовано</button>
+			</div>
+			<button id="goKomplektBtn" class="btn primary" type="button" disabled>Комплектувати</button>
+			<button id="viewLaunchDetailsBtn" class="btn" type="button" disabled>Деталі</button>
+		</div>
+
+		<div class="table-wrap launches-select-wrap" id="launchesListWrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>#</th>
+						<th>Запуск</th>
+						<th>Всього деталей</th>
+						<th>Укомплектовано</th>
+						<th>Не укомплектовано</th>
+						<th>Прогрес</th>
+						<th>Статус</th>
+						<th>Хто почав</th>
+						<th>Коли почато</th>
+						<th>Хто завершив</th>
+						<th>Коли завершено</th>
+					</tr>
+				</thead>
+				<tbody id="launchesBody"></tbody>
+			</table>
+		</div>
+		<p id="launchesLoading" class="muted hidden">Підвантаження запусків...</p>
+	</div>
+</div>
+
+<div id="komplektModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="komplektModalTitle">
+	<div class="modal-box modal-wide">
+		<div class="modal-header-row">
+			<h3 id="komplektModalTitle">Комплектування запуску</h3>
+			<button id="closeKomplektBtn" class="btn-toggle" type="button">Закрити</button>
+		</div>
+
+		<div id="scanTopMsg" class="msg hidden"></div>
+
+		<div class="selected-meta selected-meta-strong">
+			<div><strong>Замовлення:</strong> <span id="modalOrder">-</span></div>
+			<div><strong>Запуск:</strong> <span id="modalLaunch">-</span></div>
+			<div><strong>Всього:</strong> <span id="modalTotal">0</span></div>
+			<div><strong>Укомплектовано:</strong> <span id="modalCompleted">0</span></div>
+			<div><strong>Не укомплектовано:</strong> <span id="modalPending">0</span></div>
+			<div><strong>Статус:</strong> <span id="modalStatus">-</span></div>
+			<div><strong>Почато:</strong> <span id="modalStartedInfo">-</span></div>
+			<div><strong>Завершено:</strong> <span id="modalCompletedInfo">-</span></div>
+		</div>
+
+		<div class="zapusky-toolbar toolbar-aligned">
+			<input id="scanInput" type="text" class="scan-input scan-input-visual" placeholder="Скануйте штрихкод (поле завжди чекає скан)" autocomplete="off">
+			<span class="muted">У буфері: <strong id="bufferCount">0</strong></span>
+		</div>
+
+		<div id="scanLoading" class="msg info hidden">Збереження на сервер...</div>
+		<div id="scanMsg" class="msg"></div>
+
+		<div class="komplekt-details-grid">
+			<section class="details-panel pending-panel">
+				<h4>Не укомплектовані деталі</h4>
+				<div class="table-wrap komplekt-details-wrap">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Номер деталі</th>
+								<th>Позначення</th>
+								<th>Кількість</th>
+								<th>Довжина</th>
+								<th>Ширина</th>
+							</tr>
+						</thead>
+						<tbody id="pendingDetailsBody"></tbody>
+					</table>
+				</div>
+			</section>
+
+			<section class="details-panel completed-panel">
+				<h4>Укомплектовані деталі</h4>
+				<div class="table-wrap komplekt-details-wrap">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Номер деталі</th>
+								<th>Позначення</th>
+								<th>Кількість</th>
+								<th>Час</th>
+							</tr>
+						</thead>
+						<tbody id="completedDetailsBody"></tbody>
+					</table>
+				</div>
+			</section>
+		</div>
+	</div>
+</div>
+
+<div id="closeConfirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="closeConfirmTitle">
+	<div class="modal-box modal-confirm">
+		<div class="modal-header-row">
+			<h3 id="closeConfirmTitle">Підтвердження</h3>
+		</div>
+		<p class="muted">Закрити вікно комплектування?</p>
+		<div class="confirm-actions">
+			<button id="confirmCloseNo" class="btn" type="button">Скасувати</button>
+			<button id="confirmCloseYes" class="btn primary" type="button">Так, закрити</button>
+		</div>
+	</div>
+</div>
+
+<script>
+	const ordersSearch = document.getElementById('ordersSearch');
+	const ordersBody = document.getElementById('ordersBody');
+	const ordersWrap = document.getElementById('ordersWrap');
+	const ordersLoading = document.getElementById('ordersLoading');
+
+	const launchesModal = document.getElementById('launchesModal');
+	const launchesModalTitle = document.getElementById('launchesModalTitle');
+	const launchesModalOrder = document.getElementById('launchesModalOrder');
+	const launchesModalSelectedLaunch = document.getElementById('launchesModalSelectedLaunch');
+	const closeLaunchesModalBtn = document.getElementById('closeLaunchesModalBtn');
+	const launchSearch = document.getElementById('launchSearch');
+	const launchStatusFilterGroup = document.getElementById('launchStatusFilterGroup');
+	const launchesMsg = document.getElementById('launchesMsg');
+	const launchesListWrap = document.getElementById('launchesListWrap');
+	const launchesLoading = document.getElementById('launchesLoading');
+	const goKomplektBtn = document.getElementById('goKomplektBtn');
+	const viewLaunchDetailsBtn = document.getElementById('viewLaunchDetailsBtn');
+	const launchesBody = document.getElementById('launchesBody');
+
+	const komplektModal = document.getElementById('komplektModal');
+	const closeKomplektBtn = document.getElementById('closeKomplektBtn');
+	const modalOrder = document.getElementById('modalOrder');
+	const modalLaunch = document.getElementById('modalLaunch');
+	const modalTotal = document.getElementById('modalTotal');
+	const modalCompleted = document.getElementById('modalCompleted');
+	const modalPending = document.getElementById('modalPending');
+	const modalStatus = document.getElementById('modalStatus');
+	const modalStartedInfo = document.getElementById('modalStartedInfo');
+	const modalCompletedInfo = document.getElementById('modalCompletedInfo');
+	const scanTopMsg = document.getElementById('scanTopMsg');
+	const scanInput = document.getElementById('scanInput');
+	const bufferCount = document.getElementById('bufferCount');
+	const scanLoading = document.getElementById('scanLoading');
+	const scanMsg = document.getElementById('scanMsg');
+	const pendingDetailsBody = document.getElementById('pendingDetailsBody');
+	const completedDetailsBody = document.getElementById('completedDetailsBody');
+	const closeConfirmModal = document.getElementById('closeConfirmModal');
+	const confirmCloseNo = document.getElementById('confirmCloseNo');
+	const confirmCloseYes = document.getElementById('confirmCloseYes');
+
+	let selectedOrderNumber = '';
+	let selectedLaunchNumber = '';
+	let selectedLaunchCompleted = false;
+	let scanReadOnly = false;
+
+	let orderOffset = 0;
+	const orderLimit = 60;
+	let orderHasMore = true;
+	let orderLoading = false;
+
+	let launchOffset = 0;
+	const launchLimit = 120;
+	let launchHasMore = true;
+	let launchLoading = false;
+
+	let scanBuffer = [];
+	let flushTimer = null;
+	let isSaving = false;
+	let launchStatusFilterValue = '';
+	let closeConfirmResolver = null;
+
+	function showLaunchesMsg(text, type = 'info') {
+		launchesMsg.textContent = text;
+		launchesMsg.className = `msg ${type}`;
+		launchesMsg.classList.toggle('hidden', !text);
+	}
+
+	function showScanTopMsg(text, type = 'info') {
+		scanTopMsg.textContent = text;
+		scanTopMsg.className = `msg ${type}`;
+		scanTopMsg.classList.toggle('hidden', !text);
+	}
+
+	function esc(v) {
+		return String(v || '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/\"/g, '&quot;');
+	}
+
+	function showScanMsg(text, type = 'info') {
+		scanMsg.textContent = text;
+		scanMsg.className = `msg ${type}`;
+	}
+
+	function renderProgressBar(percent) {
+		const p = Number(percent || 0);
+		const cls = p >= 100 ? 'progress-fill done' : (p >= 50 ? 'progress-fill mid' : 'progress-fill low');
+		return `
+			<div class="progress-wrap">
+				<div class="progress-track"><div class="${cls}" style="width:${Math.max(0, Math.min(100, p))}%"></div></div>
+				<div class="progress-value">${esc(p)}%</div>
+			</div>
+		`;
+	}
+
+	function renderStatusBadge(status) {
+		const isDone = String(status || '').toLowerCase().includes('укомплект');
+		const cls = isDone ? 'status-badge done' : 'status-badge warn';
+		return `<span class="${cls}">${esc(status || (isDone ? 'Укомплектовано' : 'В роботі'))}</span>`;
+	}
+
+	function setModalSavingState(saving) {
+		isSaving = saving;
+		closeKomplektBtn.disabled = saving;
+		scanLoading.classList.toggle('hidden', !saving);
+		scanInput.disabled = saving || scanReadOnly;
+	}
+
+	function showLoader(message) {
+		if (typeof window.showGlobalLoading === 'function') {
+			window.showGlobalLoading(message);
+		}
+	}
+
+	function hideLoader() {
+		if (typeof window.hideGlobalLoading === 'function') {
+			window.hideGlobalLoading();
+		}
+	}
+
+	function openOverlay(overlay) {
+		if (!overlay) return;
+		overlay.classList.remove('hidden', 'is-closing');
+		overlay.classList.add('is-opening');
+		setTimeout(() => overlay.classList.remove('is-opening'), 220);
+		document.body.classList.add('modal-open');
+	}
+
+	function closeOverlay(overlay) {
+		if (!overlay || overlay.classList.contains('hidden')) return;
+		overlay.classList.remove('is-opening');
+		overlay.classList.add('is-closing');
+		setTimeout(() => {
+			overlay.classList.add('hidden');
+			overlay.classList.remove('is-closing');
+			if (launchesModal.classList.contains('hidden') && komplektModal.classList.contains('hidden') && closeConfirmModal.classList.contains('hidden')) {
+				document.body.classList.remove('modal-open');
+			}
+		}, 180);
+	}
+
+	function openLaunchesModal() {
+		openOverlay(launchesModal);
+		launchSearch.focus();
+	}
+
+	function closeLaunchesModal() {
+		if (launchLoading) return;
+		closeOverlay(launchesModal);
+	}
+
+	function openScanModal() {
+		openOverlay(komplektModal);
+		if (!scanReadOnly) {
+			scanInput.focus();
+		}
+	}
+
+	function closeScanModal() {
+		closeOverlay(komplektModal);
+	}
+
+	function askCloseConfirm() {
+		return new Promise((resolve) => {
+			closeConfirmResolver = resolve;
+			openOverlay(closeConfirmModal);
+		});
+	}
+
+	function updateLaunchSelectionUi() {
+		launchesModalSelectedLaunch.textContent = selectedLaunchNumber || '-';
+		launchesModalSelectedLaunch.classList.toggle('value-highlight', !!selectedLaunchNumber);
+		launchesModalOrder.classList.toggle('value-highlight', !!selectedOrderNumber);
+		goKomplektBtn.disabled = !selectedLaunchNumber;
+		viewLaunchDetailsBtn.disabled = !(selectedLaunchNumber && selectedLaunchCompleted);
+	}
+
+	function formatActorTime(name, at) {
+		if (!name && !at) return '-';
+		if (name && at) return `${name} (${at})`;
+		return name || at;
+	}
+
+	function setScanMode(readOnly) {
+		scanReadOnly = !!readOnly;
+		scanInput.disabled = scanReadOnly || isSaving;
+		scanInput.classList.toggle('hidden', scanReadOnly);
+		if (scanReadOnly) {
+			showScanTopMsg('Режим деталей: запуск повністю укомплектовано', 'ok');
+			showScanMsg('Запуск уже повністю укомплектовано. Режим перегляду деталей.', 'info');
+		} else {
+			showScanTopMsg('Режим сканування активний', 'info');
+			showScanMsg('Поле сканування активне. Введіть/скануйте код і натисніть Enter.', 'info');
+		}
+	}
+
+	async function closeModalWithConfirm() {
+		if (isSaving) {
+			showScanMsg('Триває збереження на сервер. Зачекайте завершення.', 'error');
+			return;
+		}
+		const ok = await askCloseConfirm();
+		if (!ok) return;
+
+		if (!scanReadOnly && scanBuffer.length) {
+			showScanMsg('Є дані в буфері, зачекайте автоматичне збереження...', 'info');
+			await flushBuffer();
+		}
+
+		closeScanModal();
+		scanInput.focus();
+	}
+
+	function updateBufferCount() {
+		bufferCount.textContent = String(scanBuffer.length);
+	}
+
+	function renderOrderRows(items, append = false) {
+		if (!append) ordersBody.innerHTML = '';
+
+		for (const item of items) {
+			ordersBody.insertAdjacentHTML('beforeend', `
+				<tr data-order="${esc(item.order_number)}" class="clickable-row order-row ${item.details_pending === 0 ? 'row-done' : 'row-warn'}">
+					<td>${esc(item.order_number)}</td>
+					<td>${esc(item.launches_count)}</td>
+					<td>${esc(item.details_total)}</td>
+					<td>${esc(item.details_completed)}</td>
+					<td>${esc(item.details_pending)}</td>
+					<td>${renderProgressBar(item.percent)}</td>
+					<td>${renderStatusBadge(item.status)}</td>
+				</tr>
+			`);
+		}
+	}
+
+	async function loadOrders(reset = true) {
+		if (orderLoading) return;
+		if (!orderHasMore && !reset) return;
+
+		if (reset) {
+			orderOffset = 0;
+			orderHasMore = true;
+			ordersBody.innerHTML = '';
+			selectedOrderNumber = '';
+			selectedLaunchNumber = '';
+			selectedLaunchCompleted = false;
+		}
+
+		orderLoading = true;
+		ordersLoading.classList.remove('hidden');
+
+		const params = new URLSearchParams({
+			search: ordersSearch.value.trim(),
+			offset: String(orderOffset),
+			limit: String(orderLimit),
+		});
+
+		try {
+			showLoader('Підвантаження замовлень...');
+			const res = await fetch(`/api/komplekt/orders?${params.toString()}`);
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				throw new Error(data.error || 'Не вдалося завантажити замовлення');
+			}
+
+			const items = data.items || [];
+			renderOrderRows(items, !reset);
+			orderOffset = Number(data.next_offset || (orderOffset + items.length));
+			orderHasMore = Boolean(data.has_more);
+			ordersLoading.classList.toggle('hidden', !orderHasMore);
+		} catch (err) {
+			ordersLoading.classList.remove('hidden');
+			ordersLoading.textContent = err.message || 'Помилка завантаження';
+			orderHasMore = false;
+		} finally {
+			hideLoader();
+			orderLoading = false;
+		}
+	}
+
+	function maybeLoadMoreOrders() {
+		if (!ordersWrap) return;
+		if (ordersWrap.scrollTop + ordersWrap.clientHeight >= ordersWrap.scrollHeight - 100) {
+			loadOrders(false);
+		}
+	}
+
+	function renderLaunchRows(items, append = false) {
+		if (!append) launchesBody.innerHTML = '';
+
+		if (!items.length && !append) {
+			launchesBody.innerHTML = '<tr><td colspan="11">Немає запусків по цьому замовленню</td></tr>';
+			return;
+		}
+
+		for (const item of items) {
+			const checked = selectedLaunchNumber === String(item.launch) ? 'checked' : '';
+			const rowClass = item.details_pending === 0 ? 'row-done' : 'row-warn';
+			launchesBody.insertAdjacentHTML('beforeend', `
+				<tr class="${rowClass}">
+					<td><input type="checkbox" class="launch-check" data-launch="${esc(item.launch)}" ${checked}></td>
+					<td>${esc(item.launch)}</td>
+					<td>${esc(item.details_total)}</td>
+					<td>${esc(item.details_completed)}</td>
+					<td>${esc(item.details_pending)}</td>
+					<td>${renderProgressBar(item.percent)}</td>
+					<td>${renderStatusBadge(item.status)}</td>
+					<td>${esc(item.completion?.started_by || '-')}</td>
+					<td>${esc(item.completion?.started_at || '-')}</td>
+					<td>${esc(item.completion?.completed_by || '-')}</td>
+					<td>${esc(item.completion?.completed_at || '-')}</td>
+				</tr>
+			`);
+		}
+	}
+
+	async function loadLaunches(orderNumber, reset = true) {
+		if (launchLoading) return;
+		if (!launchHasMore && !reset) return;
+
+		selectedOrderNumber = _safe(orderNumber);
+		if (!selectedOrderNumber) return;
+
+		if (reset) {
+			launchOffset = 0;
+			launchHasMore = true;
+			launchesBody.innerHTML = '';
+			selectedLaunchNumber = '';
+			selectedLaunchCompleted = false;
+			updateLaunchSelectionUi();
+		}
+
+		launchLoading = true;
+		launchesLoading.classList.remove('hidden');
+
+		const params = new URLSearchParams({
+			search_launch: launchSearch.value.trim(),
+			status_filter: launchStatusFilterValue,
+			offset: String(launchOffset),
+			limit: String(launchLimit),
+		});
+
+		try {
+			showLoader('Підвантаження запусків...');
+			const res = await fetch(`/api/komplekt/orders/${encodeURIComponent(selectedOrderNumber)}/launches?${params.toString()}`);
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				throw new Error(data.error || 'Не вдалося завантажити запуски');
+			}
+
+			renderLaunchRows(data.items || [], !reset);
+			launchOffset = Number(data.next_offset || (launchOffset + (data.items || []).length));
+			launchHasMore = Boolean(data.has_more);
+			launchesLoading.classList.toggle('hidden', !launchHasMore);
+		} catch (err) {
+			launchesBody.innerHTML = `<tr><td colspan="11">${esc(err.message || 'Помилка завантаження запусків')}</td></tr>`;
+			launchHasMore = false;
+			showLaunchesMsg(err.message || 'Помилка завантаження запусків', 'error');
+		} finally {
+			hideLoader();
+			launchLoading = false;
+		}
+	}
+
+	function maybeLoadMoreLaunches() {
+		if (!launchesListWrap) return;
+		if (launchesListWrap.scrollTop + launchesListWrap.clientHeight >= launchesListWrap.scrollHeight - 100) {
+			loadLaunches(selectedOrderNumber, false);
+		}
+	}
+
+	function renderDetails(pending, completed) {
+		pendingDetailsBody.innerHTML = (pending || []).map((d) => `
+			<tr>
+				<td>${esc(d.detail_number)}</td>
+				<td>${esc(d.designation)}</td>
+				<td>${esc(d.quantity)}</td>
+				<td>${esc(d.length)}</td>
+				<td>${esc(d.width)}</td>
+			</tr>
+		`).join('');
+
+		completedDetailsBody.innerHTML = (completed || []).map((d) => `
+			<tr>
+				<td>${esc(d.detail_number)}</td>
+				<td>${esc(d.designation)}</td>
+				<td>${esc(d.quantity)}</td>
+				<td>${esc(d.completed_at)}</td>
+			</tr>
+		`).join('');
+	}
+
+	async function loadLaunchDetails(orderNumber, launch) {
+		showLoader('Підвантаження деталей запуску...');
+		const res = await fetch(`/api/komplekt/launch/${encodeURIComponent(orderNumber)}/${encodeURIComponent(launch)}/details`);
+		const data = await res.json();
+		if (!res.ok || !data.ok) {
+			hideLoader();
+			throw new Error(data.error || 'Не вдалося завантажити деталі');
+		}
+
+		modalOrder.textContent = data.order_number || '-';
+		modalLaunch.textContent = data.launch || '-';
+		modalTotal.textContent = String(data.state?.total || 0);
+		modalCompleted.textContent = String(data.state?.completed || 0);
+		modalPending.textContent = String(data.state?.pending || 0);
+		modalStatus.innerHTML = renderStatusBadge(data.state?.status || 'В роботі');
+		modalOrder.classList.toggle('value-highlight', true);
+		modalLaunch.classList.toggle('value-highlight', true);
+		modalStartedInfo.textContent = formatActorTime(data.completion?.started_by, data.completion?.started_at);
+		modalCompletedInfo.textContent = formatActorTime(data.completion?.completed_by, data.completion?.completed_at);
+		renderDetails(data.pending_details || [], data.completed_details || []);
+		hideLoader();
+	}
+
+	function _safe(v) {
+		return String(v || '').trim();
+	}
+
+	async function flushBuffer() {
+		if (isSaving || !scanBuffer.length || scanReadOnly) return;
+		if (!selectedOrderNumber || !selectedLaunchNumber) return;
+
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+			flushTimer = null;
+		}
+
+		const payload = { scans: [...scanBuffer] };
+		scanBuffer = [];
+		updateBufferCount();
+
+		setModalSavingState(true);
+		showLoader('Збереження сканів...');
+		showScanMsg(`Зберігаємо ${payload.scans.length} скан(ів)...`, 'info');
+
+		try {
+			const res = await fetch(`/api/komplekt/launch/${encodeURIComponent(selectedOrderNumber)}/${encodeURIComponent(selectedLaunchNumber)}/scan-batch`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				throw new Error(data.error || 'Помилка збереження сканів');
+			}
+
+			modalTotal.textContent = String(data.state?.total || 0);
+			modalCompleted.textContent = String(data.state?.completed || 0);
+			modalPending.textContent = String(data.state?.pending || 0);
+			modalStatus.innerHTML = renderStatusBadge(data.state?.status || 'В роботі');
+			modalStartedInfo.textContent = formatActorTime(data.completion?.started_by, data.completion?.started_at);
+			modalCompletedInfo.textContent = formatActorTime(data.completion?.completed_by, data.completion?.completed_at);
+			renderDetails(data.pending_details || [], data.completed_details || []);
+
+			let text = `Оновлено: ${data.updated_count || 0}`;
+			if (data.already_completed_count) {
+				text += `, вже укомплектовано: ${data.already_completed_count}`;
+			}
+			if ((data.not_found || []).length) {
+				text += `, не знайдено: ${data.not_found.length}`;
+			}
+			showScanMsg(text, (data.not_found || []).length ? 'error' : 'ok');
+			await loadLaunches(selectedOrderNumber, true);
+		} catch (err) {
+			showScanMsg(err.message || 'Помилка збереження', 'error');
+		} finally {
+			hideLoader();
+			setModalSavingState(false);
+			scanInput.focus();
+		}
+	}
+
+	function queueScan(raw) {
+		if (scanReadOnly) return;
+		const v = _safe(raw);
+		if (!v) return;
+		scanBuffer.push(v);
+		updateBufferCount();
+
+		if (scanBuffer.length >= 25) {
+			flushBuffer();
+			return;
+		}
+
+		if (flushTimer) clearTimeout(flushTimer);
+		flushTimer = setTimeout(() => {
+			flushBuffer();
+		}, 700);
+	}
+
+	ordersBody.addEventListener('click', async (e) => {
+		const row = e.target.closest('tr[data-order]');
+		if (!row) return;
+		const order = row.getAttribute('data-order') || '';
+		launchesModalOrder.textContent = order;
+		launchesModalTitle.textContent = `Запуски замовлення ${order}`;
+		showLaunchesMsg('', 'info');
+		openLaunchesModal();
+		await loadLaunches(order, true);
+	});
+
+	launchesBody.addEventListener('change', (e) => {
+		const check = e.target.closest('.launch-check');
+		if (!check) return;
+
+		Array.from(document.querySelectorAll('.launch-check')).forEach((el) => {
+			if (el !== check) el.checked = false;
+		});
+
+		if (check.checked) {
+			selectedLaunchNumber = check.getAttribute('data-launch') || '';
+			const row = check.closest('tr');
+			selectedLaunchCompleted = row ? row.classList.contains('row-done') : false;
+		} else {
+			selectedLaunchNumber = '';
+			selectedLaunchCompleted = false;
+		}
+
+		updateLaunchSelectionUi();
+	});
+
+	goKomplektBtn.addEventListener('click', async () => {
+		if (!selectedOrderNumber || !selectedLaunchNumber) return;
+		try {
+			setScanMode(false);
+			await loadLaunchDetails(selectedOrderNumber, selectedLaunchNumber);
+			showScanMsg('Поле сканування активне. Введіть/скануйте код і натисніть Enter.', 'info');
+			scanBuffer = [];
+			updateBufferCount();
+			setModalSavingState(false);
+			openScanModal();
+		} catch (err) {
+			showLaunchesMsg(err.message || 'Не вдалося відкрити комплектування', 'error');
+		}
+	});
+
+	viewLaunchDetailsBtn.addEventListener('click', async () => {
+		if (!selectedOrderNumber || !selectedLaunchNumber || !selectedLaunchCompleted) return;
+		try {
+			setScanMode(true);
+			await loadLaunchDetails(selectedOrderNumber, selectedLaunchNumber);
+			setModalSavingState(false);
+			openScanModal();
+		} catch (err) {
+			showLaunchesMsg(err.message || 'Не вдалося відкрити деталі', 'error');
+		}
+	});
+
+	closeLaunchesModalBtn.addEventListener('click', closeLaunchesModal);
+
+	confirmCloseNo.addEventListener('click', () => {
+		closeOverlay(closeConfirmModal);
+		if (closeConfirmResolver) {
+			closeConfirmResolver(false);
+			closeConfirmResolver = null;
+		}
+	});
+
+	confirmCloseYes.addEventListener('click', () => {
+		closeOverlay(closeConfirmModal);
+		if (closeConfirmResolver) {
+			closeConfirmResolver(true);
+			closeConfirmResolver = null;
+		}
+	});
+
+	closeKomplektBtn.addEventListener('click', closeModalWithConfirm);
+
+	komplektModal.addEventListener('click', (e) => {
+		if (e.target === komplektModal) {
+			// Закриття лише кнопкою.
+			e.stopPropagation();
+		}
+	});
+
+	scanInput.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			const v = scanInput.value;
+			scanInput.value = '';
+			queueScan(v);
+		}
+	});
+
+	scanInput.addEventListener('blur', () => {
+		if (!scanReadOnly && !isSaving && !komplektModal.classList.contains('hidden')) {
+			setTimeout(() => scanInput.focus(), 50);
+		}
+	});
+
+	ordersSearch.addEventListener('input', async () => {
+		await loadOrders(true);
+	});
+
+	launchSearch.addEventListener('input', async () => {
+		await loadLaunches(selectedOrderNumber, true);
+	});
+
+	launchStatusFilterGroup.addEventListener('click', async (e) => {
+		const btn = e.target.closest('[data-status]');
+		if (!btn) return;
+
+		launchStatusFilterValue = btn.getAttribute('data-status') || '';
+		Array.from(launchStatusFilterGroup.querySelectorAll('.status-chip')).forEach((chip) => {
+			chip.classList.remove('active');
+		});
+		btn.classList.add('active');
+		await loadLaunches(selectedOrderNumber, true);
+	});
+
+	if (ordersWrap) {
+		ordersWrap.addEventListener('scroll', maybeLoadMoreOrders, { passive: true });
+	}
+
+	if (launchesListWrap) {
+		launchesListWrap.addEventListener('scroll', maybeLoadMoreLaunches, { passive: true });
+	}
+
+	loadOrders(true);
+</script>
+{% endblock %}

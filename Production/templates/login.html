@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production - Вхід</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="page-center">
+    <section class="card auth-card">
+      <h1>Production</h1>
+      <p class="muted">Вхід по номеру телефону та коду з Telegram.</p>
+
+      <label for="phone">Номер телефону</label>
+      <input id="phone" type="tel" inputmode="numeric" maxlength="12" placeholder="380XXXXXXXXX" value="380" autocomplete="tel">
+      <p class="hint">Вводьте тільки у форматі 380XXXXXXXXX</p>
+
+      <button id="sendCodeBtn" class="btn primary" type="button">Надіслати код</button>
+
+      <div id="codeWrap" class="hidden">
+        <label for="code">Код з Telegram</label>
+        <input id="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 цифр" autocomplete="one-time-code">
+        <button id="loginBtn" class="btn" type="button">Увійти</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
+    </section>
+  </main>
+
+  <script>
+    const sendCodeBtn = document.getElementById('sendCodeBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const phoneInput = document.getElementById('phone');
+    const codeInput = document.getElementById('code');
+    const codeWrap = document.getElementById('codeWrap');
+    const msg = document.getElementById('msg');
+
+    function onlyDigits(v) {
+      return String(v || '').replace(/\D/g, '');
+    }
+
+    function normalizePhoneInput(v) {
+      let digits = onlyDigits(v).slice(0, 12);
+      if (!digits.startsWith('380')) {
+        digits = `380${digits.replace(/^380?/, '')}`.slice(0, 12);
+      }
+      if (digits.length < 3) {
+        return '380';
+      }
+      return digits;
+    }
+
+    function showMessage(text, type = 'error') {
+      msg.textContent = text;
+      msg.className = `msg ${type}`;
+    }
+
+    sendCodeBtn.addEventListener('click', async () => {
+      const phone = normalizePhoneInput(phoneInput.value);
+      phoneInput.value = phone;
+
+      if (!/^380\d{9}$/.test(phone)) {
+        showMessage('Номер має бути у форматі 380XXXXXXXXX');
+        return;
+      }
+
+      sendCodeBtn.disabled = true;
+      showMessage('Відправляємо код...', 'info');
+
+      try {
+        const res = await fetch('/api/auth/request-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          showMessage(data.error || 'Помилка відправки коду');
+          return;
+        }
+
+        codeWrap.classList.remove('hidden');
+        showMessage('Код відправлено у Telegram.', 'ok');
+        codeInput.focus();
+      } catch (e) {
+        showMessage('Сервер недоступний. Спробуйте ще раз.');
+      } finally {
+        sendCodeBtn.disabled = false;
+      }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const phone = normalizePhoneInput(phoneInput.value);
+      phoneInput.value = phone;
+      const code = onlyDigits(codeInput.value);
+
+      if (!/^380\d{9}$/.test(phone)) {
+        showMessage('Номер має бути у форматі 380XXXXXXXXX');
+        return;
+      }
+      if (!/^\d{6}$/.test(code)) {
+        showMessage('Код має складатися з 6 цифр');
+        return;
+      }
+
+      loginBtn.disabled = true;
+      showMessage('Перевіряємо код...', 'info');
+
+      try {
+        const res = await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          showMessage(data.error || 'Помилка перевірки');
+          return;
+        }
+
+        window.location.href = data.redirect || '/reestr';
+      } catch (e) {
+        showMessage('Сервер недоступний. Спробуйте ще раз.');
+      } finally {
+        loginBtn.disabled = false;
+      }
+    });
+
+    phoneInput.addEventListener('input', () => {
+      phoneInput.value = normalizePhoneInput(phoneInput.value);
+    });
+
+    phoneInput.value = normalizePhoneInput(phoneInput.value || '380');
+    codeInput.addEventListener('input', () => {
+      codeInput.value = onlyDigits(codeInput.value).slice(0, 6);
+    });
+  </script>
+</body>
+</html>

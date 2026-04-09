@@ -1,0 +1,605 @@
+{% extends "layout.html" %}
+
+{% block container_class %}container-wide{% endblock %}
+{% block card_class %}card-wide{% endblock %}
+
+{% block content %}
+{% set role = (user.role if user and user.role else '')|lower %}
+{% set is_admin_hide = role in ['admin', 'адмін'] %}
+<h1>Запуски</h1>
+<p class="muted">Пошук і фільтр по статусу. Клік по рядку відкриває завантаження PDF для конкретного запуску.</p>
+
+<div class="zapusky-toolbar">
+	<input id="orderInput" type="text" placeholder="Номер замовлення" class="input-inline" autocomplete="off">
+	<div id="statusFilterGroup" class="status-segment" role="tablist" aria-label="Фільтр статусу">
+		<button type="button" class="status-chip active" data-status="">Усі статуси</button>
+		<button type="button" class="status-chip" data-status="needs_upload">Потрібен файл</button>
+		<button type="button" class="status-chip" data-status="uploaded">Завантажено</button>
+	</div>
+	{% if is_admin_hide %}
+	<div id="adminBulkTools" class="zapusky-toolbar hidden" style="margin:0;">
+		<button id="bulkHideBtn" class="btn" type="button">Приховати вибрані замовлення</button>
+		<button id="hideSearchedOrderBtn" class="btn" type="button">Приховати замовлення з пошуку</button>
+	</div>
+	{% endif %}
+</div>
+
+<div class="table-wrap zapusky-main-wrap">
+	<table class="data-table" id="launchesTable">
+		<thead>
+			<tr id="launchesHeadRow">
+				<th id="selectHead" class="hidden" style="width:42px;">#</th>
+				<th>Номер замовлення</th>
+				<th>Запуск</th>
+				<th>Статус файлу</th>
+				<th>Завантажено</th>
+				<th>Хто завантажив</th>
+				<th id="actionsHead" class="hidden">Дії</th>
+			</tr>
+		</thead>
+		<tbody id="launchesBody"></tbody>
+	</table>
+</div>
+<p id="launchesEmpty" class="muted hidden">Немає запусків для відображення.</p>
+<p id="launchesLoading" class="muted hidden">Підвантаження...</p>
+
+<div id="uploadModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle">
+	<div class="modal-box">
+		<div class="modal-header-row">
+			<h3 id="uploadModalTitle">Завантаження деталей запуску</h3>
+			<button id="closeUploadModalBtn" class="btn-toggle" type="button">Закрити</button>
+		</div>
+
+		<div class="selected-meta">
+			<div><strong>Замовлення:</strong> <span id="selectedOrder">-</span></div>
+			<div><strong>Запуск:</strong> <span id="selectedLaunch">-</span></div>
+		</div>
+
+		<div id="dropZone" class="drop-zone">
+			<p>Перетягніть PDF сюди або натисніть для вибору файлу</p>
+			<input id="pdfInput" type="file" accept="application/pdf" hidden>
+		</div>
+
+		<div id="uploadFileInfo" class="muted"></div>
+		<div id="parseMeta" class="muted"></div>
+
+		<div class="zapusky-toolbar">
+			<button id="uploadBtn" class="btn primary" type="button" disabled>Завантажити і записати</button>
+		</div>
+
+		<div id="uploadMsg" class="msg"></div>
+
+		<div id="previewWrap" class="hidden">
+			<h4>Попередній перегляд деталей</h4>
+			<div class="table-wrap preview-wrap">
+				<table class="data-table" id="previewTable">
+					<thead>
+						<tr>
+							<th>Номер деталі</th>
+							<th>Позначення</th>
+							<th>Кількість</th>
+							<th>Довжина</th>
+							<th>Ширина</th>
+						</tr>
+					</thead>
+					<tbody id="previewBody"></tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs" type="module"></script>
+<script>
+	let pdfjsLib = null;
+	(async () => {
+		try {
+			pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
+			pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+		} catch (e) {
+			console.error('PDF.js init error', e);
+		}
+	})();
+
+	const orderInput = document.getElementById('orderInput');
+	const statusFilterGroup = document.getElementById('statusFilterGroup');
+	const closeUploadModalBtn = document.getElementById('closeUploadModalBtn');
+	const uploadModal = document.getElementById('uploadModal');
+	const dropZone = document.getElementById('dropZone');
+	const pdfInput = document.getElementById('pdfInput');
+	const uploadBtn = document.getElementById('uploadBtn');
+	const uploadMsg = document.getElementById('uploadMsg');
+	const uploadFileInfo = document.getElementById('uploadFileInfo');
+	const parseMeta = document.getElementById('parseMeta');
+	const previewWrap = document.getElementById('previewWrap');
+	const previewBody = document.getElementById('previewBody');
+	const selectedOrder = document.getElementById('selectedOrder');
+	const selectedLaunch = document.getElementById('selectedLaunch');
+	const selectHead = document.getElementById('selectHead');
+	const actionsHead = document.getElementById('actionsHead');
+	const adminBulkTools = document.getElementById('adminBulkTools');
+	const bulkHideBtn = document.getElementById('bulkHideBtn');
+	const hideSearchedOrderBtn = document.getElementById('hideSearchedOrderBtn');
+
+	const launchesBody = document.getElementById('launchesBody');
+	const launchesEmpty = document.getElementById('launchesEmpty');
+	const launchesLoading = document.getElementById('launchesLoading');
+	const launchesWrap = document.querySelector('.zapusky-main-wrap');
+
+	let selectedFile = null;
+	let selectedOrderNumber = '';
+	let selectedLaunchNumber = '';
+	let parsedPayload = null;
+	let canManageHidden = false;
+	let statusFilterValue = '';
+	let pageOffset = 0;
+	const pageLimit = 80;
+	let hasMore = true;
+	let isLoading = false;
+
+	function esc(v) {
+		return String(v || '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/\"/g, '&quot;');
+	}
+
+	function showMsg(text, type = 'info') {
+		uploadMsg.textContent = text;
+		uploadMsg.className = `msg ${type}`;
+	}
+
+	function setSelection(order, launch) {
+		selectedOrderNumber = String(order || '').trim();
+		selectedLaunchNumber = String(launch || '').trim();
+		selectedOrder.textContent = selectedOrderNumber || '-';
+		selectedLaunch.textContent = selectedLaunchNumber || '-';
+	}
+
+	function openModal() {
+		uploadModal.classList.remove('hidden');
+		document.body.classList.add('modal-open');
+	}
+
+	function closeModal() {
+		uploadModal.classList.add('hidden');
+		document.body.classList.remove('modal-open');
+	}
+
+	function resetUploadState() {
+		selectedFile = null;
+		parsedPayload = null;
+		pdfInput.value = '';
+		uploadFileInfo.textContent = '';
+		parseMeta.textContent = '';
+		uploadBtn.disabled = true;
+		previewWrap.classList.add('hidden');
+		previewBody.innerHTML = '';
+	}
+
+	function setFile(file) {
+		selectedFile = file;
+		parsedPayload = null;
+		previewWrap.classList.add('hidden');
+		if (!file) {
+			uploadFileInfo.textContent = '';
+			parseMeta.textContent = '';
+			uploadBtn.disabled = true;
+			return;
+		}
+		uploadFileInfo.textContent = `Файл: ${file.name}`;
+		uploadBtn.disabled = true;
+	}
+
+	function renderPreview(details) {
+		previewBody.innerHTML = (details || []).map((d) => `
+			<tr>
+				<td>${esc(d.detail_number)}</td>
+				<td>${esc(d.designation)}</td>
+				<td>${esc(d.quantity)}</td>
+				<td>${esc(d.length)}</td>
+				<td>${esc(d.width)}</td>
+			</tr>
+		`).join('');
+		previewWrap.classList.toggle('hidden', !(details || []).length);
+	}
+
+	function renderLaunches(items, append = false) {
+		if (!append) {
+			launchesBody.innerHTML = '';
+		}
+		launchesEmpty.classList.add('hidden');
+		selectHead.classList.toggle('hidden', !canManageHidden);
+		actionsHead.classList.toggle('hidden', !canManageHidden);
+		if (adminBulkTools) {
+			adminBulkTools.classList.toggle('hidden', !canManageHidden);
+		}
+
+		if (!items.length && !append) {
+			launchesEmpty.classList.remove('hidden');
+			return;
+		}
+
+		items.forEach((item) => {
+			const statusClass = item.needs_upload ? 'status-badge pending' : 'status-badge done';
+			const statusText = item.needs_upload ? 'Потрібен файл' : 'Завантажено';
+			const selectCell = canManageHidden
+				? `<td><input type="checkbox" class="row-select" data-order="${esc(item.order_number)}" data-launch="${esc(item.launch)}"></td>`
+				: '';
+			const actionCell = canManageHidden
+				? `<td><button class="btn-toggle hide-order-btn" data-order="${esc(item.order_number)}">Приховати замовлення</button></td>`
+				: '';
+			launchesBody.insertAdjacentHTML('beforeend', `
+				<tr data-order="${esc(item.order_number)}" data-launch="${esc(item.launch)}" class="clickable-row">
+					${selectCell}
+					<td>${esc(item.order_number)}</td>
+					<td>${esc(item.launch)}</td>
+					<td><span class="${statusClass}">${statusText}</span></td>
+					<td>${esc(item.uploaded_at)}</td>
+					<td>${esc(item.uploaded_by)}</td>
+					${actionCell}
+				</tr>
+			`);
+		});
+	}
+
+	async function loadLaunches(reset = true) {
+		if (isLoading) return;
+		if (!hasMore && !reset) return;
+
+		if (reset) {
+			pageOffset = 0;
+			hasMore = true;
+			launchesBody.innerHTML = '';
+			launchesEmpty.classList.add('hidden');
+		}
+
+		isLoading = true;
+		launchesLoading.classList.remove('hidden');
+
+		const params = new URLSearchParams({
+			status_filter: statusFilterValue,
+			order_number: orderInput.value.trim(),
+			offset: String(pageOffset),
+			limit: String(pageLimit),
+		});
+		const res = await fetch(`/api/zapusky/production-launches?${params.toString()}`);
+		const data = await res.json();
+		if (!res.ok || !data.ok) {
+			launchesEmpty.classList.remove('hidden');
+			launchesEmpty.textContent = data.error || 'Не вдалося завантажити дані';
+			launchesLoading.classList.add('hidden');
+			isLoading = false;
+			return;
+		}
+
+		canManageHidden = Boolean(data.can_manage_hidden);
+		const items = data.items || [];
+		renderLaunches(items, !reset);
+		pageOffset = Number(data.next_offset || (pageOffset + items.length));
+		hasMore = Boolean(data.has_more);
+		launchesLoading.classList.toggle('hidden', !hasMore);
+		isLoading = false;
+	}
+
+	function maybeLoadMore() {
+		if (!launchesWrap) return;
+		if (launchesWrap.scrollTop + launchesWrap.clientHeight >= launchesWrap.scrollHeight - 100) {
+			loadLaunches(false);
+		}
+	}
+
+	launchesBody.addEventListener('click', async (e) => {
+		const hideOrderBtn = e.target.closest('.hide-order-btn');
+		if (hideOrderBtn) {
+			e.stopPropagation();
+			const order = hideOrderBtn.getAttribute('data-order') || '';
+			if (!order) return;
+
+			const res = await fetch(`/api/zapusky/orders/${encodeURIComponent(order)}/hidden`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ hidden: true }),
+			});
+			const data = await res.json();
+			if (!res.ok || !data.ok) {
+				alert(data.error || 'Не вдалося приховати замовлення');
+				return;
+			}
+			await loadLaunches(true);
+			return;
+		}
+
+		if (e.target.closest('.row-select')) {
+			e.stopPropagation();
+			return;
+		}
+
+		const row = e.target.closest('tr[data-order][data-launch]');
+		if (!row) return;
+		setSelection(row.getAttribute('data-order'), row.getAttribute('data-launch'));
+		resetUploadState();
+		showMsg('', 'info');
+		openModal();
+	});
+
+	if (bulkHideBtn) {
+	bulkHideBtn.addEventListener('click', async () => {
+		const selected = Array.from(document.querySelectorAll('.row-select:checked'))
+			.map((el) => el.getAttribute('data-order') || '')
+			.filter(Boolean);
+		const uniqueOrders = [...new Set(selected)];
+
+		if (!uniqueOrders.length) {
+			alert('Оберіть рядки із замовленнями для приховування');
+			return;
+		}
+
+		const res = await fetch('/api/zapusky/orders/hide-orders-bulk', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ hidden: true, order_numbers: uniqueOrders }),
+		});
+		const data = await res.json();
+		if (!res.ok || !data.ok) {
+			alert(data.error || 'Не вдалося приховати вибрані замовлення');
+			return;
+		}
+
+		await loadLaunches(true);
+	});
+}
+
+	if (hideSearchedOrderBtn) {
+	hideSearchedOrderBtn.addEventListener('click', async () => {
+		const order = orderInput.value.trim();
+		if (!order) {
+			alert('Введіть номер замовлення у пошук');
+			return;
+		}
+
+		const res = await fetch(`/api/zapusky/orders/${encodeURIComponent(order)}/hidden`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ hidden: true }),
+		});
+		const data = await res.json();
+		if (!res.ok || !data.ok) {
+			alert(data.error || 'Не вдалося приховати замовлення');
+			return;
+		}
+
+		await loadLaunches(true);
+	});
+}
+
+	async function extractPdfText(file) {
+		if (!pdfjsLib) {
+			throw new Error('PDF.js ще не ініціалізований');
+		}
+		const bytes = await file.arrayBuffer();
+		const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+		let text = '';
+		for (let i = 1; i <= pdf.numPages; i += 1) {
+			const page = await pdf.getPage(i);
+			const content = await page.getTextContent();
+			let lastY = null;
+			let line = [];
+			for (const item of content.items) {
+				const y = item.transform?.[5] || 0;
+				if (lastY !== null && Math.abs(y - lastY) > 3 && line.length) {
+					text += `${line.join(' ')}\n`;
+					line = [];
+				}
+				line.push(item.str || '');
+				lastY = y;
+			}
+			if (line.length) text += `${line.join(' ')}\n`;
+		}
+		return text;
+	}
+
+	function parseOrderLaunch(text) {
+		const match = text.match(/Запуск\s*:\s*(\d+)\s+(\d+)/i);
+		if (!match) return { order: '', launch: '' };
+		return { order: match[1], launch: match[2] };
+	}
+
+	function parseDetails(text) {
+		const lines = text.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+		const details = [];
+		const seen = new Set();
+
+		for (const line of lines) {
+			const m = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
+			if (!m) continue;
+
+			// У типовому файлі останні 3 значення: довжина, ширина, кількість.
+			const row = {
+				detail_number: m[1],
+				designation: m[2],
+				quantity: m[5],
+				length: m[3],
+				width: m[4],
+			};
+
+			const key = `${row.detail_number}|${row.designation}|${row.quantity}|${row.length}|${row.width}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			details.push(row);
+		}
+
+		return details;
+	}
+
+	async function parseSelectedFile() {
+		if (!selectedFile) {
+			showMsg('Оберіть PDF файл', 'error');
+			return;
+		}
+		if (!selectedOrderNumber || !selectedLaunchNumber) {
+			showMsg('Спочатку оберіть запуск', 'error');
+			return;
+		}
+
+		showMsg('Парсинг PDF у браузері...', 'info');
+		try {
+			const text = await extractPdfText(selectedFile);
+			const parsed = parseOrderLaunch(text);
+			const details = parseDetails(text);
+
+			if (!parsed.order || !parsed.launch) {
+				showMsg('Не знайдено рядок "Запуск: номер запуск" у PDF', 'error');
+				uploadBtn.disabled = true;
+				return;
+			}
+
+			parseMeta.textContent = `У файлі: замовлення ${parsed.order}, запуск ${parsed.launch}. Деталей: ${details.length}`;
+			renderPreview(details.slice(0, 150));
+
+			if (parsed.order !== selectedOrderNumber || parsed.launch !== selectedLaunchNumber) {
+				showMsg(
+					`Невідповідність: вибрано ${selectedOrderNumber}/${selectedLaunchNumber}, у файлі ${parsed.order}/${parsed.launch}`,
+					'error'
+				);
+				uploadBtn.disabled = true;
+				parsedPayload = null;
+				return;
+			}
+
+			if (!details.length) {
+				showMsg('У PDF не знайдено рядків деталей', 'error');
+				uploadBtn.disabled = true;
+				parsedPayload = null;
+				return;
+			}
+
+			parsedPayload = {
+				selected_order_number: selectedOrderNumber,
+				selected_launch: selectedLaunchNumber,
+				file_order_number: parsed.order,
+				file_launch: parsed.launch,
+				details,
+			};
+			uploadBtn.disabled = false;
+			showMsg('Файл перевірено. Можна завантажувати.', 'ok');
+		} catch (err) {
+			console.error(err);
+			showMsg(err?.message || 'Помилка парсингу PDF', 'error');
+			uploadBtn.disabled = true;
+		}
+	}
+
+	uploadBtn.addEventListener('click', async () => {
+		if (!parsedPayload) {
+			showMsg('Спочатку оберіть PDF і дочекайтесь парсингу', 'error');
+			return;
+		}
+
+		uploadBtn.disabled = true;
+		showMsg('Записуємо дані в БД...', 'info');
+
+		try {
+			const res = await fetch('/api/zapusky/upload-details', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(parsedPayload),
+			});
+			const data = await res.json();
+
+			if (!res.ok || !data.ok) {
+				if (res.status === 409 && data.code === 'already_uploaded') {
+					const shouldReplace = window.confirm(data.error || 'Деталі вже завантажені. Перезаписати?');
+					if (shouldReplace) {
+						const retryPayload = { ...parsedPayload, force_replace: true };
+						const retryRes = await fetch('/api/zapusky/upload-details', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(retryPayload),
+						});
+						const retryData = await retryRes.json();
+						if (!retryRes.ok || !retryData.ok) {
+							showMsg(retryData.error || 'Помилка перезапису', 'error');
+							return;
+						}
+						showMsg(`Перезаписано. Замовлення: ${retryData.order_number}, запуск: ${retryData.launch}, деталей: ${retryData.details_count}`, 'ok');
+						renderPreview(retryData.details || []);
+						await loadLaunches(true);
+						return;
+					}
+				}
+				showMsg(data.error || 'Помилка завантаження', 'error');
+				return;
+			}
+
+			showMsg(`Збережено. Замовлення: ${data.order_number}, запуск: ${data.launch}, деталей: ${data.details_count}`, 'ok');
+			renderPreview(data.details || []);
+			await loadLaunches(true);
+		} catch (err) {
+			showMsg('Сервер недоступний', 'error');
+		} finally {
+			uploadBtn.disabled = !parsedPayload;
+		}
+	});
+
+	dropZone.addEventListener('click', () => pdfInput.click());
+	pdfInput.addEventListener('change', async () => {
+		setFile(pdfInput.files?.[0] || null);
+		await parseSelectedFile();
+	});
+
+	['dragenter', 'dragover'].forEach((eventName) => {
+		dropZone.addEventListener(eventName, (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			dropZone.classList.add('drop-zone-active');
+		});
+	});
+	['dragleave', 'drop'].forEach((eventName) => {
+		dropZone.addEventListener(eventName, (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			dropZone.classList.remove('drop-zone-active');
+		});
+	});
+	dropZone.addEventListener('drop', (e) => {
+		const file = e.dataTransfer?.files?.[0] || null;
+		if (file && file.type === 'application/pdf') {
+			setFile(file);
+			parseSelectedFile();
+		} else {
+			showMsg('Перетягніть PDF файл', 'error');
+		}
+	});
+
+	closeUploadModalBtn.addEventListener('click', closeModal);
+	uploadModal.addEventListener('click', (e) => {
+		if (e.target === uploadModal) closeModal();
+	});
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && !uploadModal.classList.contains('hidden')) {
+			closeModal();
+		}
+	});
+
+	orderInput.addEventListener('input', async () => {
+		await loadLaunches(true);
+	});
+	statusFilterGroup.addEventListener('click', async (e) => {
+		const btn = e.target.closest('[data-status]');
+		if (!btn) return;
+
+		statusFilterValue = btn.getAttribute('data-status') || '';
+		Array.from(statusFilterGroup.querySelectorAll('.status-chip')).forEach((chip) => {
+			chip.classList.remove('active');
+		});
+		btn.classList.add('active');
+		await loadLaunches(true);
+	});
+	if (launchesWrap) {
+		launchesWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
+	}
+	loadLaunches(true);
+</script>
+{% endblock %}

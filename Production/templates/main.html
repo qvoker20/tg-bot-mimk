@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h1>Головна сторінка</h1>
+<p>Вхід виконано успішно.</p>
+<ul class="meta">
+  <li><strong>Ім'я:</strong> {{ user.name }}</li>
+  <li><strong>Телефон:</strong> {{ user.phone }}</li>
+  <li><strong>Роль:</strong> {{ user.role or 'не вказано' }}</li>
+</ul>
+<p class="muted">Ви можете перейти в модулі: Комплектування, Запуски, Реєстр.</p>
+{% endblock %}

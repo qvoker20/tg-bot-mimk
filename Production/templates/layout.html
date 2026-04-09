@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Виробництво МІМ-К</title>
+  <link rel="icon" type="image/png" href="/static/branding/favicon-mimk.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    {% set role = (user.role if user and user.role else '')|lower %}
+    {% set can_zapusky = role in ['admin', 'адмін', 'технолог виробництво', 'технолог виробництва'] %}
+    <div class="topbar-brand">
+      <img src="/static/branding/logo-mimk.png" alt="MIM-K" class="topbar-logo" onerror="this.style.display='none'">
+      <div class="topbar-title-wrap">
+        <div class="topbar-title">Виробництво МІМ-К</div>
+        <div class="topbar-subtitle">Внутрішня виробнича система</div>
+      </div>
+    </div>
+    <nav class="topnav">
+      <a href="/komplektuvannya" class="navlink {% if request.url.path == '/komplektuvannya' %}active{% endif %}">Комплектування</a>
+      {% if can_zapusky %}
+      <a href="/zapusky" class="navlink {% if request.url.path == '/zapusky' %}active{% endif %}">Запуски</a>
+      {% endif %}
+      <a href="/reestr" class="navlink {% if request.url.path == '/reestr' %}active{% endif %}">Реєстр</a>
+    </nav>
+    <div class="topbar-user-wrap">
+      <div class="topbar-user">
+        <div class="topbar-user-name">{{ user.name if user and user.name else 'Користувач' }}</div>
+        <div class="topbar-user-role">{{ user.role if user and user.role else 'Без ролі' }}</div>
+      </div>
+      <form method="post" action="/logout">
+        <button class="btn topbar-logout-btn" type="submit">Вийти</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="container {% block container_class %}{% endblock %}">
+    <section class="card {% block card_class %}{% endblock %}">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+
+  <div id="globalLoadingModal" class="global-loading hidden" aria-hidden="true">
+    <div class="global-loading-box" role="status" aria-live="polite" aria-busy="true">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="globalLoadingText" class="global-loading-text">Підвантаження...</div>
+    </div>
+  </div>
+
+  <div id="globalAlertModal" class="global-loading hidden" aria-hidden="true">
+    <div class="global-alert-box" role="alertdialog" aria-modal="true" aria-live="assertive">
+      <div class="global-alert-header">
+        <strong id="globalAlertTitle">Повідомлення</strong>
+      </div>
+      <div id="globalAlertText" class="global-alert-text"></div>
+      <div class="global-alert-actions">
+        <button id="globalAlertOkBtn" class="btn primary" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function initGlobalLoading() {
+      const modal = document.getElementById('globalLoadingModal');
+      const text = document.getElementById('globalLoadingText');
+      const alertModal = document.getElementById('globalAlertModal');
+      const alertTitle = document.getElementById('globalAlertTitle');
+      const alertText = document.getElementById('globalAlertText');
+      const alertOkBtn = document.getElementById('globalAlertOkBtn');
+
+      function showGlobalLoading(message) {
+        if (!modal || !text) return;
+        text.textContent = message || 'Підвантаження...';
+        modal.classList.remove('hidden');
+      }
+
+      function hideGlobalLoading() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+      }
+
+      function showGlobalAlert(message, title) {
+        if (!alertModal || !alertText) return;
+        alertTitle.textContent = title || 'Повідомлення';
+        alertText.textContent = message || '';
+        alertModal.classList.remove('hidden');
+      }
+
+      function hideGlobalAlert() {
+        if (!alertModal) return;
+        alertModal.classList.add('hidden');
+      }
+
+      if (alertOkBtn) {
+        alertOkBtn.addEventListener('click', hideGlobalAlert);
+      }
+
+      if (alertModal) {
+        alertModal.addEventListener('click', (e) => {
+          if (e.target === alertModal) hideGlobalAlert();
+        });
+      }
+
+      window.showGlobalLoading = showGlobalLoading;
+      window.hideGlobalLoading = hideGlobalLoading;
+      window.showGlobalAlert = showGlobalAlert;
+      window.hideGlobalAlert = hideGlobalAlert;
+    })();
+  </script>
+</body>
+</html>

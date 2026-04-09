@@ -42,6 +42,18 @@ USERS_SHEET_NAME = "users"
 
 JSON_KEY_FILE = os.environ.get('JSON_KEY_FILE')
 
+
+def resolve_service_account_path(path_value: str | None) -> str:
+    if not path_value:
+        return ""
+
+    normalized = os.path.expanduser(path_value.strip().strip('"').strip("'"))
+    if os.path.isabs(normalized):
+        return normalized
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.abspath(os.path.join(base_dir, normalized))
+
 # =========================
 # PostgreSQL configuration
 # =========================
@@ -67,6 +79,34 @@ DATA_PLAN_DATE_TABLE_NAME = 'data_plan_date'
 DATA_REC_TABLE_NAME = 'data_rec'
 USERS_TABLE_NAME = 'users'
 
+REGISTER_REQUIRED_HEADERS = [
+    "Номер замовлення",
+    "Запуск",
+    "Кількість запусків до частин",
+    "Частина",
+    "Всього частин",
+    "Тип Номер Р Назва замовлення",
+    "Тип матеріалу",
+    "Фюрер",
+    "Кількість листів",
+    "Статус",
+    "Дата передачі на виробн.",
+    "взяли в роботу",
+    "Забез-ння сировиною",
+    "Порізка метри",
+    "Присадка кіл. отв. Порізка",
+    "поклейка",
+    "Присадка",
+    "Криволі-нійна",
+    "Формат-ник",
+    "Стяжки",
+    "Нестінг",
+    "Дата гот. виробництво",
+    "Дата по договору (монтаж)",
+    "Куди передавати матеріал",
+    "Примітки",
+]
+
 # =========================
 # Utilities
 # =========================
@@ -89,18 +129,65 @@ def is_work_time():
 
 
 def authenticate_google_sheets(json_key_file):
-    if not json_key_file:
-        raise ValueError("JSON_KEY_FILE не задано в .env")
-    if not os.path.exists(json_key_file):
-        raise FileNotFoundError(f"Не знайдено файл сервісного акаунта: {json_key_file}")
+    candidate = json_key_file or os.environ.get("FIREBASE_SERVICE_ACCOUNT_FILE")
+    resolved_path = resolve_service_account_path(candidate)
+
+    if not resolved_path:
+        raise ValueError("Не задано JSON_KEY_FILE або FIREBASE_SERVICE_ACCOUNT_FILE в .env")
+    if not os.path.exists(resolved_path):
+        raise FileNotFoundError(f"Не знайдено файл сервісного акаунта: {resolved_path}")
+
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(json_key_file, scope)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(resolved_path, scope)
     client = gspread.authorize(credentials)
     return client
 
 
 def fetch_data_from_sheet(sheet):
     return sheet.get_all_values()
+
+
+def normalize_header(value):
+    return " ".join(str(value or "").replace("\xa0", " ").replace("\n", " ").strip().lower().split())
+
+
+def extract_rows_by_header_names(data, required_headers, header_row_index=1):
+    if len(data) <= header_row_index:
+        return []
+
+    header_row = data[header_row_index]
+    normalized_header_row = [normalize_header(h) for h in header_row]
+
+    indices = []
+    missing_headers = []
+    for header_name in required_headers:
+        normalized_target = normalize_header(header_name)
+        if normalized_target in normalized_header_row:
+            indices.append(normalized_header_row.index(normalized_target))
+        else:
+            indices.append(None)
+            missing_headers.append(header_name)
+
+    if missing_headers:
+        print(
+            f"Увага: не знайдено колонки в рядку {header_row_index + 1}: "
+            + ", ".join(missing_headers)
+        )
+
+    rows_to_insert = []
+    for row in data[header_row_index + 1:]:
+        if all(cell is None or str(cell).strip() == "" for cell in row):
+            continue
+
+        extracted_row = []
+        for idx in indices:
+            if idx is None or idx >= len(row):
+                extracted_row.append(None)
+            else:
+                extracted_row.append(row[idx])
+        rows_to_insert.append(extracted_row)
+
+    return rows_to_insert
 
 
 def get_pg_connection():
@@ -230,7 +317,8 @@ def create_register_table(cursor):
             column21 TEXT,
             column22 TEXT,
             column23 TEXT,
-            column24 TEXT
+            column24 TEXT,
+            column25 TEXT
         );
     ''')
 
@@ -295,7 +383,8 @@ def create_register_table_closed(cursor):
             column21 TEXT,
             column22 TEXT,
             column23 TEXT,
-            column24 TEXT
+            column24 TEXT,
+            column25 TEXT
         );
     ''')
 
@@ -421,20 +510,14 @@ def insert_data_into_rzm_table(cursor, data):
 def insert_data_into_register_table(cursor, data):
     cursor.execute(f"TRUNCATE TABLE {REGISTER_TABLE_NAME} RESTART IDENTITY;")
 
-    cols = ", ".join([f"column{i}" for i in range(1, 25)])
+    cols = ", ".join([f"column{i}" for i in range(1, 26)])
+    rows_to_insert = extract_rows_by_header_names(
+        data=data,
+        required_headers=REGISTER_REQUIRED_HEADERS,
+        header_row_index=1,
+    )
 
-    rows_to_insert = []
-    for row in data:
-        # Ваша логіка: якщо більше 24 — видалити елемент з індексом 24
-        if len(row) > 24:
-            del row[24]
-
-        row = row[:24]
-        if len(row) < 24:
-            row.extend([None] * (24 - len(row)))
-        rows_to_insert.append(row)
-
-    query = f"INSERT INTO {REGISTER_TABLE_NAME} ({cols}) VALUES ({', '.join(['%s'] * 24)})"
+    query = f"INSERT INTO {REGISTER_TABLE_NAME} ({cols}) VALUES ({', '.join(['%s'] * 25)})"
     execute_batch(cursor, query, rows_to_insert, page_size=500)
 
 
@@ -469,19 +552,14 @@ def insert_data_into_table_dop(cursor, data):
 def insert_data_into_register_table_closed(cursor, data):
     cursor.execute(f"TRUNCATE TABLE {REGISTER_TABLE_NAME_CLOSED} RESTART IDENTITY;")
 
-    cols = ", ".join([f"column{i}" for i in range(1, 25)])
+    cols = ", ".join([f"column{i}" for i in range(1, 26)])
+    rows_to_insert = extract_rows_by_header_names(
+        data=data,
+        required_headers=REGISTER_REQUIRED_HEADERS,
+        header_row_index=1,
+    )
 
-    rows_to_insert = []
-    for row in data:
-        if len(row) > 24:
-            del row[24]
-
-        row = row[:24]
-        if len(row) < 24:
-            row.extend([None] * (24 - len(row)))
-        rows_to_insert.append(row)
-
-    query = f"INSERT INTO {REGISTER_TABLE_NAME_CLOSED} ({cols}) VALUES ({', '.join(['%s'] * 24)})"
+    query = f"INSERT INTO {REGISTER_TABLE_NAME_CLOSED} ({cols}) VALUES ({', '.join(['%s'] * 25)})"
     execute_batch(cursor, query, rows_to_insert, page_size=500)
 
 
@@ -511,9 +589,7 @@ async def update_google_sheets():
         create_table(cursor)
         create_second_table(cursor)
         create_rzm_table(cursor)
-        create_register_table(cursor)
         create_table_dop(cursor)
-        create_register_table_closed(cursor)
         conn.commit()
 
         while True:
@@ -537,9 +613,11 @@ async def update_google_sheets():
 
             # реєстр
             register_data = fetch_data_from_sheet(register_sheet)
-            insert_data_into_register_table(cursor, register_data)
+            register_cols = get_max_columns(register_data)
+            create_dynamic_table(cursor, REGISTER_TABLE_NAME, register_cols)
+            insert_rows_dynamic(cursor, REGISTER_TABLE_NAME, register_data, register_cols)
             conn.commit()
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data)} rows into {REGISTER_TABLE_NAME}.")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data)} rows into {REGISTER_TABLE_NAME} ({register_cols} cols).")
 
             # 3D замір ДОП
             sheet_data_dop = fetch_data_from_sheet(sheet_dop)
@@ -549,9 +627,11 @@ async def update_google_sheets():
 
             # Виконані
             register_data_closed = fetch_data_from_sheet(register_sheet_closed)
-            insert_data_into_register_table_closed(cursor, register_data_closed)
+            register_closed_cols = get_max_columns(register_data_closed)
+            create_dynamic_table(cursor, REGISTER_TABLE_NAME_CLOSED, register_closed_cols)
+            insert_rows_dynamic(cursor, REGISTER_TABLE_NAME_CLOSED, register_data_closed, register_closed_cols)
             conn.commit()
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data_closed)} rows into {REGISTER_TABLE_NAME_CLOSED}.")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inserted {len(register_data_closed)} rows into {REGISTER_TABLE_NAME_CLOSED} ({register_closed_cols} cols).")
 
             # data-plan (dynamic width)
             plan_data = fetch_data_from_sheet(plan_sheet)
