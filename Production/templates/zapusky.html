@@ -84,6 +84,7 @@
 							<th>Кількість</th>
 							<th>Довжина</th>
 							<th>Ширина</th>
+							<th style="width:80px;">Дії</th>
 						</tr>
 					</thead>
 					<tbody id="previewBody"></tbody>
@@ -268,16 +269,32 @@
 	}
 
 	function renderPreview(details) {
-		previewBody.innerHTML = (details || []).map((d) => `
+		const rows = details || [];
+		previewBody.innerHTML = rows.map((d, idx) => `
 			<tr>
 				<td>${esc(d.detail_number)}</td>
 				<td>${esc(d.designation)}</td>
 				<td>${esc(d.quantity)}</td>
 				<td>${esc(d.length)}</td>
 				<td>${esc(d.width)}</td>
+				<td><button type="button" class="btn-toggle preview-delete" data-index="${idx}">Видалити</button></td>
 			</tr>
 		`).join('');
-		previewWrap.classList.toggle('hidden', !(details || []).length);
+		previewWrap.classList.toggle('hidden', !rows.length);
+	}
+
+	function removePreviewDetailAt(index) {
+		if (!parsedPayload || !Array.isArray(parsedPayload.details)) return;
+		const i = Number(index);
+		if (!Number.isInteger(i) || i < 0 || i >= parsedPayload.details.length) return;
+
+		parsedPayload.details.splice(i, 1);
+		renderPreview(parsedPayload.details);
+		parseMeta.textContent = `У файлі: замовлення ${parsedPayload.file_order_number}, запуск ${parsedPayload.file_launch}. Деталей: ${parsedPayload.details.length}`;
+		uploadBtn.disabled = parsedPayload.details.length === 0;
+		if (parsedPayload.details.length === 0) {
+			showMsg('Усі рядки видалені. Додайте/перепарсьте PDF.', 'error');
+		}
 	}
 
 	function renderLaunches(items, append = false) {
@@ -513,9 +530,15 @@
 		const details = [];
 		const seen = new Set();
 
+		function hasDigitsNumericToken(token) {
+			const t = String(token || '').trim();
+			return /^[\d.,]+$/.test(t) && /\d/.test(t);
+		}
+
 		for (const line of lines) {
 			const m = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
 			if (!m) continue;
+			if (!hasDigitsNumericToken(m[3]) || !hasDigitsNumericToken(m[4]) || !hasDigitsNumericToken(m[5])) continue;
 
 			// У типовому файлі останні 3 значення: довжина, ширина, кількість.
 			const row = {
@@ -559,7 +582,7 @@
 			}
 
 			parseMeta.textContent = `У файлі: замовлення ${parsed.order}, запуск ${parsed.launch}. Деталей: ${details.length}`;
-			renderPreview(details.slice(0, 150));
+			renderPreview(details);
 
 			if (parsed.order !== selectedOrderNumber || parsed.launch !== selectedLaunchNumber) {
 				showMsg(
@@ -659,6 +682,13 @@
 			setBusy(false);
 			uploadBtn.disabled = !parsedPayload;
 		}
+	});
+
+	previewBody.addEventListener('click', (e) => {
+		const btn = e.target.closest('.preview-delete');
+		if (!btn) return;
+		const idx = btn.getAttribute('data-index');
+		removePreviewDetailAt(idx);
 	});
 
 	dropZone.addEventListener('click', () => pdfInput.click());
