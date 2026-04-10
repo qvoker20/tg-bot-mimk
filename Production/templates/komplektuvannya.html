@@ -264,6 +264,7 @@
 	let scanHistory = [];
 	let scanToastTimer = null;
 	let retryFlushTimer = null;
+	let scanInputIdleTimer = null;
 	const SOUND_SETTINGS_KEY = 'komplekt_sound_settings_v1';
 	let soundSettings = {
 		enabled: true,
@@ -947,6 +948,31 @@
 		flushBuffer();
 	}
 
+	function commitScanInputValue() {
+		if (scanReadOnly) return;
+		const value = _safe(scanInput.value);
+		if (!value) return;
+
+		// Barcode contract is "detail order launch"; keep input for manual correction if incomplete.
+		const parts = value.split(/\s+/).filter(Boolean);
+		if (parts.length < 3) return;
+
+		scanInput.value = '';
+		queueScan(value);
+	}
+
+	function scheduleAutoCommitFromInput() {
+		if (scanInputIdleTimer) {
+			clearTimeout(scanInputIdleTimer);
+			scanInputIdleTimer = null;
+		}
+
+		// Supports scanners configured without Enter/Tab suffix.
+		scanInputIdleTimer = setTimeout(() => {
+			commitScanInputValue();
+		}, 90);
+	}
+
 	ordersBody.addEventListener('click', async (e) => {
 		const row = e.target.closest('tr[data-order]');
 		if (!row) return;
@@ -1063,12 +1089,20 @@
 	});
 
 	scanInput.addEventListener('keydown', (e) => {
-		if (e.key === 'Enter') {
+		if (e.key === 'Enter' || e.key === 'Tab') {
 			e.preventDefault();
-			const v = scanInput.value;
-			scanInput.value = '';
-			queueScan(v);
+			commitScanInputValue();
 		}
+	});
+
+	scanInput.addEventListener('input', () => {
+		if (scanReadOnly) return;
+		scheduleAutoCommitFromInput();
+	});
+
+	scanInput.addEventListener('paste', () => {
+		if (scanReadOnly) return;
+		scheduleAutoCommitFromInput();
 	});
 
 	scanInput.addEventListener('blur', () => {

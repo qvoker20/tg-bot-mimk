@@ -33,7 +33,7 @@
 	<table class="data-table" id="launchesTable">
 		<thead>
 			<tr id="launchesHeadRow">
-				<th id="selectHead" class="hidden" style="width:42px;">#</th>
+				<th id="selectHead" class="hidden" style="width:42px;"><input id="selectAllRows" type="checkbox" aria-label="Вибрати всі"></th>
 				<th>Номер замовлення</th>
 				<th>Запуск</th>
 				<th>Статус файлу</th>
@@ -135,6 +135,7 @@
 	const selectedOrder = document.getElementById('selectedOrder');
 	const selectedLaunch = document.getElementById('selectedLaunch');
 	const selectHead = document.getElementById('selectHead');
+	const selectAllRows = document.getElementById('selectAllRows');
 	const actionsHead = document.getElementById('actionsHead');
 	const adminBulkTools = document.getElementById('adminBulkTools');
 	const bulkHideBtn = document.getElementById('bulkHideBtn');
@@ -160,6 +161,20 @@
 	let hasMore = true;
 	let isLoading = false;
 	let replaceConfirmResolver = null;
+
+	function syncSelectAllCheckbox() {
+		if (!selectAllRows) return;
+		const rows = Array.from(document.querySelectorAll('.row-select'));
+		if (!rows.length) {
+			selectAllRows.checked = false;
+			selectAllRows.indeterminate = false;
+			return;
+		}
+
+		const checkedCount = rows.filter((el) => el.checked).length;
+		selectAllRows.checked = checkedCount === rows.length;
+		selectAllRows.indeterminate = checkedCount > 0 && checkedCount < rows.length;
+	}
 
 	function toast(text, level = 'primary') {
 		if (typeof window.appToast === 'function') {
@@ -275,6 +290,10 @@
 		if (adminBulkTools) {
 			adminBulkTools.classList.toggle('hidden', !canManageHidden);
 		}
+		if (selectAllRows) {
+			selectAllRows.checked = false;
+			selectAllRows.indeterminate = false;
+		}
 
 		if (!items.length && !append) {
 			launchesEmpty.classList.remove('hidden');
@@ -284,8 +303,9 @@
 		items.forEach((item) => {
 			const statusClass = item.needs_upload ? 'status-badge pending' : 'status-badge done';
 			const statusText = item.needs_upload ? 'Потрібен файл' : 'Завантажено';
+			const isHeaderChecked = Boolean(selectAllRows && selectAllRows.checked);
 			const selectCell = canManageHidden
-				? `<td><input type="checkbox" class="row-select" data-order="${esc(item.order_number)}" data-launch="${esc(item.launch)}"></td>`
+				? `<td><input type="checkbox" class="row-select" data-order="${esc(item.order_number)}" data-launch="${esc(item.launch)}" ${isHeaderChecked ? 'checked' : ''}></td>`
 				: '';
 			const actionCell = canManageHidden
 				? `<td><button class="btn-toggle hide-order-btn" data-order="${esc(item.order_number)}">Приховати замовлення</button></td>`
@@ -302,6 +322,7 @@
 				</tr>
 			`);
 		});
+		syncSelectAllCheckbox();
 	}
 
 	async function loadLaunches(reset = true) {
@@ -380,6 +401,7 @@
 		}
 
 		if (e.target.closest('.row-select')) {
+			syncSelectAllCheckbox();
 			e.stopPropagation();
 			return;
 		}
@@ -419,6 +441,16 @@
 		await loadLaunches(true);
 	});
 }
+
+	if (selectAllRows) {
+		selectAllRows.addEventListener('change', () => {
+			const checked = Boolean(selectAllRows.checked);
+			Array.from(document.querySelectorAll('.row-select')).forEach((el) => {
+				el.checked = checked;
+			});
+			syncSelectAllCheckbox();
+		});
+	}
 
 	if (hideSearchedOrderBtn) {
 	hideSearchedOrderBtn.addEventListener('click', async () => {
