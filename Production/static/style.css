@@ -926,6 +926,35 @@ body.modal-open {
   max-height: 320px;
 }
 
+#previewTable {
+  width: 100%;
+  table-layout: fixed;
+}
+
+#previewTable th,
+#previewTable td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-delete-x {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preview-delete-x:hover {
+  background: #fee2e2;
+}
+
 .input-inline {
   min-width: 160px;
   max-width: 220px;

@@ -84,7 +84,7 @@
 							<th>Кількість</th>
 							<th>Довжина</th>
 							<th>Ширина</th>
-							<th style="width:80px;">Дії</th>
+							<th style="width:52px; text-align:center;">✕</th>
 						</tr>
 					</thead>
 					<tbody id="previewBody"></tbody>
@@ -162,6 +162,7 @@
 	let hasMore = true;
 	let isLoading = false;
 	let replaceConfirmResolver = null;
+	let previewDetails = [];
 
 	function syncSelectAllCheckbox() {
 		if (!selectAllRows) return;
@@ -246,6 +247,7 @@
 	function resetUploadState() {
 		selectedFile = null;
 		parsedPayload = null;
+		previewDetails = [];
 		pdfInput.value = '';
 		uploadFileInfo.textContent = '';
 		parseMeta.textContent = '';
@@ -269,7 +271,8 @@
 	}
 
 	function renderPreview(details) {
-		const rows = details || [];
+		const rows = Array.isArray(details) ? details : [];
+		previewDetails = rows;
 		previewBody.innerHTML = rows.map((d, idx) => `
 			<tr>
 				<td>${esc(d.detail_number)}</td>
@@ -277,22 +280,29 @@
 				<td>${esc(d.quantity)}</td>
 				<td>${esc(d.length)}</td>
 				<td>${esc(d.width)}</td>
-				<td><button type="button" class="btn-toggle preview-delete" data-index="${idx}">Видалити</button></td>
+				<td style="text-align:center;"><button type="button" class="preview-delete-x" data-index="${idx}" title="Видалити рядок" aria-label="Видалити рядок">✕</button></td>
 			</tr>
 		`).join('');
 		previewWrap.classList.toggle('hidden', !rows.length);
 	}
 
 	function removePreviewDetailAt(index) {
-		if (!parsedPayload || !Array.isArray(parsedPayload.details)) return;
+		if (!Array.isArray(previewDetails)) return;
 		const i = Number(index);
-		if (!Number.isInteger(i) || i < 0 || i >= parsedPayload.details.length) return;
+		if (!Number.isInteger(i) || i < 0 || i >= previewDetails.length) return;
 
-		parsedPayload.details.splice(i, 1);
-		renderPreview(parsedPayload.details);
-		parseMeta.textContent = `У файлі: замовлення ${parsedPayload.file_order_number}, запуск ${parsedPayload.file_launch}. Деталей: ${parsedPayload.details.length}`;
-		uploadBtn.disabled = parsedPayload.details.length === 0;
-		if (parsedPayload.details.length === 0) {
+		previewDetails.splice(i, 1);
+		if (parsedPayload && Array.isArray(parsedPayload.details)) {
+			parsedPayload.details = [...previewDetails];
+		}
+		renderPreview(previewDetails);
+
+		if (parsedPayload) {
+			parseMeta.textContent = `У файлі: замовлення ${parsedPayload.file_order_number}, запуск ${parsedPayload.file_launch}. Деталей: ${previewDetails.length}`;
+		}
+
+		uploadBtn.disabled = !parsedPayload || previewDetails.length === 0;
+		if (previewDetails.length === 0) {
 			showMsg('Усі рядки видалені. Додайте/перепарсьте PDF.', 'error');
 		}
 	}
@@ -582,7 +592,7 @@
 			}
 
 			parseMeta.textContent = `У файлі: замовлення ${parsed.order}, запуск ${parsed.launch}. Деталей: ${details.length}`;
-			renderPreview(details);
+			renderPreview([...details]);
 
 			if (parsed.order !== selectedOrderNumber || parsed.launch !== selectedLaunchNumber) {
 				showMsg(
@@ -606,7 +616,7 @@
 				selected_launch: selectedLaunchNumber,
 				file_order_number: parsed.order,
 				file_launch: parsed.launch,
-				details,
+				details: [...details],
 			};
 			uploadBtn.disabled = false;
 			showMsg('Файл перевірено. Можна завантажувати.', 'ok');
@@ -685,7 +695,7 @@
 	});
 
 	previewBody.addEventListener('click', (e) => {
-		const btn = e.target.closest('.preview-delete');
+		const btn = e.target.closest('.preview-delete-x');
 		if (!btn) return;
 		const idx = btn.getAttribute('data-index');
 		removePreviewDetailAt(idx);
