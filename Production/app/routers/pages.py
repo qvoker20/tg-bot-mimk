@@ -34,6 +34,12 @@ def _has_zapusky_access(request: Request) -> bool:
     return role in {"admin", "адмін", "технолог виробництво", "технолог виробництва"}
 
 
+def _has_komplekt_access(request: Request) -> bool:
+    user = _user(request) or {}
+    role = str(user.get("role") or "").strip().lower()
+    return role in {"майстер цеху", "комплектувальник", "admin", "директор з виробництва"}
+
+
 @router.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     if _user(request):
@@ -59,6 +65,8 @@ async def main_page(request: Request):
 async def komplektuvannya_page(request: Request):
     if not _user(request):
         return RedirectResponse(url="/login", status_code=302)
+    if not _has_komplekt_access(request):
+        return RedirectResponse(url="/reestr", status_code=302)
     return router.templates.TemplateResponse("komplektuvannya.html", _context(request, "Комплектування"))
 
 

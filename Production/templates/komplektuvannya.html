@@ -83,10 +83,14 @@
 	<div class="modal-box modal-wide">
 		<div class="modal-header-row">
 			<h3 id="komplektModalTitle">Комплектування запуску</h3>
-			<button id="closeKomplektBtn" class="btn-toggle" type="button">Закрити</button>
+			<div class="confirm-actions">
+				<button id="openScanHistoryBtn" class="btn" type="button">Історія сканувань</button>
+				<button id="closeKomplektBtn" class="btn-toggle" type="button">Закрити</button>
+			</div>
 		</div>
 
 		<div id="scanTopMsg" class="msg hidden"></div>
+		<div id="scanToast" class="scan-toast hidden" aria-live="polite"></div>
 
 		<div class="selected-meta selected-meta-strong">
 			<div><strong>Замовлення:</strong> <span id="modalOrder">-</span></div>
@@ -101,11 +105,13 @@
 
 		<div class="zapusky-toolbar toolbar-aligned">
 			<input id="scanInput" type="text" class="scan-input scan-input-visual" placeholder="Скануйте штрихкод (поле завжди чекає скан)" autocomplete="off">
-			<span class="muted">У буфері: <strong id="bufferCount">0</strong></span>
+			<span class="muted">У черзі: <strong id="bufferCount">0</strong></span>
+			<label class="muted toolbar-inline-label" for="soundEnabledToggle"><input id="soundEnabledToggle" type="checkbox" checked> Звук</label>
+			<label class="muted toolbar-inline-label" for="soundVolumeRange">Гучність <input id="soundVolumeRange" class="sound-range" type="range" min="0" max="100" step="5" value="70"></label>
+			<span id="soundStatusHint" class="muted">Звукові сигнали активні</span>
 		</div>
 
-		<div id="scanLoading" class="d-flex align-items-center gap-2 text-secondary small hidden"><span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span><span>Збереження...</span></div>
-		<div id="scanMsg" class="msg"></div>
+		<div id="scanMsg" class="msg hidden"></div>
 
 		<div class="komplekt-details-grid">
 			<section class="details-panel pending-panel">
@@ -116,7 +122,9 @@
 							<tr>
 								<th>Номер деталі</th>
 								<th>Позначення</th>
-								<th>Кількість</th>
+								<th>План</th>
+								<th>Укомплектовано</th>
+								<th>Залишилось</th>
 								<th>Довжина</th>
 								<th>Ширина</th>
 							</tr>
@@ -134,7 +142,9 @@
 							<tr>
 								<th>Номер деталі</th>
 								<th>Позначення</th>
-								<th>Кількість</th>
+								<th>План</th>
+								<th>Укомплектовано</th>
+								<th>Залишилось</th>
 								<th>Час</th>
 							</tr>
 						</thead>
@@ -142,6 +152,30 @@
 					</table>
 				</div>
 			</section>
+		</div>
+	</div>
+</div>
+
+<div id="scanHistoryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scanHistoryTitle">
+	<div class="modal-box modal-wide">
+		<div class="modal-header-row">
+			<h3 id="scanHistoryTitle">Історія сканувань</h3>
+			<button id="closeScanHistoryBtn" class="btn-toggle" type="button">Закрити</button>
+		</div>
+
+		<div class="table-wrap launches-select-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>#</th>
+						<th>Час</th>
+						<th>Скан</th>
+						<th>Статус</th>
+						<th>Коментар</th>
+					</tr>
+				</thead>
+				<tbody id="scanHistoryBody"></tbody>
+			</table>
 		</div>
 	</div>
 </div>
@@ -188,18 +222,27 @@
 	const modalStartedInfo = document.getElementById('modalStartedInfo');
 	const modalCompletedInfo = document.getElementById('modalCompletedInfo');
 	const scanTopMsg = document.getElementById('scanTopMsg');
+	const scanToast = document.getElementById('scanToast');
 	const scanInput = document.getElementById('scanInput');
 	const bufferCount = document.getElementById('bufferCount');
-	const scanLoading = document.getElementById('scanLoading');
 	const scanMsg = document.getElementById('scanMsg');
 	const pendingDetailsBody = document.getElementById('pendingDetailsBody');
 	const completedDetailsBody = document.getElementById('completedDetailsBody');
 	const closeConfirmModal = document.getElementById('closeConfirmModal');
 	const confirmCloseNo = document.getElementById('confirmCloseNo');
 	const confirmCloseYes = document.getElementById('confirmCloseYes');
+	const openScanHistoryBtn = document.getElementById('openScanHistoryBtn');
+	const scanHistoryModal = document.getElementById('scanHistoryModal');
+	const closeScanHistoryBtn = document.getElementById('closeScanHistoryBtn');
+	const scanHistoryBody = document.getElementById('scanHistoryBody');
+	const soundEnabledToggle = document.getElementById('soundEnabledToggle');
+	const soundVolumeRange = document.getElementById('soundVolumeRange');
+	const soundStatusHint = document.getElementById('soundStatusHint');
 
 	let selectedOrderNumber = '';
 	let selectedLaunchNumber = '';
+	let activeScanOrderNumber = '';
+	let activeScanLaunchNumber = '';
 	let selectedLaunchCompleted = false;
 	let scanReadOnly = false;
 
@@ -213,11 +256,200 @@
 	let launchHasMore = true;
 	let launchLoading = false;
 
-	let scanBuffer = [];
-	let flushTimer = null;
+	let scanQueue = [];
 	let isSaving = false;
 	let launchStatusFilterValue = '';
 	let closeConfirmResolver = null;
+	let audioCtx = null;
+	let scanHistory = [];
+	let scanToastTimer = null;
+	let retryFlushTimer = null;
+	const SOUND_SETTINGS_KEY = 'komplekt_sound_settings_v1';
+	let soundSettings = {
+		enabled: true,
+		volume: 70,
+	};
+
+	function clampVolume(v) {
+		const n = Number(v);
+		if (!Number.isFinite(n)) return 70;
+		return Math.max(0, Math.min(100, Math.round(n)));
+	}
+
+	function saveSoundSettings() {
+		try {
+			localStorage.setItem(SOUND_SETTINGS_KEY, JSON.stringify(soundSettings));
+		} catch (e) {
+			void e;
+		}
+	}
+
+	function loadSoundSettings() {
+		try {
+			const raw = localStorage.getItem(SOUND_SETTINGS_KEY);
+			if (!raw) return;
+			const parsed = JSON.parse(raw);
+			soundSettings.enabled = Boolean(parsed?.enabled);
+			soundSettings.volume = clampVolume(parsed?.volume);
+		} catch (e) {
+			void e;
+		}
+	}
+
+	function updateSoundStatusHint() {
+		if (!soundStatusHint) return;
+		if (!soundSettings.enabled || soundSettings.volume <= 0) {
+			soundStatusHint.textContent = 'Звукові сигнали вимкнені';
+			return;
+		}
+		soundStatusHint.textContent = `Звукові сигнали активні (${soundSettings.volume}%)`;
+	}
+
+	function syncSoundControls() {
+		if (soundEnabledToggle) {
+			soundEnabledToggle.checked = soundSettings.enabled;
+		}
+		if (soundVolumeRange) {
+			soundVolumeRange.value = String(soundSettings.volume);
+		}
+		updateSoundStatusHint();
+	}
+
+	function initSoundSettings() {
+		loadSoundSettings();
+		syncSoundControls();
+	}
+
+	function getAudioContext() {
+		if (audioCtx) return audioCtx;
+		const Ctx = window.AudioContext || window.webkitAudioContext;
+		if (!Ctx) return null;
+		audioCtx = new Ctx();
+		return audioCtx;
+	}
+
+	function playTone({ freq = 660, duration = 0.09, type = 'sine', gain = 0.05, delay = 0 }) {
+		if (!soundSettings.enabled || soundSettings.volume <= 0) return;
+		const ctx = getAudioContext();
+		if (!ctx) return;
+		const now = ctx.currentTime + delay;
+		const osc = ctx.createOscillator();
+		const amp = ctx.createGain();
+		const volumeFactor = soundSettings.volume / 100;
+		const level = Math.max(0.0001, gain * volumeFactor);
+
+		osc.type = type;
+		osc.frequency.setValueAtTime(freq, now);
+		amp.gain.setValueAtTime(0.0001, now);
+		amp.gain.exponentialRampToValueAtTime(level, now + 0.01);
+		amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+		osc.connect(amp);
+		amp.connect(ctx.destination);
+		osc.start(now);
+		osc.stop(now + duration + 0.02);
+	}
+
+	function playSuccessSound() {
+		playTone({ freq: 784, duration: 0.07, type: 'sine', gain: 0.045, delay: 0 });
+		playTone({ freq: 988, duration: 0.11, type: 'sine', gain: 0.05, delay: 0.08 });
+	}
+
+	function playErrorSound() {
+		playTone({ freq: 240, duration: 0.13, type: 'square', gain: 0.06, delay: 0 });
+	}
+
+	function playDuplicateSound() {
+		playTone({ freq: 370, duration: 0.08, type: 'triangle', gain: 0.05, delay: 0 });
+		playTone({ freq: 320, duration: 0.08, type: 'triangle', gain: 0.045, delay: 0.09 });
+	}
+
+	function addScanHistoryEntry(entry) {
+		const dtText = _safe(entry?.created_at);
+		const dt = dtText ? null : new Date();
+		scanHistory.push({
+			index: scanHistory.length + 1,
+			at: dtText || dt.toLocaleTimeString('uk-UA', { hour12: false }),
+			raw_scan: entry.raw_scan || '',
+			status: entry.status || 'info',
+			message: entry.message || '',
+		});
+		renderScanHistory();
+	}
+
+	async function loadScanHistory(orderNumber, launch) {
+		const order = _safe(orderNumber);
+		const launchNumber = _safe(launch);
+		if (!order || !launchNumber) return;
+
+		try {
+			const res = await fetch(`/api/komplekt/launch/${encodeURIComponent(order)}/${encodeURIComponent(launchNumber)}/scan-history?limit=500`);
+			const data = await res.json();
+			if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося завантажити історію сканувань');
+
+			scanHistory = [];
+			for (const row of (data.items || []).slice().reverse()) {
+				addScanHistoryEntry(row);
+			}
+		} catch (e) {
+			void e;
+		}
+	}
+
+	async function postScanHistoryEvent(status, message) {
+		const order = _safe(activeScanOrderNumber || selectedOrderNumber);
+		const launchNumber = _safe(activeScanLaunchNumber || selectedLaunchNumber);
+		if (!order || !launchNumber) return;
+
+		try {
+			await fetch(`/api/komplekt/launch/${encodeURIComponent(order)}/${encodeURIComponent(launchNumber)}/scan-history-event`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ status, message }),
+			});
+		} catch (e) {
+			void e;
+		}
+	}
+
+	function statusLabel(status) {
+		switch (String(status || '').toLowerCase()) {
+			case 'updated': return 'Успіх';
+			case 'already_completed': return 'Дубль';
+			case 'wrong_order_launch': return 'Невірний запуск';
+			case 'invalid_format': return 'Формат';
+			case 'not_found': return 'Не знайдено';
+			case 'session_resume': return 'Продовжено';
+			case 'details_opened': return 'Перегляд деталей';
+			default: return 'Інфо';
+		}
+	}
+
+	function statusBadgeClass(status) {
+		const s = String(status || '').toLowerCase();
+		if (s === 'updated') return 'status-badge done';
+		if (s === 'already_completed') return 'status-badge warn';
+		if (s === 'not_found' || s === 'wrong_order_launch' || s === 'invalid_format') return 'status-badge pending';
+		if (s === 'session_resume' || s === 'details_opened') return 'status-badge warn';
+		return 'status-badge warn';
+	}
+
+	function renderScanHistory() {
+		if (!scanHistory.length) {
+			scanHistoryBody.innerHTML = '<tr><td colspan="5">Історія порожня</td></tr>';
+			return;
+		}
+
+		scanHistoryBody.innerHTML = scanHistory.map((row) => `
+			<tr>
+				<td>${row.index}</td>
+				<td>${esc(row.at)}</td>
+				<td>${esc(row.raw_scan)}</td>
+				<td><span class="${statusBadgeClass(row.status)}">${statusLabel(row.status)}</span></td>
+				<td>${esc(row.message)}</td>
+			</tr>
+		`).join('');
+	}
 
 	function showLaunchesMsg(text, type = 'info') {
 		launchesMsg.textContent = text;
@@ -242,9 +474,54 @@
 	}
 
 	function showScanMsg(text, type = 'info') {
-		scanMsg.textContent = text;
-		const cls = type === 'error' ? 'alert-danger' : (type === 'ok' ? 'alert-success' : 'alert-secondary');
-		scanMsg.className = `alert ${cls} py-2 px-3`;
+		scanMsg.classList.add('hidden');
+		if (!text) return;
+		const toastType = type === 'ok' ? 'ok' : (type === 'error' ? 'error' : 'info');
+		showScanToast(text, toastType);
+	}
+
+	function showScanToast(text, type = 'info') {
+		if (!scanToast) return;
+		scanToast.textContent = text;
+		scanToast.classList.remove('hidden', 'ok', 'error', 'warn', 'info');
+		scanToast.classList.add(type);
+		if (scanToastTimer) {
+			clearTimeout(scanToastTimer);
+			scanToastTimer = null;
+		}
+		scanToastTimer = setTimeout(() => {
+			scanToast.classList.add('hidden');
+		}, 2400);
+	}
+
+	function eventCode(ev) {
+		return _safe(ev?.detail_number || ev?.raw_scan || '-');
+	}
+
+	function notifyScanEvent(ev) {
+		const status = String(ev?.status || '').toLowerCase();
+		const code = eventCode(ev);
+		if (status === 'updated') {
+			showScanToast(`Запис успішно: ${code}`, 'ok');
+			return;
+		}
+		if (status === 'already_completed' || status === 'already_processed_in_batch') {
+			showScanToast(`Деталь вже відсканована: ${code}`, 'warn');
+			return;
+		}
+		if (status === 'not_found') {
+			showScanToast(`Такої деталі немає у списку: ${code}`, 'error');
+			return;
+		}
+		if (status === 'wrong_order_launch') {
+			showScanToast(`Невірний запуск/замовлення: ${code}`, 'error');
+			return;
+		}
+		if (status === 'invalid_format') {
+			showScanToast(`Невірний формат скану: ${code}`, 'error');
+			return;
+		}
+		showScanToast(`${ev?.message || 'Подія сканування'}: ${code}`, 'info');
 	}
 
 	function renderProgressBar(percent) {
@@ -267,8 +544,7 @@
 	function setModalSavingState(saving) {
 		isSaving = saving;
 		closeKomplektBtn.disabled = saving;
-		scanLoading.classList.toggle('hidden', !saving);
-		scanInput.disabled = saving || scanReadOnly;
+		scanInput.disabled = scanReadOnly;
 	}
 
 	function showLoader(message) {
@@ -312,12 +588,19 @@
 
 	function openScanModal() {
 		openOverlay(komplektModal);
+		loadScanHistory(activeScanOrderNumber || selectedOrderNumber, activeScanLaunchNumber || selectedLaunchNumber);
+		showScanMsg('', 'info');
+		if (scanToast) {
+			scanToast.classList.add('hidden');
+		}
 		if (!scanReadOnly) {
 			scanInput.focus();
 		}
 	}
 
 	function closeScanModal() {
+		activeScanOrderNumber = '';
+		activeScanLaunchNumber = '';
 		closeOverlay(komplektModal);
 	}
 
@@ -344,7 +627,7 @@
 
 	function setScanMode(readOnly) {
 		scanReadOnly = !!readOnly;
-		scanInput.disabled = scanReadOnly || isSaving;
+		scanInput.disabled = scanReadOnly;
 		scanInput.classList.toggle('hidden', scanReadOnly);
 		if (scanReadOnly) {
 			showScanTopMsg('Режим деталей: запуск повністю укомплектовано', 'ok');
@@ -363,8 +646,8 @@
 		const ok = await askCloseConfirm();
 		if (!ok) return;
 
-		if (!scanReadOnly && scanBuffer.length) {
-			showScanMsg('Є дані в буфері, зачекайте автоматичне збереження...', 'info');
+		if (!scanReadOnly && scanQueue.length) {
+			showScanMsg('Є дані в черзі, завершуємо збереження на сервер...', 'info');
 			await flushBuffer();
 		}
 
@@ -373,7 +656,7 @@
 	}
 
 	function updateBufferCount() {
-		bufferCount.textContent = String(scanBuffer.length);
+		bufferCount.textContent = String(scanQueue.length);
 	}
 
 	function renderOrderRows(items, append = false) {
@@ -526,21 +809,33 @@
 	}
 
 	function renderDetails(pending, completed) {
+		function quantityStateClass(item) {
+			const done = Number(item?.quantity_completed || 0);
+			const left = Number(item?.quantity || 0);
+			if (left <= 0 && done > 0) return 'qty-row-complete';
+			if (done > 0 && left > 0) return 'qty-row-partial';
+			return 'qty-row-not-started';
+		}
+
 		pendingDetailsBody.innerHTML = (pending || []).map((d) => `
-			<tr>
+			<tr class="${quantityStateClass(d)}">
 				<td>${esc(d.detail_number)}</td>
 				<td>${esc(d.designation)}</td>
-				<td>${esc(d.quantity)}</td>
+				<td>${esc(d.quantity_total || d.quantity || '0')}</td>
+				<td>${esc(d.quantity_completed || '0')}</td>
+				<td>${esc(d.quantity || '0')}</td>
 				<td>${esc(d.length)}</td>
 				<td>${esc(d.width)}</td>
 			</tr>
 		`).join('');
 
 		completedDetailsBody.innerHTML = (completed || []).map((d) => `
-			<tr>
+			<tr class="${quantityStateClass(d)}">
 				<td>${esc(d.detail_number)}</td>
 				<td>${esc(d.designation)}</td>
-				<td>${esc(d.quantity)}</td>
+				<td>${esc(d.quantity_total || d.quantity || '0')}</td>
+				<td>${esc(d.quantity_completed || d.quantity || '0')}</td>
+				<td>${esc(d.quantity || '0')}</td>
 				<td>${esc(d.completed_at)}</td>
 			</tr>
 		`).join('');
@@ -574,56 +869,72 @@
 	}
 
 	async function flushBuffer() {
-		if (isSaving || !scanBuffer.length || scanReadOnly) return;
-		if (!selectedOrderNumber || !selectedLaunchNumber) return;
+		if (isSaving || scanReadOnly) return;
+		if (!activeScanOrderNumber || !activeScanLaunchNumber) return;
 
-		if (flushTimer) {
-			clearTimeout(flushTimer);
-			flushTimer = null;
+		if (retryFlushTimer) {
+			clearTimeout(retryFlushTimer);
+			retryFlushTimer = null;
 		}
 
-		const payload = { scans: [...scanBuffer] };
-		scanBuffer = [];
-		updateBufferCount();
+		while (scanQueue.length && !scanReadOnly) {
+			const payloadScans = [scanQueue.shift()];
+			updateBufferCount();
 
-		setModalSavingState(true);
-		showLoader('Збереження сканів...');
-		showScanMsg(`Зберігаємо ${payload.scans.length} скан(ів)...`, 'info');
+			setModalSavingState(true);
+			showLoader('Синхронізація сканів...');
 
-		try {
-			const res = await fetch(`/api/komplekt/launch/${encodeURIComponent(selectedOrderNumber)}/${encodeURIComponent(selectedLaunchNumber)}/scan-batch`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
-			const data = await res.json();
-			if (!res.ok || !data.ok) {
-				throw new Error(data.error || 'Помилка збереження сканів');
+			try {
+				const res = await fetch(`/api/komplekt/launch/${encodeURIComponent(activeScanOrderNumber)}/${encodeURIComponent(activeScanLaunchNumber)}/scan-batch`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ scans: payloadScans }),
+				});
+				const data = await res.json();
+				if (!res.ok || !data.ok) {
+					throw new Error(data.error || 'Помилка збереження сканів');
+				}
+
+				modalTotal.textContent = String(data.state?.total || 0);
+				modalCompleted.textContent = String(data.state?.completed || 0);
+				modalPending.textContent = String(data.state?.pending || 0);
+				modalStatus.innerHTML = renderStatusBadge(data.state?.status || 'В роботі');
+				modalStartedInfo.textContent = formatActorTime(data.completion?.started_by, data.completion?.started_at);
+				modalCompletedInfo.textContent = formatActorTime(data.completion?.completed_by, data.completion?.completed_at);
+				renderDetails(data.pending_details || [], data.completed_details || []);
+
+				if ((data.not_found || []).length > 0) {
+					playErrorSound();
+				} else if (Number(data.already_completed_count || 0) > 0 && Number(data.updated_count || 0) === 0) {
+					playDuplicateSound();
+				} else if (Number(data.updated_count || 0) > 0) {
+					playSuccessSound();
+				}
+
+				for (const ev of (data.scan_events || [])) {
+					addScanHistoryEntry(ev);
+					notifyScanEvent(ev);
+				}
+
+			} catch (err) {
+				playErrorSound();
+				scanQueue = payloadScans.concat(scanQueue);
+				updateBufferCount();
+				addScanHistoryEntry({
+					raw_scan: payloadScans.join(', '),
+					status: 'error',
+					message: err.message || 'Помилка збереження',
+				});
+				showScanToast(err.message || 'Помилка збереження', 'error');
+				retryFlushTimer = setTimeout(() => {
+					flushBuffer();
+				}, 450);
+				break;
+			} finally {
+				hideLoader();
+				setModalSavingState(false);
+				scanInput.focus();
 			}
-
-			modalTotal.textContent = String(data.state?.total || 0);
-			modalCompleted.textContent = String(data.state?.completed || 0);
-			modalPending.textContent = String(data.state?.pending || 0);
-			modalStatus.innerHTML = renderStatusBadge(data.state?.status || 'В роботі');
-			modalStartedInfo.textContent = formatActorTime(data.completion?.started_by, data.completion?.started_at);
-			modalCompletedInfo.textContent = formatActorTime(data.completion?.completed_by, data.completion?.completed_at);
-			renderDetails(data.pending_details || [], data.completed_details || []);
-
-			let text = `Оновлено: ${data.updated_count || 0}`;
-			if (data.already_completed_count) {
-				text += `, вже укомплектовано: ${data.already_completed_count}`;
-			}
-			if ((data.not_found || []).length) {
-				text += `, не знайдено: ${data.not_found.length}`;
-			}
-			showScanMsg(text, (data.not_found || []).length ? 'error' : 'ok');
-			await loadLaunches(selectedOrderNumber, true);
-		} catch (err) {
-			showScanMsg(err.message || 'Помилка збереження', 'error');
-		} finally {
-			hideLoader();
-			setModalSavingState(false);
-			scanInput.focus();
 		}
 	}
 
@@ -631,18 +942,9 @@
 		if (scanReadOnly) return;
 		const v = _safe(raw);
 		if (!v) return;
-		scanBuffer.push(v);
+		scanQueue.push(v);
 		updateBufferCount();
-
-		if (scanBuffer.length >= 25) {
-			flushBuffer();
-			return;
-		}
-
-		if (flushTimer) clearTimeout(flushTimer);
-		flushTimer = setTimeout(() => {
-			flushBuffer();
-		}, 700);
+		flushBuffer();
 	}
 
 	ordersBody.addEventListener('click', async (e) => {
@@ -679,10 +981,13 @@
 	goKomplektBtn.addEventListener('click', async () => {
 		if (!selectedOrderNumber || !selectedLaunchNumber) return;
 		try {
+			activeScanOrderNumber = selectedOrderNumber;
+			activeScanLaunchNumber = selectedLaunchNumber;
+			await postScanHistoryEvent('session_resume', 'Продовжено комплектування');
 			setScanMode(false);
 			await loadLaunchDetails(selectedOrderNumber, selectedLaunchNumber);
 			showScanMsg('Поле сканування активне. Введіть/скануйте код і натисніть Enter.', 'info');
-			scanBuffer = [];
+			scanQueue = [];
 			updateBufferCount();
 			setModalSavingState(false);
 			openScanModal();
@@ -694,6 +999,9 @@
 	viewLaunchDetailsBtn.addEventListener('click', async () => {
 		if (!selectedOrderNumber || !selectedLaunchNumber || !selectedLaunchCompleted) return;
 		try {
+			activeScanOrderNumber = selectedOrderNumber;
+			activeScanLaunchNumber = selectedLaunchNumber;
+			await postScanHistoryEvent('details_opened', 'Відкрито детальну інформацію запуску');
 			setScanMode(true);
 			await loadLaunchDetails(selectedOrderNumber, selectedLaunchNumber);
 			setModalSavingState(false);
@@ -722,6 +1030,30 @@
 	});
 
 	closeKomplektBtn.addEventListener('click', closeModalWithConfirm);
+	openScanHistoryBtn.addEventListener('click', async () => {
+		await loadScanHistory(activeScanOrderNumber || selectedOrderNumber, activeScanLaunchNumber || selectedLaunchNumber);
+		openOverlay(scanHistoryModal);
+	});
+	closeScanHistoryBtn.addEventListener('click', () => closeOverlay(scanHistoryModal));
+	scanHistoryModal.addEventListener('click', (e) => {
+		if (e.target === scanHistoryModal) closeOverlay(scanHistoryModal);
+	});
+
+	if (soundEnabledToggle) {
+		soundEnabledToggle.addEventListener('change', () => {
+			soundSettings.enabled = Boolean(soundEnabledToggle.checked);
+			saveSoundSettings();
+			updateSoundStatusHint();
+		});
+	}
+
+	if (soundVolumeRange) {
+		soundVolumeRange.addEventListener('input', () => {
+			soundSettings.volume = clampVolume(soundVolumeRange.value);
+			saveSoundSettings();
+			updateSoundStatusHint();
+		});
+	}
 
 	komplektModal.addEventListener('click', (e) => {
 		if (e.target === komplektModal) {
@@ -773,6 +1105,7 @@
 		launchesListWrap.addEventListener('scroll', maybeLoadMoreLaunches, { passive: true });
 	}
 
+	initSoundSettings();
 	loadOrders(true);
 </script>
 {% endblock %}

@@ -12,6 +12,7 @@
   <header class="topbar">
     {% set role = (user.role if user and user.role else '')|lower %}
     {% set can_zapusky = role in ['admin', 'адмін', 'технолог виробництво', 'технолог виробництва'] %}
+    {% set can_komplekt = role in ['майстер цеху', 'комплектувальник', 'admin', 'директор з виробництва'] %}
     <div class="topbar-brand">
       <img src="/static/branding/logo-mimk.png" alt="MIM-K" class="topbar-logo" onerror="this.style.display='none'">
       <div class="topbar-title-wrap">
@@ -20,7 +21,9 @@
       </div>
     </div>
     <nav class="topnav">
+      {% if can_komplekt %}
       <a href="/komplektuvannya" class="navlink {% if request.url.path == '/komplektuvannya' %}active{% endif %}">Комплектування</a>
+      {% endif %}
       {% if can_zapusky %}
       <a href="/zapusky" class="navlink {% if request.url.path == '/zapusky' %}active{% endif %}">Запуски</a>
       {% endif %}

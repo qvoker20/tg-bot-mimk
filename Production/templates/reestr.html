@@ -248,6 +248,18 @@
 		const launches = (order.launches || []).filter((launch) => {
 			if (statusFilter && normalizeText(launch.status) !== statusFilter) return false;
 			if (materialFilter && !normalizeText(launch.material_type).includes(materialFilter)) return false;
+			const hasData = [
+				launch.launch,
+				launch.name,
+				launch.status,
+				launch.material_type,
+				launch.sheets_count,
+				launch.service,
+				launch.part,
+				launch.cut_meters,
+				launch.drilling_qty,
+			].some((v) => normalizeText(v));
+			if (!hasData) return false;
 			return true;
 		});
 

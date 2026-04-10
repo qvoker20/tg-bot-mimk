@@ -557,7 +557,7 @@ async def upload_details(request: Request, payload: UploadParsedPayload):
                 status_code=400,
             )
 
-        if _is_komplekt_started(cur, selected_order_number, selected_launch):
+        if _is_komplekt_started(cur, selected_order_number, selected_launch) and not _can_manage_hidden(user):
             conn.rollback()
             return JSONResponse(
                 {
@@ -565,7 +565,7 @@ async def upload_details(request: Request, payload: UploadParsedPayload):
                     "code": "komplekt_started",
                     "error": (
                         "Перезапис заборонено: для цього запуску вже розпочато комплектування. "
-                        "Завантаження/перезапис деталей неможливі."
+                        "Перезапис після старту комплектування дозволений лише адміністратору."
                     ),
                 },
                 status_code=409,

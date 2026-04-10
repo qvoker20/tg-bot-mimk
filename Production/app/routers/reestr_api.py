@@ -126,6 +126,22 @@ def _map_launch_row(row: dict) -> dict:
     return item
 
 
+def _is_meaningful_launch(item: dict) -> bool:
+    # Відкидаємо технічні/порожні рядки, що не містять даних запуску.
+    check_keys = [
+        "launch",
+        "name",
+        "status",
+        "material_type",
+        "sheets_count",
+        "service",
+        "part",
+        "cut_meters",
+        "drilling_qty",
+    ]
+    return any(str(item.get(k) or "").strip() for k in check_keys)
+
+
 def _sort_key(value: str):
     text = (value or "").strip()
     return (0, int(text)) if text.isdigit() else (1, text)
@@ -246,7 +262,9 @@ def _build_orders_dataset(cur):
         for row in rows:
             order_number = (row.get("c1") or "").strip()
             if order_number:
-                grouped[order_number].append(_map_launch_row(row))
+                mapped = _map_launch_row(row)
+                if _is_meaningful_launch(mapped):
+                    grouped[order_number].append(mapped)
 
     result = []
     today = date.today()

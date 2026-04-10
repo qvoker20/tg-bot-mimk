@@ -447,6 +447,7 @@ input:focus {
   border-radius: 12px;
   width: min(1600px, 98vw);
   max-height: 92vh;
+  position: relative;
   border: 1px solid var(--border);
   box-shadow: 0 26px 64px rgba(15, 23, 42, 0.3);
   padding: 14px;
@@ -491,6 +492,21 @@ input:focus {
 
 #komplektModal .details-panel h4 {
   margin: 0 0 8px;
+}
+
+#komplektModal .qty-row-not-started td {
+  background: #fef2f2 !important;
+}
+
+#komplektModal .qty-row-partial td {
+  background: #fffbeb !important;
+}
+
+#komplektModal .qty-row-complete td {
+  background: #ecfdf3 !important;
+  text-decoration: underline;
+  text-decoration-color: #22c55e;
+  text-underline-offset: 3px;
 }
 
 #komplektModal .komplekt-details-wrap {
@@ -762,6 +778,116 @@ body.modal-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.toolbar-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toolbar-inline-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.sound-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 210px;
+  max-width: 40vw;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+}
+
+.sound-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(90deg, #1f6feb 0%, #3b82f6 55%, #93c5fd 100%);
+  box-shadow: inset 0 0 0 1px #bfdbfe;
+}
+
+.sound-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #0f4fc5;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+  margin-top: -4px;
+}
+
+.sound-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(90deg, #1f6feb 0%, #3b82f6 55%, #93c5fd 100%);
+  box-shadow: inset 0 0 0 1px #bfdbfe;
+}
+
+.sound-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #0f4fc5;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+
+.sound-range:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+}
+
+.scan-toast {
+  position: absolute;
+  top: 58px;
+  right: 14px;
+  max-width: min(440px, 48vw);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+  z-index: 3;
+}
+
+.scan-toast.ok {
+  background: #ecfdf3;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.scan-toast.warn {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.scan-toast.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.scan-toast.info {
+  background: #eff6ff;
+  color: #1e3a8a;
+  border-color: #bfdbfe;
 }
 
 .checkbox-inline {

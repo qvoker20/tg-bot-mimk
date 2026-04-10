@@ -3,15 +3,26 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..db import get_db_connection
+from ..services.auth_service import get_fresh_role
 
 router = APIRouter(prefix="/api/komplekt", tags=["komplekt"])
 
 DETAILS_TABLE = "production_launch_details"
 COMPLETION_TABLE = "production_launch_completion"
+SCAN_HISTORY_TABLE = "production_scan_history"
 
 
 class ScanBatchPayload(BaseModel):
     scans: list[str]
+
+
+class ScanHistoryEventPayload(BaseModel):
+    status: str = "info"
+    message: str = ""
+    raw_scan: str = ""
+    detail_number: str = ""
+    scan_order_number: str = ""
+    scan_launch: str = ""
 
 
 def _safe_text(value: str) -> str:
@@ -20,6 +31,14 @@ def _safe_text(value: str) -> str:
 
 def _normalize_code(value: str) -> str:
     return "".join(ch for ch in _safe_text(value).lower() if ch.isalnum())
+
+
+def _parse_scan_triplet(raw_scan: str) -> tuple[str, str, str] | None:
+    parts = [p for p in _safe_text(raw_scan).split(" ") if p]
+    if len(parts) != 3:
+        return None
+    detail_number, order_number, launch = parts
+    return _safe_text(detail_number), _safe_text(order_number), _safe_text(launch)
 
 
 def _display_number(value) -> str:
@@ -31,6 +50,13 @@ def _display_number(value) -> str:
     except Exception:
         return text
     return str(int(num)) if num.is_integer() else (f"{num:.3f}").rstrip("0").rstrip(".")
+
+
+def _to_float(value) -> float:
+    try:
+        return float(value or 0)
+    except Exception:
+        return 0.0
 
 
 def _has_table(cur, table_name: str) -> bool:
@@ -68,9 +94,86 @@ def _ensure_completion_table(cur):
     )
 
 
+def _ensure_scan_history_table(cur):
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {SCAN_HISTORY_TABLE} (
+            id SERIAL PRIMARY KEY,
+            order_number TEXT NOT NULL,
+            launch TEXT NOT NULL,
+            actor_name TEXT,
+            raw_scan TEXT,
+            detail_number TEXT,
+            scan_order_number TEXT,
+            scan_launch TEXT,
+            status TEXT,
+            message TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        f"CREATE INDEX IF NOT EXISTS idx_{SCAN_HISTORY_TABLE}_order_launch_created ON {SCAN_HISTORY_TABLE}(order_number, launch, created_at DESC)"
+    )
+
+
+def _insert_scan_history_rows(cur, order_number: str, launch: str, actor_name: str, events: list[dict]):
+    rows = []
+    for ev in events or []:
+        rows.append(
+            (
+                order_number,
+                launch,
+                _safe_text(actor_name),
+                _safe_text(ev.get("raw_scan", "")),
+                _safe_text(ev.get("detail_number", "")),
+                _safe_text(ev.get("scan_order_number", "")),
+                _safe_text(ev.get("scan_launch", "")),
+                _safe_text(ev.get("status", "info")),
+                _safe_text(ev.get("message", "")),
+            )
+        )
+
+    if not rows:
+        return
+
+    cur.executemany(
+        f"""
+        INSERT INTO {SCAN_HISTORY_TABLE}
+            (order_number, launch, actor_name, raw_scan, detail_number, scan_order_number, scan_launch, status, message)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        rows,
+    )
+
+
 def _get_actor_name(request: Request) -> str:
     user = request.session.get("user") or {}
     return _safe_text(user.get("name") or user.get("phone") or "Користувач")
+
+
+def _refresh_session_role(request: Request, user: dict) -> dict:
+    user = dict(user or {})
+    fresh_role = get_fresh_role(user)
+    user["role"] = fresh_role
+    request.session["user"] = user
+    return user
+
+
+def _has_komplekt_access(user: dict) -> bool:
+    role = _safe_text((user or {}).get("role") or "").lower()
+    return role in {"майстер цеху", "комплектувальник", "admin", "директор з виробництва"}
+
+
+def _require_komplekt_access(request: Request):
+    user = request.session.get("user")
+    if not user:
+        return None, JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    user = _refresh_session_role(request, user)
+    if not _has_komplekt_access(user):
+        return None, JSONResponse({"ok": False, "error": "Недостатньо прав для комплектування"}, status_code=403)
+    return user, None
 
 
 def _completion_info(cur, order_number: str, launch: str):
@@ -151,25 +254,25 @@ def _get_launch_state(cur, order_number: str, launch: str):
     cur.execute(
         f"""
         SELECT
-            COUNT(*)::INT,
-            COUNT(*) FILTER (WHERE status = 'укомплектовано')::INT,
-            COUNT(*) FILTER (WHERE status <> 'укомплектовано')::INT
+            COALESCE(SUM(COALESCE(quantity, 0)), 0),
+            COALESCE(SUM(LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0))), 0),
+            COALESCE(SUM(GREATEST(COALESCE(quantity, 0) - LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0)), 0)), 0)
         FROM {DETAILS_TABLE}
         WHERE order_number = %s AND launch = %s
         """,
         (order_number, launch),
     )
     total, completed, pending = cur.fetchone() or (0, 0, 0)
-    total = int(total or 0)
-    completed = int(completed or 0)
-    pending = int(pending or 0)
+    total = _to_float(total)
+    completed = _to_float(completed)
+    pending = _to_float(pending)
     percent = round((completed / total) * 100, 1) if total else 0.0
     return {
         "total": total,
         "completed": completed,
         "pending": pending,
         "percent": percent,
-        "status": "Укомплектовано" if pending == 0 and total > 0 else "В роботі",
+        "status": "Укомплектовано" if pending <= 0 and total > 0 else "В роботі",
     }
 
 
@@ -181,6 +284,7 @@ def _fetch_launch_details(cur, order_number: str, launch: str, detail_search: st
             COALESCE(detail_number, ''),
             COALESCE(designation, ''),
             COALESCE(quantity, 0),
+            COALESCE(completed_quantity, 0),
             COALESCE(length, 0),
             COALESCE(width, 0),
             COALESCE(status, ''),
@@ -200,30 +304,43 @@ def _fetch_launch_details(cur, order_number: str, launch: str, detail_search: st
             "id": int(row[0]),
             "detail_number": _safe_text(row[1]),
             "designation": _safe_text(row[2]),
-            "quantity": _display_number(row[3]),
-            "length": _display_number(row[4]),
-            "width": _display_number(row[5]),
-            "status": _safe_text(row[6]),
-            "completed_at": row[7].strftime("%d.%m.%Y %H:%M") if row[7] else "",
+            "length": _display_number(row[5]),
+            "width": _display_number(row[6]),
+            "status": _safe_text(row[7]),
+            "completed_at": row[8].strftime("%d.%m.%Y %H:%M") if row[8] else "",
         }
+
+        qty_total = _to_float(row[3])
+        qty_done = _to_float(row[4])
+        qty_done = min(max(qty_done, 0.0), qty_total)
+        qty_pending = max(qty_total - qty_done, 0.0)
+
+        item["quantity_total"] = _display_number(qty_total)
+        item["quantity_completed"] = _display_number(qty_done)
+        item["quantity"] = _display_number(qty_pending)
 
         if needle:
             details_hay = _normalize_code(f"{item['detail_number']} {item['designation']}")
             if needle not in details_hay:
                 continue
 
-        if item["status"] == "укомплектовано":
-            completed.append(item)
-        else:
+        if qty_pending > 0:
+            item["quantity"] = _display_number(qty_pending)
             pending.append(item)
+
+        if qty_done > 0:
+            done_item = dict(item)
+            done_item["quantity"] = _display_number(qty_pending)
+            completed.append(done_item)
 
     return pending, completed
 
 
 @router.get("/orders")
 async def get_orders(request: Request, search: str = "", offset: int = 0, limit: int = 60):
-    if not request.session.get("user"):
-        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -240,9 +357,9 @@ async def get_orders(request: Request, search: str = "", offset: int = 0, limit:
             SELECT
                 order_number,
                 COUNT(DISTINCT launch)::INT,
-                COUNT(*)::INT,
-                COUNT(*) FILTER (WHERE status = 'укомплектовано')::INT,
-                COUNT(*) FILTER (WHERE status <> 'укомплектовано')::INT
+                COALESCE(SUM(COALESCE(quantity, 0)), 0),
+                COALESCE(SUM(LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0))), 0),
+                COALESCE(SUM(GREATEST(COALESCE(quantity, 0) - LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0)), 0)), 0)
             FROM {DETAILS_TABLE}
             GROUP BY order_number
             """
@@ -256,9 +373,9 @@ async def get_orders(request: Request, search: str = "", offset: int = 0, limit:
                 continue
 
             launches_count = int(row[1] or 0)
-            details_total = int(row[2] or 0)
-            details_completed = int(row[3] or 0)
-            details_pending = int(row[4] or 0)
+            details_total = _to_float(row[2])
+            details_completed = _to_float(row[3])
+            details_pending = _to_float(row[4])
             percent = round((details_completed / details_total) * 100, 1) if details_total else 0.0
 
             items.append(
@@ -269,7 +386,7 @@ async def get_orders(request: Request, search: str = "", offset: int = 0, limit:
                     "details_completed": details_completed,
                     "details_pending": details_pending,
                     "percent": percent,
-                    "status": "Укомплектовано" if details_pending == 0 and details_total > 0 else "В роботі",
+                    "status": "Укомплектовано" if details_pending <= 0 and details_total > 0 else "В роботі",
                 }
             )
 
@@ -320,8 +437,9 @@ async def get_order_launches(
     offset: int = 0,
     limit: int = 120,
 ):
-    if not request.session.get("user"):
-        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
 
     order_number = _safe_text(order_number)
     if not order_number:
@@ -339,9 +457,9 @@ async def get_order_launches(
             f"""
             SELECT
                 launch,
-                COUNT(*)::INT,
-                COUNT(*) FILTER (WHERE status = 'укомплектовано')::INT,
-                COUNT(*) FILTER (WHERE status <> 'укомплектовано')::INT
+                COALESCE(SUM(COALESCE(quantity, 0)), 0),
+                COALESCE(SUM(LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0))), 0),
+                COALESCE(SUM(GREATEST(COALESCE(quantity, 0) - LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0)), 0)), 0)
             FROM {DETAILS_TABLE}
             WHERE order_number = %s
             GROUP BY launch
@@ -364,10 +482,10 @@ async def get_order_launches(
             if launch_search and launch_search not in launch.lower():
                 continue
 
-            total = int(row[1] or 0)
-            completed = int(row[2] or 0)
-            pending = int(row[3] or 0)
-            is_completed = pending == 0 and total > 0
+            total = _to_float(row[1])
+            completed = _to_float(row[2])
+            pending = _to_float(row[3])
+            is_completed = pending <= 0 and total > 0
             if status_filter_norm == "completed" and not is_completed:
                 continue
             if status_filter_norm == "in_progress" and is_completed:
@@ -423,8 +541,9 @@ async def get_order_launches(
 
 @router.get("/launch/{order_number}/{launch}/details")
 async def get_launch_details(order_number: str, launch: str, request: Request, detail_search: str = ""):
-    if not request.session.get("user"):
-        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
 
     order_number = _safe_text(order_number)
     launch = _safe_text(launch)
@@ -438,6 +557,7 @@ async def get_launch_details(order_number: str, launch: str, request: Request, d
             return JSONResponse({"ok": False, "error": "Деталі ще не завантажені"}, status_code=404)
 
         _ensure_completion_table(cur)
+        _ensure_scan_history_table(cur)
 
         state = _get_launch_state(cur, order_number, launch)
         pending, completed = _fetch_launch_details(cur, order_number, launch, detail_search)
@@ -461,8 +581,9 @@ async def get_launch_details(order_number: str, launch: str, request: Request, d
 
 @router.post("/launch/{order_number}/{launch}/scan-batch")
 async def scan_batch(order_number: str, launch: str, payload: ScanBatchPayload, request: Request):
-    if not request.session.get("user"):
-        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
 
     order_number = _safe_text(order_number)
     launch = _safe_text(launch)
@@ -480,16 +601,63 @@ async def scan_batch(order_number: str, launch: str, payload: ScanBatchPayload, 
             return JSONResponse({"ok": False, "error": "Деталі ще не завантажені"}, status_code=404)
 
         _ensure_completion_table(cur)
+        _ensure_scan_history_table(cur)
         actor_name = _get_actor_name(request)
 
         updated_count = 0
         already_completed_count = 0
         not_found = []
-        updated_ids = set()
+        wrong_order_launch = []
+        invalid_format = []
+        scan_events = []
 
         for raw_scan in scans:
-            scan_norm = _normalize_code(raw_scan)
-            if not scan_norm:
+            parsed = _parse_scan_triplet(raw_scan)
+            if not parsed:
+                invalid_format.append(raw_scan)
+                not_found.append(raw_scan)
+                scan_events.append(
+                    {
+                        "raw_scan": raw_scan,
+                        "detail_number": "",
+                        "scan_order_number": "",
+                        "scan_launch": "",
+                        "status": "invalid_format",
+                        "message": "Невірний формат. Очікується: номер_деталі номер_замовлення номер_запуску",
+                    }
+                )
+                continue
+
+            detail_number, scan_order_number, scan_launch = parsed
+            detail_norm = _normalize_code(detail_number)
+            if not detail_norm:
+                invalid_format.append(raw_scan)
+                not_found.append(raw_scan)
+                scan_events.append(
+                    {
+                        "raw_scan": raw_scan,
+                        "detail_number": detail_number,
+                        "scan_order_number": scan_order_number,
+                        "scan_launch": scan_launch,
+                        "status": "invalid_format",
+                        "message": "Порожній номер деталі у скані",
+                    }
+                )
+                continue
+
+            if scan_order_number != order_number or scan_launch != launch:
+                wrong_order_launch.append(raw_scan)
+                not_found.append(raw_scan)
+                scan_events.append(
+                    {
+                        "raw_scan": raw_scan,
+                        "detail_number": detail_number,
+                        "scan_order_number": scan_order_number,
+                        "scan_launch": scan_launch,
+                        "status": "wrong_order_launch",
+                        "message": f"Невірне замовлення/запуск у скані: {scan_order_number}/{scan_launch}",
+                    }
+                )
                 continue
 
             cur.execute(
@@ -498,37 +666,55 @@ async def scan_batch(order_number: str, launch: str, payload: ScanBatchPayload, 
                 FROM {DETAILS_TABLE}
                 WHERE order_number = %s
                   AND launch = %s
-                  AND status <> 'укомплектовано'
+                AND COALESCE(completed_quantity, 0) < COALESCE(quantity, 0)
                   AND (
                         REPLACE(LOWER(COALESCE(detail_number, '')), ' ', '') = %s
-                        OR REPLACE(LOWER(COALESCE(search_key, '')), ' ', '') LIKE %s
-                        OR %s LIKE '%%' || REPLACE(LOWER(COALESCE(detail_number, '')), ' ', '') || '%%'
                   )
                 ORDER BY id
                 LIMIT 1
                 """,
-                (order_number, launch, scan_norm, f"%{scan_norm}%", scan_norm),
+                (order_number, launch, detail_norm),
             )
             pending_row = cur.fetchone()
 
             if pending_row:
                 detail_id = int(pending_row[0])
-                if detail_id in updated_ids:
-                    continue
-
                 cur.execute(
                     f"""
                     UPDATE {DETAILS_TABLE}
-                    SET status = 'укомплектовано',
-                        completed_quantity = quantity,
-                        completed_at = NOW()
-                    WHERE id = %s AND status <> 'укомплектовано'
+                    SET completed_quantity = LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0) + 1),
+                        status = CASE
+                            WHEN LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0) + 1) >= COALESCE(quantity, 0)
+                                THEN 'укомплектовано'
+                            ELSE 'у черзі'
+                        END,
+                        completed_at = CASE
+                            WHEN LEAST(COALESCE(quantity, 0), GREATEST(COALESCE(completed_quantity, 0), 0) + 1) >= COALESCE(quantity, 0)
+                                THEN NOW()
+                            ELSE NULL
+                        END
+                    WHERE id = %s
+                      AND COALESCE(completed_quantity, 0) < COALESCE(quantity, 0)
+                    RETURNING COALESCE(quantity, 0), COALESCE(completed_quantity, 0)
                     """,
                     (detail_id,),
                 )
-                if cur.rowcount:
-                    updated_ids.add(detail_id)
+                update_row = cur.fetchone()
+                if update_row:
+                    qty_total = _to_float(update_row[0])
+                    qty_done = _to_float(update_row[1])
+                    qty_pending = max(qty_total - qty_done, 0.0)
                     updated_count += 1
+                    scan_events.append(
+                        {
+                            "raw_scan": raw_scan,
+                            "detail_number": detail_number,
+                            "scan_order_number": scan_order_number,
+                            "scan_launch": scan_launch,
+                            "status": "updated",
+                            "message": f"Відскановано 1 шт. Залишилось: {_display_number(qty_pending)}",
+                        }
+                    )
                 continue
 
             cur.execute(
@@ -537,25 +723,44 @@ async def scan_batch(order_number: str, launch: str, payload: ScanBatchPayload, 
                 FROM {DETAILS_TABLE}
                 WHERE order_number = %s
                   AND launch = %s
-                  AND status = 'укомплектовано'
+                                    AND COALESCE(completed_quantity, 0) >= COALESCE(quantity, 0)
                   AND (
                         REPLACE(LOWER(COALESCE(detail_number, '')), ' ', '') = %s
-                        OR REPLACE(LOWER(COALESCE(search_key, '')), ' ', '') LIKE %s
-                        OR %s LIKE '%%' || REPLACE(LOWER(COALESCE(detail_number, '')), ' ', '') || '%%'
                   )
                 LIMIT 1
                 """,
-                (order_number, launch, scan_norm, f"%{scan_norm}%", scan_norm),
+                (order_number, launch, detail_norm),
             )
             done_row = cur.fetchone()
             if done_row:
                 already_completed_count += 1
+                scan_events.append(
+                    {
+                        "raw_scan": raw_scan,
+                        "detail_number": detail_number,
+                        "scan_order_number": scan_order_number,
+                        "scan_launch": scan_launch,
+                        "status": "already_completed",
+                        "message": "Деталь вже була відсканована раніше",
+                    }
+                )
             else:
                 not_found.append(raw_scan)
+                scan_events.append(
+                    {
+                        "raw_scan": raw_scan,
+                        "detail_number": detail_number,
+                        "scan_order_number": scan_order_number,
+                        "scan_launch": scan_launch,
+                        "status": "not_found",
+                        "message": "Деталь не знайдено для цього запуску",
+                    }
+                )
 
         if updated_count > 0:
             _mark_started(cur, order_number, launch, actor_name)
         _mark_completed_if_needed(cur, order_number, launch, actor_name)
+        _insert_scan_history_rows(cur, order_number, launch, actor_name, scan_events)
         conn.commit()
 
         state = _get_launch_state(cur, order_number, launch)
@@ -570,11 +775,120 @@ async def scan_batch(order_number: str, launch: str, payload: ScanBatchPayload, 
             "updated_count": updated_count,
             "already_completed_count": already_completed_count,
             "not_found": not_found,
+            "wrong_order_launch": wrong_order_launch,
+            "invalid_format": invalid_format,
+            "scan_events": scan_events,
             "state": state,
             "completion": completion,
             "pending_details": pending,
             "completed_details": completed,
         }
+    except Exception as exc:
+        conn.rollback()
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/launch/{order_number}/{launch}/scan-history")
+async def get_scan_history(order_number: str, launch: str, request: Request, limit: int = 300):
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
+
+    order_number = _safe_text(order_number)
+    launch = _safe_text(launch)
+    if not order_number or not launch:
+        return JSONResponse({"ok": False, "error": "Невірні параметри"}, status_code=400)
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        _ensure_scan_history_table(cur)
+        try:
+            limit = max(10, min(int(limit), 1000))
+        except Exception:
+            limit = 300
+
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                COALESCE(actor_name, ''),
+                COALESCE(raw_scan, ''),
+                COALESCE(detail_number, ''),
+                COALESCE(scan_order_number, ''),
+                COALESCE(scan_launch, ''),
+                COALESCE(status, ''),
+                COALESCE(message, ''),
+                created_at
+            FROM {SCAN_HISTORY_TABLE}
+            WHERE order_number = %s AND launch = %s
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (order_number, launch, limit),
+        )
+
+        items = []
+        for row in cur.fetchall():
+            created_at = row[8]
+            items.append(
+                {
+                    "id": int(row[0]),
+                    "actor_name": _safe_text(row[1]),
+                    "raw_scan": _safe_text(row[2]),
+                    "detail_number": _safe_text(row[3]),
+                    "scan_order_number": _safe_text(row[4]),
+                    "scan_launch": _safe_text(row[5]),
+                    "status": _safe_text(row[6]),
+                    "message": _safe_text(row[7]),
+                    "created_at": created_at.strftime("%d.%m.%Y %H:%M:%S") if created_at else "",
+                }
+            )
+
+        return {
+            "ok": True,
+            "order_number": order_number,
+            "launch": launch,
+            "items": items,
+        }
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/launch/{order_number}/{launch}/scan-history-event")
+async def add_scan_history_event(order_number: str, launch: str, payload: ScanHistoryEventPayload, request: Request):
+    _, access_error = _require_komplekt_access(request)
+    if access_error:
+        return access_error
+
+    order_number = _safe_text(order_number)
+    launch = _safe_text(launch)
+    if not order_number or not launch:
+        return JSONResponse({"ok": False, "error": "Невірні параметри"}, status_code=400)
+
+    actor_name = _get_actor_name(request)
+    event = {
+        "raw_scan": payload.raw_scan,
+        "detail_number": payload.detail_number,
+        "scan_order_number": payload.scan_order_number,
+        "scan_launch": payload.scan_launch,
+        "status": payload.status,
+        "message": payload.message,
+    }
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        _ensure_scan_history_table(cur)
+        _insert_scan_history_rows(cur, order_number, launch, actor_name, [event])
+        conn.commit()
+        return {"ok": True}
     except Exception as exc:
         conn.rollback()
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
