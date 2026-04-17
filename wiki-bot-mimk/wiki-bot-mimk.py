@@ -956,61 +956,73 @@ def handle_webhook():
         json.dumps(data, ensure_ascii=False, indent=2),
     )
 
-    event = data.get('event')
-    triggered_by = _safe(data.get('triggered_by', {}).get('name'), 'Хтось')
-    item_name = _extract_item_name(data)
-    item_url = _extract_item_url(data)
-    event_datetime = _extract_event_datetime(data)
-
-    ensure_wiki_tables()
-
-    if event == 'page_create':
-        upsert_page_owner(data, event, item_name, item_url)
-        message = _build_new_page_message(item_name, triggered_by, event_datetime, item_url)
-        broadcast_telegram_message(message)
-
-    elif event == 'page_update':
-        upsert_page_owner(data, event, item_name, item_url)
-        revision_summary = _extract_revision_summary(data)
-        summary_line = f"📝 <b>Зміни:</b> <i>{revision_summary}</i>" if revision_summary else ""
-        message = _build_message(
-            "🔄 Оновлення інструкції",
-            triggered_by,
-            item_name,
-            item_url,
-            event_datetime,
-            summary_line,
-        )
-        broadcast_telegram_message(message)
-
-    elif event == 'comment_create':
-        related = data.get('related_item') or {}
-        page_id = related.get('commentable_id')
-
-        mapped_owner = get_page_owner_info(page_id)
-        if mapped_owner:
-            mapped_page_name = mapped_owner.get('page_name')
-            mapped_page_url = mapped_owner.get('page_url')
-            if mapped_page_name:
-                item_name = _safe(mapped_page_name, item_name)
-            if mapped_page_url:
-                item_url = _safe(mapped_page_url, item_url)
-
-        api_item_name, api_item_url = get_page_info(data, page_id)
-        if api_item_name and (not item_name or item_name == 'Невідома сторінка' or str(item_name).startswith('Сторінка #')):
-            item_name = api_item_name
-        if api_item_url and not item_url:
-            item_url = api_item_url
-        else:
-            item_name, item_url = _enrich_comment_page_details(data, item_name, item_url)
-
-        message = _build_comment_owner_message(item_name, triggered_by, event_datetime, item_url)
-        send_comment_to_page_owner(data, message, item_name, item_url)
-
-    elif event in ('user_create', 'user_update', 'user_delete'):
-        send_user_event_notification(data, event, triggered_by, event_datetime)
+    worker = threading.Thread(
+        target=_process_bookstack_event,
+        args=(data,),
+        daemon=True,
+    )
+    worker.start()
 
     return {"ok": True}, 200
+
+
+def _process_bookstack_event(data):
+    try:
+        event = data.get('event')
+        triggered_by = _safe(data.get('triggered_by', {}).get('name'), 'Хтось')
+        item_name = _extract_item_name(data)
+        item_url = _extract_item_url(data)
+        event_datetime = _extract_event_datetime(data)
+
+        ensure_wiki_tables()
+
+        if event == 'page_create':
+            upsert_page_owner(data, event, item_name, item_url)
+            message = _build_new_page_message(item_name, triggered_by, event_datetime, item_url)
+            broadcast_telegram_message(message)
+
+        elif event == 'page_update':
+            upsert_page_owner(data, event, item_name, item_url)
+            revision_summary = _extract_revision_summary(data)
+            summary_line = f"📝 <b>Зміни:</b> <i>{revision_summary}</i>" if revision_summary else ""
+            message = _build_message(
+                "🔄 Оновлення інструкції",
+                triggered_by,
+                item_name,
+                item_url,
+                event_datetime,
+                summary_line,
+            )
+            broadcast_telegram_message(message)
+
+        elif event == 'comment_create':
+            related = data.get('related_item') or {}
+            page_id = related.get('commentable_id')
+
+            mapped_owner = get_page_owner_info(page_id)
+            if mapped_owner:
+                mapped_page_name = mapped_owner.get('page_name')
+                mapped_page_url = mapped_owner.get('page_url')
+                if mapped_page_name:
+                    item_name = _safe(mapped_page_name, item_name)
+                if mapped_page_url:
+                    item_url = _safe(mapped_page_url, item_url)
+
+            api_item_name, api_item_url = get_page_info(data, page_id)
+            if api_item_name and (not item_name or item_name == 'Невідома сторінка' or str(item_name).startswith('Сторінка #')):
+                item_name = api_item_name
+            if api_item_url and not item_url:
+                item_url = api_item_url
+            else:
+                item_name, item_url = _enrich_comment_page_details(data, item_name, item_url)
+
+            message = _build_comment_owner_message(item_name, triggered_by, event_datetime, item_url)
+            send_comment_to_page_owner(data, message, item_name, item_url)
+
+        elif event in ('user_create', 'user_update', 'user_delete'):
+            send_user_event_notification(data, event, triggered_by, event_datetime)
+    except Exception:
+        logger.exception("Unhandled error while processing BookStack event")
 
 if __name__ == '__main__':
     ensure_wiki_tables()
