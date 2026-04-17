@@ -512,6 +512,7 @@ def get_users():
     if not is_admin_role(session.get("role")):
         return jsonify({"ok": False, "error": "Доступ заборонено"}), 403
     search = request.args.get("search", "").strip()
+    role_filter = request.args.get("role", "").strip()
     sort = request.args.get("sort", "").strip()
     service_id_raw = request.args.get("service_id", "").strip()
     connection_status = request.args.get("connection_status", "all").strip().lower()
@@ -525,6 +526,10 @@ def get_users():
 
     if connection_status not in {"all", "connected", "not_connected"}:
         return jsonify({"ok": False, "error": "Некоректний connection_status"}), 400
+
+    # Backward compatibility for older frontend that sends `sort`.
+    if not role_filter and sort:
+        role_filter = sort
 
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -550,10 +555,13 @@ def get_users():
             if search:
                 query += " AND name ILIKE %s"
                 params.append(f"%{search}%")
-            if sort == "admin":
-                query += " AND LOWER(COALESCE(username, '')) IN ('admin', 'adminpre')"
-            elif sort == "user":
-                query += " AND LOWER(COALESCE(username, '')) NOT IN ('admin', 'adminpre')"
+            if role_filter:
+                normalized_role = role_filter.lstrip("@").strip().lower()
+                if normalized_role == "__empty__":
+                    query += " AND (username IS NULL OR BTRIM(username) = '')"
+                else:
+                    query += " AND LOWER(BTRIM(COALESCE(username, ''))) = %s"
+                    params.append(normalized_role)
 
             query += " GROUP BY u.id, u.name, u.phone_number, u.username"
 
@@ -579,14 +587,33 @@ def get_users():
                     "name": r[1],
                     "phone_number": r[2],
                     "username": r[3],
-                    "role": "admin" if is_admin_role(r[3]) else "user",
+                    "position": (r[3] or "").strip().lstrip("@"),
+                    "role": (
+                        "adminpre"
+                        if (r[3] or "").strip().lower() == "adminpre"
+                        else ("admin" if (r[3] or "").strip().lower() == "admin" else "user")
+                    ),
                     "services_count": int(r[4] or 0),
                     "has_selected_service": bool(r[5]),
                     "connected_services": r[6] or [],
                 }
                 for r in rows
             ]
-    return jsonify({"ok": True, "users": users})
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT BTRIM(username)
+                FROM public.database_app_userdatatelegram
+                WHERE username IS NOT NULL AND BTRIM(username) <> ''
+                ORDER BY BTRIM(username)
+                """
+            )
+            role_rows = cur.fetchall()
+            available_roles = [str(r[0]).lstrip("@") for r in role_rows if r and r[0]]
+
+    return jsonify({"ok": True, "users": users, "roles": available_roles})
 
 # ─────────────────────────────────────────
 # USER SERVICES (логін/пароль до сервісів)
@@ -772,84 +799,141 @@ def get_workers():
     if connection_status not in {"all", "connected", "not_connected"}:
         return jsonify({"ok": False, "error": "Некоректний connection_status"}), 400
 
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            query = """
-                SELECT
-                    u.id,
-                    u.name,
-                    u.phone_number,
-                    u.username,
-                    p.avatar_path,
-                    COALESCE(
-                        json_agg(
-                            DISTINCT jsonb_build_object(
-                                'id', c.id,
-                                'title', c.title,
-                                'service_type', c.service_type
-                            )
-                        ) FILTER (WHERE c.id IS NOT NULL),
-                        '[]'::json
-                    ) AS services,
-                    COUNT(DISTINCT us.id) AS services_count,
-                    COALESCE(BOOL_OR(us.contract_id = %s), FALSE) AS has_selected_service
-                FROM public.database_app_userdatatelegram u
-                LEFT JOIN hub_user_profiles p ON p.user_id = u.id
-                LEFT JOIN user_services us ON us.user_id = u.id
-                LEFT JOIN contracts c ON c.id = us.contract_id
-                WHERE 1=1
-            """
-            params = [service_id if service_id is not None else -1]
-
-            if search:
-                query += """
-                    AND (
-                        u.name ILIKE %s
-                        OR u.phone_number ILIKE %s
-                        OR u.username ILIKE %s
-                    )
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                query = """
+                    SELECT
+                        u.id,
+                        u.name,
+                        u.phone_number,
+                        u.username,
+                        p.avatar_path,
+                        COALESCE(
+                            json_agg(
+                                DISTINCT jsonb_build_object(
+                                    'id', c.id,
+                                    'title', c.title,
+                                    'service_type', c.service_type
+                                )
+                            ) FILTER (WHERE c.id IS NOT NULL),
+                            '[]'::json
+                        ) AS services,
+                        COUNT(DISTINCT us.id) AS services_count,
+                        COALESCE(BOOL_OR(us.contract_id = %s), FALSE) AS has_selected_service
+                    FROM public.database_app_userdatatelegram u
+                    LEFT JOIN hub_user_profiles p ON p.user_id = u.id
+                    LEFT JOIN user_services us ON us.user_id = u.id
+                    LEFT JOIN contracts c ON c.id = us.contract_id
+                    WHERE 1=1
                 """
-                like = f"%{search}%"
-                params.extend([like, like, like])
+                params = [service_id if service_id is not None else -1]
 
-            if position:
-                query += " AND u.username ILIKE %s"
-                params.append(f"%{position}%")
+                if search:
+                    query += """
+                        AND (
+                            u.name ILIKE %s
+                            OR u.phone_number ILIKE %s
+                            OR u.username ILIKE %s
+                        )
+                    """
+                    like = f"%{search}%"
+                    params.extend([like, like, like])
 
-            query += " GROUP BY u.id, u.name, u.phone_number, u.username, p.avatar_path"
+                if position:
+                    query += " AND u.username ILIKE %s"
+                    params.append(f"%{position}%")
 
-            if service_id is not None:
-                if connection_status == "connected":
-                    query += " HAVING COALESCE(BOOL_OR(us.contract_id = %s), FALSE)"
-                    params.append(service_id)
-                elif connection_status == "not_connected":
-                    query += " HAVING NOT COALESCE(BOOL_OR(us.contract_id = %s), FALSE)"
-                    params.append(service_id)
-            else:
-                if connection_status == "connected":
-                    query += " HAVING COUNT(DISTINCT us.id) > 0"
-                elif connection_status == "not_connected":
-                    query += " HAVING COUNT(DISTINCT us.id) = 0"
+                query += " GROUP BY u.id, u.name, u.phone_number, u.username, p.avatar_path"
 
-            query += " ORDER BY u.name"
-            cur.execute(query, params)
-            rows = cur.fetchall()
-            workers = [
-                {
-                    "id": r[0],
-                    "name": r[1],
-                    "phone_number": r[2],
-                    "username": r[3],
-                    "position": ("@" + r[3]) if r[3] else "Не вказано",
-                    "is_admin": is_admin_role(r[3]),
-                    "avatar_path": r[4],
-                    "services": r[5] or [],
-                    "services_count": r[6] or 0,
-                    "has_selected_service": bool(r[7]),
-                }
-                for r in rows
-            ]
-    return jsonify({"ok": True, "workers": workers})
+                if service_id is not None:
+                    if connection_status == "connected":
+                        query += " HAVING COALESCE(BOOL_OR(us.contract_id = %s), FALSE)"
+                        params.append(service_id)
+                    elif connection_status == "not_connected":
+                        query += " HAVING NOT COALESCE(BOOL_OR(us.contract_id = %s), FALSE)"
+                        params.append(service_id)
+                else:
+                    if connection_status == "connected":
+                        query += " HAVING COUNT(DISTINCT us.id) > 0"
+                    elif connection_status == "not_connected":
+                        query += " HAVING COUNT(DISTINCT us.id) = 0"
+
+                query += " ORDER BY u.name"
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                workers = [
+                    {
+                        "id": r[0],
+                        "name": r[1],
+                        "phone_number": r[2],
+                        "username": r[3],
+                        "position": ("@" + r[3]) if r[3] else "Не вказано",
+                        "is_admin": is_admin_role(r[3]),
+                        "avatar_path": r[4],
+                        "services": r[5] or [],
+                        "services_count": r[6] or 0,
+                        "has_selected_service": bool(r[7]),
+                    }
+                    for r in rows
+                ]
+        return jsonify({"ok": True, "workers": workers})
+    except Exception:
+        app.logger.exception("Primary /api/workers query failed. Falling back to basic workers list.")
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                fallback_query = """
+                    SELECT
+                        u.id,
+                        u.name,
+                        u.phone_number,
+                        u.username,
+                        p.avatar_path
+                    FROM public.database_app_userdatatelegram u
+                    LEFT JOIN hub_user_profiles p ON p.user_id = u.id
+                    WHERE 1=1
+                """
+                fallback_params = []
+
+                if search:
+                    fallback_query += """
+                        AND (
+                            u.name ILIKE %s
+                            OR u.phone_number ILIKE %s
+                            OR u.username ILIKE %s
+                        )
+                    """
+                    like = f"%{search}%"
+                    fallback_params.extend([like, like, like])
+
+                if position:
+                    fallback_query += " AND u.username ILIKE %s"
+                    fallback_params.append(f"%{position}%")
+
+                fallback_query += " ORDER BY u.name"
+                cur.execute(fallback_query, fallback_params)
+                rows = cur.fetchall()
+                workers = [
+                    {
+                        "id": r[0],
+                        "name": r[1],
+                        "phone_number": r[2],
+                        "username": r[3],
+                        "position": ("@" + r[3]) if r[3] else "Не вказано",
+                        "is_admin": is_admin_role(r[3]),
+                        "avatar_path": r[4],
+                        "services": [],
+                        "services_count": 0,
+                        "has_selected_service": False,
+                    }
+                    for r in rows
+                ]
+        return jsonify({"ok": True, "workers": workers, "fallback": True})
+    except Exception as e:
+        app.logger.exception("Fallback /api/workers query also failed.")
+        return jsonify({"ok": False, "error": f"Не вдалося завантажити робітників: {e}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=1234)

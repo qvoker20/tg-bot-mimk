@@ -21,17 +21,18 @@ async function loadMeForNavbar() {
 async function loadUsers() {
   showLoader();
   const search = document.getElementById('searchInput').value;
-  const sort = document.getElementById('roleFilter').value;
+  const role = document.getElementById('roleFilter').value;
   const serviceId = document.getElementById('serviceFilter')?.value || '';
   const connectionStatus = document.getElementById('connectionFilter')?.value || 'all';
   const params = new URLSearchParams();
   if (search) params.append('search', search);
-  if (sort) params.append('sort', sort);
+  if (role) params.append('role', role);
   if (serviceId) params.append('service_id', serviceId);
   if (connectionStatus) params.append('connection_status', connectionStatus);
   const r = await fetch('/api/users?' + params.toString());
   const data = await r.json();
   hideLoader();
+  syncRoleFilter(data.roles || []);
   const list = document.getElementById('usersList');
   list.innerHTML = '';
   if (!data.ok) return;
@@ -44,6 +45,12 @@ async function loadUsers() {
   data.users.forEach(u => {
     const card = document.createElement('article');
     card.className = 'admin-user-card';
+    const roleKey = (u.role || 'user').toLowerCase();
+    const roleIcon = 'alternate_email';
+    const normalizedPosition = String(u.position || u.username || '').trim().replace(/^@+/, '');
+    const roleLabel = normalizedPosition
+      ? normalizedPosition
+      : 'Не вказано';
     const services = Array.isArray(u.connected_services) ? u.connected_services : [];
     const visibleServices = services.slice(0, 4);
     const hiddenServicesCount = Math.max(0, services.length - visibleServices.length);
@@ -68,8 +75,8 @@ async function loadUsers() {
           <span class="user-phone">${escapeHtml(u.phone_number || '')}</span>
           <div class="user-badges-wrap">
             <span class="user-role role-${u.role}">
-              <span class="material-icons-round" style="font-size:13px;vertical-align:middle">${u.role === 'admin' ? 'shield' : 'person'}</span>
-              ${u.role === 'admin' ? 'Адмін' : 'Користувач'}
+              <span class="material-icons-round" style="font-size:13px;vertical-align:middle">${roleIcon}</span>
+              ${escapeHtml(roleLabel)}
             </span>
             <span class="user-role role-user">
               <span class="material-icons-round" style="font-size:13px;vertical-align:middle">key</span>
@@ -89,6 +96,27 @@ async function loadUsers() {
     `;
     list.appendChild(card);
   });
+}
+
+function syncRoleFilter(roles) {
+  const select = document.getElementById('roleFilter');
+  if (!select) return;
+
+  const previous = select.value;
+  const normalized = [...new Set((roles || []).map(r => String(r || '').trim().replace(/^@+/, '')).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'uk'));
+
+  select.innerHTML = '<option value="">Всі ролі</option>';
+  normalized.forEach(roleName => {
+    const option = document.createElement('option');
+    option.value = roleName;
+    option.textContent = roleName;
+    select.appendChild(option);
+  });
+
+  if (previous && normalized.includes(previous)) {
+    select.value = previous;
+  }
 }
 
 function escapeHtmlAttr(value) {
