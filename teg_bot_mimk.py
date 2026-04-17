@@ -197,7 +197,7 @@ async def start(update: Update, context: CallbackContext):
     keyboard = [
         first_row,
         ["Виробництво", "Логістика"],
-        ["MIM-K HUB"],
+        ["MIM-K HUB", "WIKI BOT"],
         third_row
     ]
     if (username or "").strip().casefold() == "admin":
@@ -795,6 +795,21 @@ async def handle_text(update: Update, context: CallbackContext):
             reply_markup=reply_markup
         )
         context.user_data["hub_message_id"] = sent_message.message_id
+        return
+
+    if text == "WIKI BOT":
+        wiki_message = (
+            "📚 <b>Wiki MIM-K Bot</b>\n\n"
+            "Перейдіть у бот бази знань для перегляду оновлень та сповіщень."
+        )
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Відкрити Wiki бот", url="https://t.me/wiki_mimk_bot")]]
+        )
+        await update.message.reply_text(
+            wiki_message,
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
         return
 
     if text == "AI MIM-K":
