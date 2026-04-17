@@ -1,6 +1,16 @@
 let workersLoaded = [];
 let workersDebounceTimer = null;
 
+function getWorkersRenderMode() {
+  const cardsRoot = document.getElementById('workersCardsList');
+  if (cardsRoot) return { mode: 'cards', root: cardsRoot };
+
+  const tableBody = document.getElementById('workersTbody');
+  if (tableBody) return { mode: 'table', root: tableBody };
+
+  return { mode: 'none', root: null };
+}
+
 async function ensureAuthenticated() {
   const meResp = await fetch('/api/me');
   const meData = await meResp.json();
@@ -36,9 +46,15 @@ async function loadWorkers() {
   if (filters.search) params.append('search', filters.search);
   if (filters.position) params.append('position', filters.position);
 
-  const r = await fetch('/api/workers?' + params.toString());
-  const data = await r.json();
-  hideLoader();
+  let data = { ok: false, workers: [] };
+  try {
+    const r = await fetch('/api/workers?' + params.toString());
+    data = await r.json();
+  } catch (e) {
+    console.error('Не вдалося завантажити /api/workers:', e);
+  } finally {
+    hideLoader();
+  }
 
   if (!data.ok) {
     renderWorkers([]);
@@ -73,18 +89,50 @@ function fillPositionFilter(workers) {
 }
 
 function renderWorkers(workers) {
-  const cardsRoot = document.getElementById('workersCardsList');
+  const renderTarget = getWorkersRenderMode();
   const emptyBlock = document.getElementById('workersEmpty');
-  cardsRoot.innerHTML = '';
 
-  if (!workers.length) {
-    emptyBlock.classList.remove('hidden');
+  if (!renderTarget.root) {
+    console.warn('Не знайдено контейнер для рендеру робітників (workersCardsList/workersTbody).');
+    if (emptyBlock) emptyBlock.classList.remove('hidden');
     return;
   }
 
-  emptyBlock.classList.add('hidden');
+  renderTarget.root.innerHTML = '';
+
+  if (!workers.length) {
+    if (emptyBlock) emptyBlock.classList.remove('hidden');
+
+    if (renderTarget.mode === 'table') {
+      renderTarget.root.innerHTML = '<tr><td colspan="3" class="workers-empty">Нічого не знайдено</td></tr>';
+    }
+    return;
+  }
+
+  if (emptyBlock) emptyBlock.classList.add('hidden');
 
   workers.forEach(worker => {
+    if (renderTarget.mode === 'table') {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>
+          <div class="worker-main">
+            <div class="worker-avatar">${worker.avatar_path
+              ? `<img src="/uploads/${worker.avatar_path}" alt="${worker.name || 'Користувач'}" class="worker-avatar-img" />`
+              : `<span class="worker-avatar-letter">${(worker.name || worker.username || '?')[0].toUpperCase()}</span>`}
+            </div>
+            <div class="worker-info">
+              <div class="worker-name">${worker.name || '—'}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="worker-phone">${worker.phone_number || '—'}</span></td>
+        <td><span class="worker-role-badge ${worker.is_admin ? 'worker-role-admin' : 'worker-role-user'}">${worker.position || 'Не вказано'}</span></td>
+      `;
+      renderTarget.root.appendChild(row);
+      return;
+    }
+
     const card = document.createElement('article');
     card.className = 'worker-card';
 
@@ -106,12 +154,15 @@ function renderWorkers(workers) {
       </div>
     `;
 
-    cardsRoot.appendChild(card);
+    renderTarget.root.appendChild(card);
   });
 }
 
-document.getElementById('workersSearch').addEventListener('input', debounceLoadWorkers);
-document.getElementById('workersPositionFilter').addEventListener('change', loadWorkers);
+const workersSearchEl = document.getElementById('workersSearch');
+if (workersSearchEl) workersSearchEl.addEventListener('input', debounceLoadWorkers);
+
+const workersPositionEl = document.getElementById('workersPositionFilter');
+if (workersPositionEl) workersPositionEl.addEventListener('change', loadWorkers);
 
 (async function initWorkersPage() {
   const ok = await ensureAuthenticated();
