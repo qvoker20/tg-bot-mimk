@@ -21,7 +21,7 @@
       </a>
       <a href="/profile" class="nav-btn">
         <span class="material-icons-round" style="font-size:16px">person</span>
-        Профіль
+        <span id="navProfileName">Профіль</span>
       </a>
     </div>
   </nav>
@@ -37,17 +37,10 @@
         <option value="">Всі посади</option>
       </select>
     </div>
-    <div class="workers-table-wrap">
-      <table class="workers-table">
-        <thead>
-          <tr>
-            <th>Працівник</th>
-            <th>Телефон</th>
-            <th>Посада</th>
-          </tr>
-        </thead>
-        <tbody id="workersTbody"></tbody>
-      </table>
+    <div id="workersCards" class="workers-cards-grid"></div>
+    <div id="workersEmpty" class="workers-empty workers-empty-block hidden">Нічого не знайдено</div>
+    <div class="workers-list-wrap" id="workersListWrap">
+      <div id="workersCardsList" class="workers-cards-list"></div>
     </div>
   </div>
 

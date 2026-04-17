@@ -1,61 +1,53 @@
-async function loadWorkers() {
-  showLoader();
+let workersLoaded = [];
+let workersDebounceTimer = null;
+
+async function ensureAuthenticated() {
   const meResp = await fetch('/api/me');
   const meData = await meResp.json();
   if (!meData.ok) {
-    hideLoader();
     window.location.href = '/login';
-    return;
+    return false;
   }
 
-  const search = (document.getElementById('workersSearch')?.value || '').trim();
-  const position = (document.getElementById('workersPositionFilter')?.value || '').trim();
+  const navProfileName = document.getElementById('navProfileName');
+  if (navProfileName) {
+    navProfileName.textContent = meData.user?.name || 'Профіль';
+  }
+  return true;
+}
+
+function debounceLoadWorkers() {
+  clearTimeout(workersDebounceTimer);
+  workersDebounceTimer = setTimeout(loadWorkers, 220);
+}
+
+function getFilters() {
+  return {
+    search: (document.getElementById('workersSearch')?.value || '').trim(),
+    position: (document.getElementById('workersPositionFilter')?.value || '').trim(),
+  };
+}
+
+async function loadWorkers() {
+  showLoader();
+  const filters = getFilters();
+
   const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  if (position) params.append('position', position);
+  if (filters.search) params.append('search', filters.search);
+  if (filters.position) params.append('position', filters.position);
 
   const r = await fetch('/api/workers?' + params.toString());
   const data = await r.json();
   hideLoader();
 
-  const tbody = document.getElementById('workersTbody');
-  tbody.innerHTML = '';
   if (!data.ok) {
-    tbody.innerHTML = '<tr><td colspan="3" class="workers-empty">Не вдалося завантажити список</td></tr>';
+    renderWorkers([]);
     return;
   }
 
-  fillPositionFilter(data.workers);
-
-  if (!data.workers.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="workers-empty">Нічого не знайдено</td></tr>';
-    return;
-  }
-
-  data.workers.forEach(w => {
-    const row = document.createElement('tr');
-
-    const avatarHtml = w.avatar_path
-      ? `<img src="/uploads/${w.avatar_path}" alt="${w.name || 'Користувач'}" class="worker-avatar-img" />`
-      : `<span class="worker-avatar-letter">${(w.name || w.username || '?')[0].toUpperCase()}</span>`;
-
-    const positionLabel = w.position || 'Не вказано';
-
-    row.innerHTML = `
-      <td>
-        <div class="worker-main">
-        <div class="worker-avatar">${avatarHtml}</div>
-        <div class="worker-info">
-          <div class="worker-name">${w.name || '—'}</div>
-        </div>
-        </div>
-      </td>
-      <td><span class="worker-phone">${w.phone_number || '—'}</span></td>
-      <td><span class="worker-role-badge ${w.is_admin ? 'worker-role-admin' : 'worker-role-user'}">${positionLabel}</span></td>
-    `;
-
-    tbody.appendChild(row);
-  });
+  workersLoaded = data.workers || [];
+  fillPositionFilter(workersLoaded);
+  renderWorkers(workersLoaded);
 }
 
 function fillPositionFilter(workers) {
@@ -80,7 +72,49 @@ function fillPositionFilter(workers) {
   }
 }
 
-document.getElementById('workersSearch').addEventListener('input', loadWorkers);
+function renderWorkers(workers) {
+  const cardsRoot = document.getElementById('workersCardsList');
+  const emptyBlock = document.getElementById('workersEmpty');
+  cardsRoot.innerHTML = '';
+
+  if (!workers.length) {
+    emptyBlock.classList.remove('hidden');
+    return;
+  }
+
+  emptyBlock.classList.add('hidden');
+
+  workers.forEach(worker => {
+    const card = document.createElement('article');
+    card.className = 'worker-card';
+
+    const displayName = worker.name || '—';
+    const phone = worker.phone_number || '—';
+    const positionLabel = worker.position || 'Не вказано';
+    const avatarHtml = worker.avatar_path
+      ? `<img src="/uploads/${worker.avatar_path}" alt="${displayName}" class="worker-avatar-img" />`
+      : `<span class="worker-avatar-letter">${(worker.name || worker.username || '?')[0].toUpperCase()}</span>`;
+
+    card.innerHTML = `
+      <div class="worker-card-top">
+        <div class="worker-avatar">${avatarHtml}</div>
+        <div class="worker-card-main">
+          <h4 class="worker-name">${displayName}</h4>
+          <div class="worker-phone">${phone}</div>
+          <span class="worker-role-badge ${worker.is_admin ? 'worker-role-admin' : 'worker-role-user'}">${positionLabel}</span>
+        </div>
+      </div>
+    `;
+
+    cardsRoot.appendChild(card);
+  });
+}
+
+document.getElementById('workersSearch').addEventListener('input', debounceLoadWorkers);
 document.getElementById('workersPositionFilter').addEventListener('change', loadWorkers);
 
-loadWorkers();
+(async function initWorkersPage() {
+  const ok = await ensureAuthenticated();
+  if (!ok) return;
+  await loadWorkers();
+})();
