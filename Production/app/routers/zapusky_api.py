@@ -193,7 +193,7 @@ def _can_manage_hidden(user: dict) -> bool:
 
 def _has_zapusky_access(user: dict) -> bool:
     role = _safe_text((user or {}).get("role", "")).lower()
-    return role in {"admin", "адмін", "технолог виробництво", "технолог виробництва"}
+    return role in {"admin", "адмін", "технолог виробництво", "технолог виробництва", "комплектувальник"}
 
 
 def _refresh_session_role(request: Request, user: dict) -> dict:
