@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}Масові операції | Збиральники | MIMK ERP{% endblock %}
+
+{% block body_class %}buffer-route{% endblock %}
+
+{% block content %}
+<main class="assemblers-layout buffer-screen assemblers-data-screen">
+    <section class="module-shell">
+        <aside class="module-sidebar">
+            <div class="module-sidebar-head">
+                <div>
+                    <p class="eyebrow">Модуль</p>
+                    <h2>Збиральники</h2>
+                </div>
+                <a href="/main" class="module-back-link">До модулів ERP</a>
+            </div>
+
+            <nav class="module-sidebar-nav">
+                {% for item in sub_nav %}
+                <a href="{{ item.href }}" class="module-sidebar-link{% if item.active %} is-active{% endif %}"{% if item.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.label }}</a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="module-content">
+            <header class="module-toolbar">
+                <div class="module-toolbar-head">
+                    <div>
+                        <p class="eyebrow">Адміністрація</p>
+                        <h2>Масові операції</h2>
+                    </div>
+                </div>
+            </header>
+
+            <section class="subpage-panel buffer-page assemblers-data-page">
+                <div class="admin-bulk-ops" data-bulk-ops-panel>
+                    <!-- Закриття замовлень -->
+                    <div class="bulk-op-card">
+                        <h3>Закриття замовлень</h3>
+                        <div class="bulk-op-form">
+                            <div class="form-group">
+                                <label>Номери замовлень для закриття (через кому, пробіл або з нового рядка)</label>
+                                <textarea placeholder="7120, 7121, 7122&#10;7123" data-close-order-list rows="7"></textarea>
+                            </div>
+
+                            <div class="form-info">
+                                <p>
+                                    <strong>Вказано номерів:</strong>
+                                    <span data-close-entered-count>0</span>
+                                </p>
+                                <p>
+                                    <strong>Унікальних номерів:</strong>
+                                    <span data-close-unique-count>0</span>
+                                </p>
+                                <p>
+                                    <strong>Вже закриті (буде проігноровано):</strong>
+                                    <span data-close-already-count>0</span>
+                                </p>
+                                <p>
+                                    <strong>Буде закрито:</strong>
+                                    <span data-bulk-close-count>0</span>
+                                </p>
+                                <button type="button" class="btn btn-secondary" data-close-analyze-btn>Аналізувати</button>
+                                <button type="button" class="btn btn-secondary" data-bulk-preview-btn>Показати список</button>
+                            </div>
+
+                            <button type="button" class="btn btn-danger" data-bulk-close-btn disabled>
+                                Закрити <span data-bulk-close-count-btn>0</span> замовлень
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Повернення закритих -->
+                    <div class="bulk-op-card">
+                        <h3>Повернення закритих замовлень</h3>
+                        <div class="bulk-op-form">
+                            <div class="form-group">
+                                <label>Номери замовлень (через кому, або одне на рядок)</label>
+                                <textarea placeholder="7120, 7121, 7122&#10;7123" data-reopen-list rows="4"></textarea>
+                            </div>
+
+                            <div class="form-info">
+                                <p>
+                                    <strong>Кількість для повернення:</strong> 
+                                    <span data-reopen-count>0</span>
+                                </p>
+                            </div>
+
+                            <button type="button" class="btn btn-success" data-reopen-btn disabled>
+                                Повернути <span data-reopen-count-btn>0</span> замовлень
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Модальне вікно для попереду -->
+                <div class="modal fade" id="previewModal" data-preview-modal>
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5>Попередній перегляд замовлень для закриття</h5>
+                                <button type="button" class="btn-close" data-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div data-preview-list></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Скасувати</button>
+                                <button type="button" class="btn btn-danger" data-confirm-close-btn>Підтвердити закриття</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
+
+<style>
+    .admin-bulk-ops {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 2rem;
+        padding: 2rem;
+    }
+
+    .bulk-op-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .bulk-op-card h3 {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        color: #212529;
+        font-size: 1.25rem;
+    }
+
+    .bulk-op-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-group label {
+        font-weight: 500;
+        color: #495057;
+        font-size: 0.875rem;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.875rem;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        font-family: monospace;
+    }
+
+    .form-info {
+        padding: 1rem;
+        background: #e7f3ff;
+        border-left: 4px solid #0066cc;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .form-info p {
+        margin: 0;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #5a6268;
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+        background: #c82333;
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+        background: #218838;
+    }
+
+    .modal.fade {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+    }
+
+    .modal.fade.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-dialog {
+        background: white;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .modal-footer {
+        border-bottom: none;
+        border-top: 1px solid #dee2e6;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .preview-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 1rem;
+    }
+
+    .preview-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid #e9ecef;
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+
+    .preview-item:last-child {
+        border-bottom: none;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block page_scripts %}
+{% if page_script %}
+<script src="{{ url_for('static', path=page_script) }}?v=bulk-ops-1" defer></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,172 @@
+﻿.assemblers-status-cell {
+text-align: center;
+}
+
+.assemblers-status-badge {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-height: 24px;
+padding: 4px 10px;
+border-radius: 999px;
+border: 1px solid transparent;
+font-size: 12px;
+font-weight: 800;
+line-height: 1.1;
+white-space: nowrap;
+}
+
+.assemblers-status-badge.is-queued {
+background: #fff7ed;
+border-color: #fdba74;
+color: #9a3412;
+}
+
+.assemblers-status-badge.is-in-progress {
+background: #eff6ff;
+border-color: #93c5fd;
+color: #1d4ed8;
+}
+
+.assemblers-status-badge.is-paused {
+background: #fef3c7;
+border-color: #f59e0b;
+color: #92400e;
+}
+
+.assemblers-status-badge.is-completed {
+background: #ecfdf3;
+border-color: #86efac;
+color: #166534;
+}
+
+.assemblers-status-badge.is-distributed {
+background: #ecfeff;
+border-color: #67e8f9;
+color: #155e75;
+}
+
+.assemblers-status-badge.is-closed {
+background: #eef2ff;
+border-color: #a5b4fc;
+color: #3730a3;
+}
+
+.assemblers-status-badge.is-idle {
+background: #fff1f2;
+border-color: #fda4af;
+color: #9f1239;
+}
+
+.assemblers-status-badge.is-missing {
+background: #fff7ed;
+border-color: #fdba74;
+color: #9a3412;
+}
+
+.assemblers-status-badge.is-not-sent {
+background: #fff4e6;
+border-color: #f8b26a;
+color: #9a3412;
+}
+
+.assemblers-status-badge.is-default {
+background: #f8fafc;
+border-color: #cbd5e1;
+color: #475569;
+}
+
+.assemblers-status-badge.is-plan-none {
+    background: #fde8e8;
+    color: #c0392b;
+    border-color: #f5c6cb;
+}
+
+.assemblers-status-badge.is-plan-low {
+    background: #fff3cd;
+    color: #856404;
+    border-color: #ffc107;
+}
+
+.assemblers-status-badge.is-plan-mid {
+    background: #fff9e6;
+    color: #b8860b;
+    border-color: #ffd966;
+}
+
+.assemblers-data-table td.is-deadline-critical {
+    color: #b42318;
+    font-weight: 700;
+}
+
+.buffer-table td.is-deadline-critical {
+    color: #b42318;
+    font-weight: 700;
+}
+
+/* Статус-бейджі у модальних таблицях буфера */
+.buffer-info-status-cell {
+    text-align: left;
+}
+
+.buffer-info-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.buffer-info-status-badge.is-completed  { background: #ecfdf3; border-color: #86efac; color: #166534; }
+.buffer-info-status-badge.is-in-progress { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.buffer-info-status-badge.is-plan-low   { background: #fff3cd; border-color: #ffc107; color: #856404; }
+.buffer-info-status-badge.is-plan-mid   { background: #fff9e6; border-color: #ffd966; color: #b8860b; }
+.buffer-info-status-badge.is-plan-none  { background: #fde8e8; border-color: #f5c6cb; color: #c0392b; }
+.buffer-info-status-badge.is-not-sent   { background: #fff4e6; border-color: #f8b26a; color: #9a3412; }
+.buffer-info-status-badge.is-missing    { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+.buffer-info-status-badge.is-default    { background: #f8fafc; border-color: #cbd5e1; color: #475569; }
+
+/* Рядки продуктів у модальному вікні */
+.buffer-product-list {
+    display: grid;
+    gap: 5px;
+    padding: 4px 0;
+}
+
+.buffer-product-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 0.83rem;
+}
+
+.buffer-product-item.is-done {
+    background: #ecfdf3;
+    border-color: #86efac;
+}
+
+.buffer-product-item.is-in-work {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+
+.buffer-product-name {
+    font-weight: 600;
+    color: #1e293b;
+    flex: 1;
+}
+
+.buffer-product-status {
+    flex-shrink: 0;
+}
+

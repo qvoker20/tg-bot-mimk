@@ -1,0 +1,137 @@
+﻿.schedule-task-modal {
+    width: min(980px, 100%);
+    max-height: calc(100vh - 48px);
+    display: grid;
+    gap: 16px;
+    overflow: auto;
+}
+
+.schedule-selection-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.schedule-selection-card {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #f8fbff;
+}
+
+.schedule-selection-card span,
+.schedule-search-meta {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.schedule-selection-card strong {
+    display: block;
+    margin-top: 8px;
+    line-height: 1.45;
+}
+
+.schedule-task-type-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.schedule-task-type-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.schedule-task-type-card input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+}
+
+.schedule-order-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.schedule-order-search-field,
+.schedule-related-task-field {
+    display: grid;
+    gap: 8px;
+}
+
+
+/* Compact controls in schedule assign modal */
+.schedule-task-modal .module-link,
+.schedule-task-modal .ghost-button {
+    min-height: 36px;
+    padding: 8px 14px;
+    font-size: 0.92rem;
+    border-radius: 10px;
+}
+
+.schedule-task-modal input[type="text"],
+.schedule-task-modal input[type="search"],
+.schedule-task-modal input[type="number"],
+.schedule-task-modal textarea {
+    min-height: 38px;
+    padding: 8px 12px;
+    font-size: 0.92rem;
+    border-radius: 10px;
+}
+
+.schedule-task-modal textarea {
+    min-height: 86px;
+    resize: vertical;
+}
+
+.schedule-task-modal .schedule-task-type-card {
+    padding: 10px 12px;
+    gap: 8px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+}
+
+.schedule-task-modal .schedule-task-type-card input {
+    width: 15px;
+    height: 15px;
+}
+
+.schedule-task-modal .schedule-selection-card {
+    padding: 10px 12px;
+    border-radius: 10px;
+}
+
+.schedule-task-modal .schedule-selection-card span,
+.schedule-task-modal .schedule-search-meta {
+    font-size: 12px;
+}
+
+.schedule-task-modal .schedule-selection-card strong {
+    margin-top: 4px;
+    font-size: 0.98rem;
+}
+
+@media (max-width: 768px) {
+    .schedule-task-modal .module-link,
+    .schedule-task-modal .ghost-button,
+    .schedule-task-modal input[type="text"],
+    .schedule-task-modal input[type="search"],
+    .schedule-task-modal input[type="number"] {
+        min-height: 34px;
+        padding: 7px 10px;
+        font-size: 0.88rem;
+    }
+
+    .schedule-task-modal .schedule-task-type-card {
+        padding: 8px 10px;
+        font-size: 0.88rem;
+    }
+}

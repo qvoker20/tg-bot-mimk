@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | Збиральники | MIMK ERP{% endblock %}
+
+{% block body_class %}buffer-route{% endblock %}
+
+{% block content %}
+<main class="assemblers-layout buffer-screen assemblers-data-screen">
+    <section class="module-shell">
+        <aside class="module-sidebar">
+            <div class="module-sidebar-head">
+                <div>
+                    <p class="eyebrow">Модуль</p>
+                    <h2>Збиральники</h2>
+                </div>
+                <a href="/main" class="module-back-link">До модулів ERP</a>
+            </div>
+
+            <nav class="module-sidebar-nav">
+                {% for item in sub_nav %}
+                <a href="{{ item.href }}" class="module-sidebar-link{% if item.active %} is-active{% endif %}"{% if item.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.label }}</a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="module-content">
+            <header class="module-toolbar">
+                <div class="module-toolbar-head">
+                    <div>
+                        <p class="eyebrow">Збиральний цех</p>
+                        <h2>{{ page.title }}</h2>
+                    </div>
+                </div>
+            </header>
+
+            <section class="subpage-panel">
+                <header class="subpage-header">
+                    <p>{{ page.description }}</p>
+                </header>
+
+                <p class="subpage-note">Ця вкладка доступна лише admin. Тут зберігаються базові параметри для розрахунків збирального напряму.</p>
+
+                {% with alert_text=alert_text, alert_kind=alert_kind %}
+                {% include "partials/action_alert.html" %}
+                {% endwith %}
+
+                <form method="post" action="/assemblers/settings" class="placeholder-block">
+                    <strong>Вартість дня збірки за одного збиральника</strong>
+                    <p class="placeholder-copy">Значення зберігається в базі даних і використовується в формулі для годин у вкладці Деталі.</p>
+
+                    <div class="settings-form-grid">
+                        <label>
+                            <span>Сума, грн</span>
+                            <input
+                                type="number"
+                                name="assembly_day_cost"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                placeholder="Наприклад, 2500"
+                                value="{{ assembly_day_cost }}"
+                                required
+                            >
+                        </label>
+                        <label>
+                            <span>Годин у робочому дні</span>
+                            <input
+                                type="number"
+                                name="assembly_workday_hours"
+                                min="0.1"
+                                step="0.1"
+                                inputmode="decimal"
+                                placeholder="8"
+                                value="{{ assembly_workday_hours or '8' }}"
+                                required
+                            >
+                        </label>
+                        <div></div>
+                        <button type="submit" class="module-link">Зберегти</button>
+                    </div>
+                </form>
+            </section>
+        </section>
+    </section>
+</main>
+{% endblock %}

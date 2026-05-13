@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MIMK ERP{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0">
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles/shared/style.css') }}?v=global-loader-10">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}{% if user %} has-topbar{% endif %}">
+    {% if user %}
+    <header class="topbar">
+        <div class="topbar-brand">
+            <span class="topbar-mark">ERP</span>
+            <div>
+                <strong>MIMK ERP</strong>
+                <p>Керування відділами компанії</p>
+            </div>
+        </div>
+
+        <div class="topbar-spacer"></div>
+
+        <div class="topbar-actions">
+            <div class="topbar-user">
+                <strong id="topbar-user-role">Роль: {{ user.role or "користувач" }}</strong>
+            </div>
+            <form action="/auth/logout" method="post">
+                <button type="submit" class="ghost-button">Вийти</button>
+            </form>
+        </div>
+    </header>
+    {% endif %}
+
+    <div class="page-shell">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div class="global-loader-overlay" data-global-loader aria-live="polite" aria-busy="true">
+        <div class="global-loader-card">
+            <div class="global-loader-spinner" aria-hidden="true"></div>
+            <strong data-global-loader-text>Завантаження...</strong>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/shared/action-toast.js') }}?v=toast-bootstrap-1" defer></script>
+    <script src="{{ url_for('static', path='/js/shared/loading-overlay.js') }}?v=global-loader-1" defer></script>
+    {% if user %}
+    <script>
+        window.__ERP_INITIAL_USER__ = {{ user|tojson }};
+    </script>
+    <script src="{{ url_for('static', path='/js/auth/auth-guard.js') }}?v=auth-refresh-1" defer></script>
+    <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}?v=table-tools-3" defer></script>
+    {% endif %}
+    {% block page_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,190 @@
+﻿.assemblers-data-screen .module-shell {
+    align-items: stretch;
+}
+
+.assemblers-data-screen .module-content {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
+}
+
+.assemblers-data-screen .module-toolbar,
+.assemblers-data-screen .subpage-panel,
+.assemblers-data-screen .module-sidebar {
+    padding: 16px 18px;
+}
+
+.assemblers-data-screen .module-toolbar {
+    min-height: auto;
+}
+
+.assemblers-data-screen .subpage-header {
+    margin-bottom: 12px;
+}
+
+.assemblers-data-page {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+
+.buffer-actions-row,
+.table-status-row,
+.confirm-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.table-status-row {
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+.table-meta,
+.table-loader {
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.main-filters-row {
+    grid-template-columns: minmax(180px, 250px) minmax(200px, 280px) auto;
+    margin-bottom: 10px;
+}
+
+.main-filters-actions-row {
+    justify-content: flex-start;
+}
+
+body.buffer-route {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.buffer-route .page-shell {
+    height: calc(100vh - 77px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.buffer-screen,
+.buffer-screen .module-shell,
+.buffer-screen .module-content {
+    min-height: 0;
+    height: 100%;
+}
+
+.buffer-screen .module-shell {
+    align-items: stretch;
+}
+
+.buffer-screen .module-sidebar {
+    max-height: 100%;
+    overflow: auto;
+}
+
+.buffer-screen .module-content {
+    gap: 8px;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
+}
+
+.buffer-screen .module-content.module-content-no-toolbar {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.buffer-screen .module-toolbar {
+    padding: 10px 16px;
+    min-height: auto;
+}
+
+.buffer-screen .subpage-panel {
+    padding: 10px 14px 14px;
+}
+
+.buffer-screen .module-shell {
+    gap: 14px;
+}
+
+.buffer-screen .module-toolbar-head h2 {
+    font-size: 20px;
+}
+
+.buffer-page {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.buffer-page .subpage-header {
+    margin-bottom: 6px;
+}
+
+.buffer-page .subpage-header p {
+    margin-top: 4px;
+    font-size: 0.95rem;
+}
+
+body.buffer-route .buffer-table-wrap {
+    min-height: 0;
+    height: 100%;
+    max-height: none;
+}
+
+.buffer-filters-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) minmax(200px, 280px) auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 8px;
+}
+
+.buffer-filter-field {
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.buffer-filter-field span {
+    display: block;
+}
+
+.buffer-filter-field input {
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.buffer-actions-row {
+    display: flex;
+    align-items: end;
+    justify-content: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+
+.buffer-toolbar-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
+.buffer-actions-row .table-meta {
+    margin-left: auto;
+    text-align: right;
+}
+
+.buffer-screen .buffer-table-wrap {
+    border-radius: 10px;
+}

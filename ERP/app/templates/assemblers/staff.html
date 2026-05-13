@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | Збиральники | MIMK ERP{% endblock %}
+
+{% block body_class %}buffer-route{% endblock %}
+
+{% block content %}
+<main class="assemblers-layout buffer-screen assemblers-data-screen">
+    <section class="module-shell">
+        <aside class="module-sidebar">
+            <div class="module-sidebar-head">
+                <div>
+                    <p class="eyebrow">Модуль</p>
+                    <h2>Збиральники</h2>
+                </div>
+                <a href="/main" class="module-back-link">До модулів ERP</a>
+            </div>
+
+            <nav class="module-sidebar-nav">
+                {% for item in sub_nav %}
+                <a href="{{ item.href }}" class="module-sidebar-link{% if item.active %} is-active{% endif %}"{% if item.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.label }}</a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="module-content">
+            <header class="module-toolbar">
+                <div class="module-toolbar-head">
+                    <div>
+                        <p class="eyebrow">Збиральний цех</p>
+                        <h2>{{ page.title }}</h2>
+                    </div>
+                </div>
+            </header>
+
+            <section class="subpage-panel buffer-page" data-assemblers-page="staff">
+                <header class="subpage-header">
+                    <p>{{ page.description }}</p>
+                </header>
+
+                <p class="subpage-note">Показуються тільки користувачі з ролями: збиральник, керівник збиральників, керівник збиральників приват, керівник збиральників тендер.</p>
+                <p class="subpage-note">Натисни на рядок користувача, щоб відкрити вікно редагування підрозділу і бригади. Запис у базу відбувається після натискання кнопки Зберегти в модальному вікні.</p>
+
+                {% with alert_text=alert_text, alert_kind=alert_kind %}
+                {% include "partials/action_alert.html" %}
+                {% endwith %}
+
+                <div class="assemblers-table-wrap" data-assemblers-table-wrap>
+                    <table class="buffer-table staff-table" data-table-key="assemblers-staff">
+                        <thead>
+                            <tr>
+                                <th>Telegram ID</th>
+                                <th>Ім'я</th>
+                                <th>Username</th>
+                                <th>Підрозділ</th>
+                                <th>Бригада</th>
+                            </tr>
+                        </thead>
+                        <tbody data-staff-body>
+                            {% for row in staff_rows %}
+                            <tr class="staff-row{% if is_admin %} is-clickable{% endif %}"
+                                data-staff-row
+                                data-source-user-id="{{ row.source_user_id }}"
+                                data-telegram-id="{{ row.telegram_id }}"
+                                data-name="{{ row.name }}"
+                                data-username="{{ row.username }}"
+                                data-subdivision="{{ row.subdivision_value }}"
+                                data-brigade-number="{{ row.brigade_number_value }}">
+                                <td>{{ row.telegram_id }}</td>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.username }}</td>
+                                <td>{{ row.subdivision }}</td>
+                                <td>{{ row.brigade_number }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5">Поки що користувачів цього напряму не знайдено.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="table-status-row">
+                    <div class="table-meta">Знайдено {{ staff_rows|length }} користувачів.</div>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
+
+{% if is_admin %}
+<div class="modal-overlay hidden" data-staff-modal>
+    <div class="modal-box modal-compact staff-settings-modal">
+        <div class="modal-header-row">
+            <h3>Налаштування збиральника</h3>
+            <button type="button" class="ghost-button" data-staff-modal-close>Закрити</button>
+        </div>
+        <p class="placeholder-copy" data-staff-modal-user>Оберіть значення і збережіть зміни.</p>
+        <form action="/assemblers/staff" method="post" class="secondary-form" data-staff-modal-form>
+            <input type="hidden" name="source_user_id" data-staff-source-user-id>
+            <label>
+                <span>Підрозділ</span>
+                <select name="subdivision" data-staff-subdivision required>
+                    <option value="">Оберіть</option>
+                    {% for option in subdivision_options %}
+                    <option value="{{ option }}">{{ option }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Номер бригади</span>
+                <input type="number" name="brigade_number" min="1" step="1" placeholder="№" data-staff-brigade required>
+            </label>
+            <div class="staff-brigade-members-box" data-staff-brigade-members-box>
+                <strong>У цій бригаді:</strong>
+                <p data-staff-brigade-members>Оберіть підрозділ і номер бригади.</p>
+            </div>
+            <div class="confirm-actions-row">
+                <button type="submit" class="module-link" data-staff-submit>Зберегти</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
+{% if page_script %}
+<script src="{{ url_for('static', path=page_script) }}?v=staff-modal-3" defer></script>
+{% endif %}
+{% endblock %}

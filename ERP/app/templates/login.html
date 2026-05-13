@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Вхід | MIMK ERP{% endblock %}
+
+{% block content %}
+<main class="auth-layout">
+    <section class="auth-hero">
+        <p class="eyebrow">МІМК ERP</p>
+        <h1>Вхід через телефон і Telegram</h1>
+        <p class="lead">
+            Введіть номер телефону, який уже є у корпоративній базі. Код підтвердження прийде у Telegram на прив'язаний акаунт.
+        </p>
+    </section>
+
+    <section class="auth-card">
+        <div class="card-head">
+            <h2>{% if stage == "verify" %}Підтвердження входу{% else %}Авторизація{% endif %}</h2>
+            <p>Перший модуль для подальшого керування збиральним цехом.</p>
+        </div>
+
+        {% with alert_text=error, alert_kind='error' %}
+        {% include "partials/action_alert.html" %}
+        {% endwith %}
+
+        {% with alert_text=message, alert_kind='info' %}
+        {% include "partials/action_alert.html" %}
+        {% endwith %}
+
+        {% if stage == "verify" %}
+        <form class="auth-form" action="/auth/verify" method="post">
+            <label>
+                <span>Номер телефону</span>
+                <input type="text" name="phone_number" value="{{ phone_number }}" readonly>
+            </label>
+            <label>
+                <span>Код з Telegram</span>
+                <input type="text" name="code" maxlength="6" minlength="6" placeholder="6 цифр" required>
+            </label>
+            <button type="submit">Увійти</button>
+        </form>
+
+        <form class="secondary-form" action="/auth/request-code" method="post">
+            <input type="hidden" name="phone_number" value="{{ phone_number }}">
+            <button type="submit" class="ghost-button">Надіслати код ще раз</button>
+        </form>
+        {% else %}
+        <form class="auth-form" action="/auth/request-code" method="post">
+            <label>
+                <span>Телефон</span>
+                <input type="text" name="phone_number" value="{{ phone_number or '+380' }}" inputmode="tel" placeholder="+380XXXXXXXXX" required>
+            </label>
+            <button type="submit">Отримати код у Telegram</button>
+        </form>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% if alert_text %}
+<div class="alert action-toast alert-{{ 'danger' if alert_kind == 'error' else (alert_kind | default('success')) }} alert-dismissible" data-action-toast role="status" aria-live="polite">
+	<div class="action-toast-text">{{ alert_text }}</div>
+	<button type="button" class="btn-close action-toast-close" data-action-toast-close aria-label="Закрити повідомлення">×</button>
+</div>
+{% endif %}

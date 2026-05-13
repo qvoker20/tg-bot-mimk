@@ -1,0 +1,14 @@
+.auth-layout {
+    grid-template-columns: 1fr 420px;
+    align-items: stretch;
+}
+
+.auth-hero {
+    padding: 48px;
+}
+
+.auth-form,
+.secondary-form {
+    display: grid;
+    gap: 16px;
+}

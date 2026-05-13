@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | MIMK ERP{% endblock %}
+
+{% block body_class %}application-mobile-route{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', path='/styles/assemblers/assemblers-application.css') }}?v=application-mobile-5">
+{% endblock %}
+
+{% block content %}
+<main class="application-mobile-shell" data-application-page data-initial-day="{{ application_initial_date }}">
+    <section class="application-mobile-card">
+        <header class="application-mobile-header">
+            <div class="application-mobile-badge">MIMK ERP</div>
+            <p class="application-mobile-eyebrow">Додаток Збиральників</p>
+            <h1>Мої задачі</h1>
+            <p class="application-mobile-copy">
+                Задачі на день, швидкий старт роботи, пауза з причиною та завершення з фіксацією локації.
+            </p>
+        </header>
+
+        <section class="application-mobile-day-switch" aria-label="Перемикання дня">
+            <button type="button" class="application-mobile-day-button" data-app-day-shift="-1" aria-label="Попередній день">
+                <span>&lsaquo;</span>
+            </button>
+            <div class="application-mobile-day-copy">
+                <span class="application-mobile-day-label" data-app-day-label>Сьогодні</span>
+                <strong class="application-mobile-day-date" data-app-day-date>{{ application_initial_date }}</strong>
+            </div>
+            <button type="button" class="application-mobile-day-button" data-app-day-shift="1" aria-label="Наступний день">
+                <span>&rsaquo;</span>
+            </button>
+        </section>
+
+        <section class="application-mobile-board" data-app-swipe-zone>
+            <div class="application-mobile-meta" data-app-meta>Завантаження задач...</div>
+            <div class="application-mobile-task-list" data-app-task-list>
+                <article class="application-mobile-empty-state is-loading">
+                    <strong>Готуємо задачі</strong>
+                    <span>Зачекайте, поки сторінка підтягне ваш план на день.</span>
+                </article>
+            </div>
+        </section>
+    </section>
+
+    <nav class="application-mobile-tabbar" aria-label="Нижня навігація">
+        <button type="button" class="application-mobile-tab is-active" aria-current="page">
+            <span class="application-mobile-tab-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M5 6.75A1.75 1.75 0 0 1 6.75 5h1.5A1.75 1.75 0 0 1 10 6.75v1.5A1.75 1.75 0 0 1 8.25 10h-1.5A1.75 1.75 0 0 1 5 8.25zm0 9A1.75 1.75 0 0 1 6.75 14h1.5A1.75 1.75 0 0 1 10 15.75v1.5A1.75 1.75 0 0 1 8.25 19h-1.5A1.75 1.75 0 0 1 5 17.25zM12.5 7a1 1 0 0 1 1-1h4.75a1 1 0 1 1 0 2H13.5a1 1 0 0 1-1-1m0 9a1 1 0 0 1 1-1h4.75a1 1 0 1 1 0 2H13.5a1 1 0 0 1-1-1"/>
+                </svg>
+            </span>
+            <span class="application-mobile-tab-label">Задачі</span>
+        </button>
+        <button type="button" class="application-mobile-tab is-disabled" aria-disabled="true">
+            <span class="application-mobile-tab-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M7 3a1 1 0 0 1 1 1v1h8V4a1 1 0 1 1 2 0v1h.75A2.25 2.25 0 0 1 21 7.25v10.5A2.25 2.25 0 0 1 18.75 20H5.25A2.25 2.25 0 0 1 3 17.75V7.25A2.25 2.25 0 0 1 5.25 5H6V4a1 1 0 0 1 1-1m11.75 6H5.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h13.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25"/>
+                </svg>
+            </span>
+            <span class="application-mobile-tab-label">Графік</span>
+        </button>
+        <button type="button" class="application-mobile-tab is-disabled" aria-disabled="true">
+            <span class="application-mobile-tab-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 3.5c.567 0 1.09.302 1.372.793l7.284 12.663A1.58 1.58 0 0 1 19.284 19H4.716a1.58 1.58 0 0 1-1.372-2.044L10.628 4.293A1.58 1.58 0 0 1 12 3.5m0 4a1 1 0 0 0-1 1v4.25a1 1 0 1 0 2 0V8.5a1 1 0 0 0-1-1m0 9.25a1.125 1.125 0 1 0 0-2.25 1.125 1.125 0 0 0 0 2.25"/>
+                </svg>
+            </span>
+            <span class="application-mobile-tab-label">Проблема</span>
+        </button>
+    </nav>
+</main>
+
+<section class="application-mobile-modal hidden" data-app-pause-modal aria-hidden="true">
+    <div class="application-mobile-modal-backdrop" data-app-pause-cancel></div>
+    <div class="application-mobile-modal-card" role="dialog" aria-modal="true" aria-labelledby="application-pause-title">
+        <div class="application-mobile-modal-head">
+            <p class="application-mobile-modal-eyebrow">Пауза задачі</p>
+            <h2 id="application-pause-title">Вкажіть причину</h2>
+        </div>
+        <label class="application-mobile-modal-label" for="application-pause-reason">Причина паузи</label>
+        <textarea id="application-pause-reason" data-app-pause-input rows="4" placeholder="Наприклад: очікування матеріалів, виїзд на інший об'єкт"></textarea>
+        <p class="application-mobile-modal-error hidden" data-app-pause-error></p>
+        <div class="application-mobile-modal-actions">
+            <button type="button" class="application-mobile-action ghost" data-app-pause-cancel>Скасувати</button>
+            <button type="button" class="application-mobile-action primary" data-app-pause-confirm>Підтвердити паузу</button>
+        </div>
+    </div>
+</section>
+
+<section class="application-mobile-modal hidden" data-app-finish-modal aria-hidden="true">
+    <div class="application-mobile-modal-backdrop" data-app-finish-cancel></div>
+    <div class="application-mobile-modal-card" role="dialog" aria-modal="true" aria-labelledby="application-finish-title">
+        <div class="application-mobile-modal-head">
+            <p class="application-mobile-modal-eyebrow">Завершення задачі</p>
+            <h2 id="application-finish-title">Оберіть завершені вироби</h2>
+        </div>
+        <p class="application-mobile-modal-copy">
+            Якщо по цій задачі є повністю завершені вироби, познач їх. Можна залишити список порожнім і просто завершити задачу.
+        </p>
+        <div class="application-mobile-modal-toolbar">
+            <button type="button" class="application-mobile-action ghost" data-app-finish-select-all>Обрати всі</button>
+            <button type="button" class="application-mobile-action ghost" data-app-finish-clear-all>Очистити</button>
+        </div>
+        <div class="application-mobile-finish-list" data-app-finish-list></div>
+        <p class="application-mobile-modal-error hidden" data-app-finish-error></p>
+        <div class="application-mobile-modal-actions">
+            <button type="button" class="application-mobile-action ghost" data-app-finish-cancel>Скасувати</button>
+            <button type="button" class="application-mobile-action success" data-app-finish-confirm>Підтвердити завершення</button>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+{% if page_script %}
+<script src="{{ url_for('static', path=page_script) }}?v=application-tasks-10" defer></script>
+{% endif %}
+{% endblock %}

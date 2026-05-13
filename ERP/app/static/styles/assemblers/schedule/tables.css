@@ -1,0 +1,514 @@
+﻿.schedule-grid-wrap {
+    min-height: 0;
+    height: 100%;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+}
+
+.schedule-grid-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.schedule-grid-table th,
+.schedule-grid-table td {
+    border-right: 1px solid #d7e3f1;
+    border-bottom: 1px solid #d7e3f1;
+    vertical-align: top;
+}
+
+.schedule-grid-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+}
+
+.schedule-grid-table tbody .schedule-sticky-col,
+.schedule-grid-table tbody .schedule-sticky-col-2 {
+    z-index: 3;
+}
+
+.schedule-grid-table thead .schedule-sticky-col,
+.schedule-grid-table thead .schedule-sticky-col-2 {
+    top: 0;
+    z-index: 8;
+    background: #f7fbff;
+}
+
+.schedule-col-brigade,
+.schedule-col-worker,
+.schedule-brigade-cell,
+.schedule-worker-cell {
+    background: #f7fbff;
+}
+
+.schedule-sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+}
+
+.schedule-sticky-col-2 {
+    position: sticky;
+    left: 54px;
+    z-index: 5;
+}
+
+.schedule-col-brigade,
+.schedule-brigade-cell {
+    min-width: 54px;
+    width: 54px;
+    text-align: center;
+}
+
+.schedule-col-worker,
+.schedule-worker-cell {
+    min-width: 190px;
+    width: 190px;
+    text-align: left;
+}
+
+.schedule-day-head {
+    min-width: 150px;
+    padding: 14px 12px;
+    background: #ddf6f4;
+    text-align: center;
+}
+
+.schedule-day-head span {
+    display: block;
+    margin-bottom: 6px;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.schedule-day-head strong {
+    display: block;
+    font-size: 16px;
+    line-height: 1.15;
+}
+
+.schedule-day-head.is-today {
+    background: #ffe3b3;
+    box-shadow: inset 0 0 0 2px #f59e0b;
+}
+
+.schedule-day-head.is-weekend {
+    background: #caeef0;
+}
+
+.schedule-brigade-cell {
+    padding: 18px 12px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.schedule-worker-cell {
+    padding: 8px 10px;
+}
+
+.schedule-worker-cell-inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.schedule-worker-toggle {
+    width: 20px;
+    height: 20px;
+    min-height: 20px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1f2937;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.schedule-worker-toggle svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+.schedule-worker-cell strong {
+    line-height: 1.3;
+    font-size: 14px;
+    margin: 0;
+}
+
+.schedule-slot {
+    min-width: 150px;
+    width: 150px;
+    padding: 8px;
+    background: #f5f7fb;
+}
+
+.schedule-slot.is-weekend {
+    background: #eef7fb;
+}
+
+.schedule-slot.is-today {
+    background: #fff4db;
+}
+
+.schedule-slot-card {
+    position: relative;
+    min-height: 92px;
+    padding: 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.86);
+    text-align: center;
+}
+
+.schedule-slot-card.is-collapsed {
+    min-height: 64px;
+    padding: 7px 8px;
+    background: #f8fbff;
+    border-style: dashed;
+}
+
+.schedule-slot-card.is-collapsed .schedule-task-item strong {
+    margin-bottom: 4px;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.schedule-slot-card.is-collapsed .schedule-task-item span {
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.schedule-slot-card.is-collapsed .schedule-task-status-row {
+    margin-top: 5px;
+    gap: 4px;
+}
+
+.schedule-collapsed-more {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    min-width: 20px;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.schedule-slot.is-selected {
+    background: #fff0d4;
+}
+
+.schedule-slot.is-selected .schedule-slot-card {
+    border-color: #f59e0b;
+    background: #fffaf0;
+}
+
+.schedule-slot-card.has-task {
+    border-style: solid;
+}
+
+.schedule-slot-card.has-task strong,
+.schedule-slot-card.has-task span {
+    display: block;
+}
+
+.schedule-task-item + .schedule-task-item {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.6);
+}
+
+.schedule-task-item-assembly {
+    border-left: 3px solid #22c55e;
+    padding-left: 6px;
+}
+
+.schedule-task-item-install {
+    border-left: 3px solid #3b82f6;
+    padding-left: 6px;
+}
+
+.schedule-task-item-related {
+    border-left: 3px solid #f97316;
+    padding-left: 6px;
+}
+
+.schedule-slot-card.has-task strong {
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: center;
+}
+
+.schedule-slot-card.has-task span {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+    text-align: center;
+}
+
+.schedule-task-status-row {
+    margin-top: 8px;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+}
+
+.schedule-task-status-label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.schedule-task-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.schedule-task-status-badge.is-queued {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #9a3412;
+}
+
+.schedule-task-status-badge.is-in-progress {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+.schedule-task-status-badge.is-paused {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.schedule-task-status-badge.is-completed {
+    background: #ecfdf3;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.schedule-task-status-badge.is-default {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+
+.schedule-slot-card.task-assembly {
+    background: #ecfdf3;
+    border-color: #86efac;
+}
+
+.schedule-slot-card.task-install {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+
+.schedule-slot-card.task-related {
+    background: #fff7ed;
+    border-color: #fdba74;
+}
+
+.schedule-slot-card.task-mixed {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    border-color: #cbd5e1;
+}
+
+.schedule-task-more {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.schedule-slot-card span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.schedule-empty-cell {
+    padding: 18px;
+    text-align: center;
+    color: var(--muted);
+    background: #fff;
+}
+
+.schedule-search-table-wrap {
+    margin-top: 10px;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.schedule-search-table {
+    min-width: 100%;
+}
+
+.schedule-part-checkbox {
+    width: 16px;
+    height: 16px;
+}
+
+.schedule-edit-table-wrap {
+    max-height: 320px;
+    overflow-x: hidden;
+}
+
+.schedule-edit-note {
+    padding: 12px 14px;
+    border: 1px solid #dbe6f3;
+    border-radius: 12px;
+    background: #f8fbff;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.schedule-edit-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.schedule-edit-table th,
+.schedule-edit-table td {
+    text-align: center;
+    vertical-align: middle;
+    white-space: normal;
+    max-width: none;
+    padding: 0.48rem 0.42rem;
+}
+
+.schedule-edit-table thead th {
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+}
+
+.schedule-edit-table th:nth-child(1),
+.schedule-edit-table td:nth-child(1) {
+    width: 56px;
+}
+
+.schedule-edit-table th:nth-child(2),
+.schedule-edit-table td:nth-child(2) {
+    width: 24%;
+}
+
+.schedule-edit-table th:nth-child(3),
+.schedule-edit-table td:nth-child(3) {
+    width: 15%;
+}
+
+.schedule-edit-table th:nth-child(4),
+.schedule-edit-table td:nth-child(4) {
+    width: 15%;
+}
+
+.schedule-edit-table th:nth-child(5),
+.schedule-edit-table td:nth-child(5) {
+    width: 24%;
+}
+
+.schedule-edit-table th:nth-child(6),
+.schedule-edit-table td:nth-child(6) {
+    width: 22%;
+}
+
+.schedule-edit-row.is-locked {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+.schedule-edit-row.is-locked td {
+    opacity: 0.88;
+}
+
+.schedule-search-row-completed {
+    background: #ecfdf3;
+}
+
+.schedule-search-row-completed td {
+    color: #166534;
+}
+
+.schedule-search-row-completed .schedule-part-checkbox {
+    accent-color: #16a34a;
+}
+
+/* Blocked rows — orange tint + CSS tooltip on hover */
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-blocked {
+    background: #fff7ed !important;
+    position: relative;
+}
+
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-blocked td {
+    color: #92400e;
+    opacity: 0.88;
+    background: transparent !important;
+}
+
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-blocked .schedule-part-checkbox {
+    cursor: not-allowed;
+    accent-color: #f97316;
+}
+
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-has-tooltip {
+    position: relative;
+}
+
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-has-tooltip::after {
+    content: attr(data-block-reason);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: #1e293b;
+    color: #f8fafc;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    padding: 6px 10px;
+    border-radius: 7px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    transition: opacity 120ms ease;
+}
+
+.buffer-table.schedule-search-table tbody tr.schedule-search-row-has-tooltip:hover::after {
+    opacity: 1;
+}

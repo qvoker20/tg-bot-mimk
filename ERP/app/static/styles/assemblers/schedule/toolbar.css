@@ -1,0 +1,64 @@
+﻿.schedule-page {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 12px;
+    min-height: 0;
+}
+
+.schedule-toolbar-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.schedule-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.schedule-week-controls {
+    display: flex;
+    align-items: end;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.schedule-toolbar-row .ghost-button,
+.schedule-toolbar-row .module-link {
+    min-height: 31px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.schedule-nav-button {
+    min-height: 31px;
+}
+
+.schedule-week-label {
+    min-width: 186px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+}
+
+.schedule-date-picker-field {
+    min-width: 126px;
+}
+
+.schedule-date-picker-field input {
+    min-height: 31px;
+    padding: 5px 8px;
+    font-size: 13px;
+}
+

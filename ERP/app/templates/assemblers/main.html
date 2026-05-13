@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | Збиральники | MIMK ERP{% endblock %}
+
+{% block body_class %}buffer-route{% endblock %}
+
+{% block extra_head %}
+<style>
+    .main-order-modal .main-order-details-wrap {
+        overflow-x: hidden !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table thead th,
+    .main-order-modal table.buffer-table.main-order-details-table tbody td {
+        white-space: normal !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
+        max-width: none !important;
+        word-break: break-word !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(1),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(1) {
+        width: 8% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(2),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(2) {
+        width: 18% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(3),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(3) {
+        width: 14% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(4),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(4) {
+        width: 8% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(5),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(5),
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(6),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(6) {
+        width: 9% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(7),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(7),
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(8),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(8) {
+        width: 16% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(9),
+    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(9) {
+        width: 10% !important;
+    }
+
+    .main-order-modal table.buffer-table.main-order-details-table td input[type="date"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="assemblers-layout buffer-screen assemblers-data-screen">
+    <section class="module-shell">
+        <aside class="module-sidebar">
+            <div class="module-sidebar-head">
+                <div>
+                    <p class="eyebrow">Модуль</p>
+                    <h2>Збиральники</h2>
+                </div>
+                <a href="/main" class="module-back-link">До модулів ERP</a>
+            </div>
+
+            <nav class="module-sidebar-nav">
+                {% for item in sub_nav %}
+                <a href="{{ item.href }}" class="module-sidebar-link{% if item.active %} is-active{% endif %}"{% if item.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.label }}</a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="module-content">
+            <header class="module-toolbar">
+                <div class="module-toolbar-head">
+                    <div>
+                        <p class="eyebrow">Збиральний цех</p>
+                        <h2>{{ page.title }}</h2>
+                    </div>
+                </div>
+            </header>
+
+            <section class="subpage-panel buffer-page assemblers-data-page" data-assemblers-page="main" data-can-manage-orders="{{ 'true' if can_manage_main_orders else 'false' }}">
+                <header class="subpage-header">
+                    <p>{{ page.description }}</p>
+                </header>
+
+                <div class="buffer-filters-row">
+                    <label class="buffer-filter-field">
+                        <span>Пошук по номеру</span>
+                        <input type="search" placeholder="Наприклад, 7125" data-main-search-order autocomplete="off">
+                    </label>
+                    <label class="buffer-filter-field">
+                        <span>Пошук по замовнику</span>
+                        <input type="search" placeholder="Назва замовника" data-main-search-customer autocomplete="off">
+                    </label>
+                    <div class="buffer-actions-row main-filters-actions-row">
+                        <button type="button" class="ghost-button buffer-action-button" data-main-open-filters>Фільтри</button>
+                    </div>
+                </div>
+
+                <div class="buffer-toolbar-meta-row">
+                    <div class="buffer-active-filters" data-main-active-filters></div>
+                </div>
+
+                <div class="assemblers-table-wrap" data-assemblers-table-wrap>
+                    <table class="buffer-table assemblers-data-table" data-table-key="assemblers-main">
+                        <thead>
+                            <tr>
+                                <th>Номер замовлення</th>
+                                <th>Замовник</th>
+                                <th>Тип замовлення</th>
+                                <th>Статус</th>
+                                <th>Примітка</th>
+                                <th>Вироби</th>
+                                <th>Кінцева дата за договором</th>
+                                <th>Дедлайн</th>
+                                <th>Годин на виконання</th>
+                                <th>Факт годин виконання</th>
+                                <th>Часу залишилось</th>
+                                <th>План кінця збірки в частинах</th>
+                                <th>План кінця монтажу в частинах</th>
+                                <th>Статус збірка</th>
+                                <th>Початок збірки</th>
+                                <th>Заверш. збірка</th>
+                                <th>Годин на збірку</th>
+                                <th>Збиральники збірка (кількість)</th>
+                                <th>Статус монтаж</th>
+                                <th>Початок монтажу</th>
+                                <th>Кінець монтажу</th>
+                                <th>Годин на монтаж</th>
+                                <th>Збиральники збірка</th>
+                                <th>Монтаж збиральники</th>
+                                <th class="is-subcontract is-subcontract-first" data-subcontract>Малярний цех</th>
+                                <th class="is-subcontract" data-subcontract>Статус малярка</th>
+                                <th class="is-subcontract" data-subcontract>Метал</th>
+                                <th class="is-subcontract" data-subcontract>Статус метал</th>
+                                <th class="is-subcontract" data-subcontract>Шпон</th>
+                                <th class="is-subcontract" data-subcontract>Пластик HPL</th>
+                                <th class="is-subcontract" data-subcontract>Столярний цех</th>
+                                <th class="is-subcontract" data-subcontract>М'який цех</th>
+                                <th class="is-subcontract" data-subcontract>Штучний камінь</th>
+                                <th class="is-subcontract" data-subcontract>Компакт-плита</th>
+                                <th class="is-subcontract" data-subcontract>Cтільниця ДСП</th>
+                                <th class="is-subcontract" data-subcontract>Розсувні системи</th>
+                                <th class="is-subcontract" data-subcontract>Скло/дзеркало</th>
+                                <th class="is-subcontract" data-subcontract>Статус скло/дзеркало</th>
+                                <th class="is-subcontract" data-subcontract>Рамкові фасади</th>
+                                <th class="is-subcontract is-subcontract-last" data-subcontract>Керамограніт</th>
+                                <th>Статус конструк.</th>
+                                <th>Статус виробни.</th>
+                                <th>Вартість замовлення</th>
+                                <th>ПДВ</th>
+                                <th>Кількість частин</th>
+                                <th>Кількість запусків</th>
+                                <th>Дата запису</th>
+                                <th>Адреса</th>
+                                <th>Примітки до адреси</th>
+                                <th>Примітка стопу задачі від збиральника</th>
+                                <th>Матеріали</th>
+                                <th>Конструктор</th>
+                                <th>Пауза від збиральників дата та час</th>
+                                <th>Менеджер</th>
+                            </tr>
+                        </thead>
+                        <tbody data-main-body></tbody>
+                    </table>
+                </div>
+
+                <div class="table-status-row">
+                    <div class="table-meta" data-main-meta>Поки що записів немає.</div>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
+
+<div class="modal-overlay hidden" data-main-filters-modal>
+    <div class="modal-box modal-compact buffer-filters-modal-box">
+        <div class="modal-header-row">
+            <h3>Фільтри головної таблиці</h3>
+            <button type="button" class="ghost-button" data-main-filters-close>Закрити</button>
+        </div>
+
+        <div class="buffer-filters-modal-body">
+            <fieldset class="buffer-filters-group">
+                <legend>Статус замовлення</legend>
+                <label>
+                    <span>Оберіть статус</span>
+                    <select data-main-filter-status>
+                        <option value="">Усі статуси</option>
+                    </select>
+                </label>
+            </fieldset>
+
+            <fieldset class="buffer-filters-group">
+                <legend>Тип замовлення</legend>
+                <label>
+                    <span>Оберіть тип</span>
+                    <select data-main-filter-order-type>
+                        <option value="">Усі типи</option>
+                    </select>
+                </label>
+            </fieldset>
+
+            <fieldset class="buffer-filters-group">
+                <legend>Дедлайн</legend>
+                <label>
+                    <span>Фільтр по дедлайну</span>
+                    <select data-main-filter-deadline>
+                        <option value="">Усі</option>
+                        <option value="overdue">Прострочені (&lt; 0 днів)</option>
+                        <option value="critical">Критичні (0-9 днів)</option>
+                        <option value="upcoming">Найближчі (10-30 днів)</option>
+                        <option value="far">Далекі (&gt; 30 днів)</option>
+                        <option value="no_deadline">Без дедлайну</option>
+                    </select>
+                </label>
+            </fieldset>
+        </div>
+
+        <div class="confirm-actions-row">
+            <button type="button" class="ghost-button" data-main-filters-reset>Скинути</button>
+            <button type="button" class="module-link" data-main-filters-apply>Застосувати</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-main-modal>
+    <div class="modal-box main-order-modal" role="dialog" aria-modal="true" aria-labelledby="main-order-modal-title">
+        <div class="modal-header-row">
+            <div>
+                <p class="eyebrow">Керування замовленням</p>
+                <h3 id="main-order-modal-title" data-main-modal-title>Замовлення</h3>
+            </div>
+            <button type="button" class="ghost-button" data-main-modal-close>Закрити</button>
+        </div>
+
+        <div class="main-order-summary">
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Номер замовлення</span>
+                <strong class="main-order-summary-value" data-main-modal-order-number>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Замовник</span>
+                <strong class="main-order-summary-value" data-main-modal-customer>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Статус</span>
+                <strong class="main-order-summary-value" data-main-modal-status>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Дедлайн</span>
+                <strong class="main-order-summary-value" data-main-modal-deadline>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Тип замовлення</span>
+                <strong class="main-order-summary-value" data-main-modal-order-type>—</strong>
+            </article>
+        </div>
+
+        <section class="main-order-details-card">
+            <div class="section-header main-order-details-head">
+                <div>
+                    <h3>Деталі замовлення</h3>
+                    <p>Частини, вироби, вартість і планові дати по замовленню.</p>
+                </div>
+            </div>
+
+            <div class="main-order-details-wrap">
+                <table class="buffer-table main-order-details-table">
+                    <thead>
+                        <tr>
+                            <th>Частина</th>
+                            <th>Виріб</th>
+                            <th>Вартість</th>
+                            <th>Відсоток</th>
+                            <th>Збірка</th>
+                            <th>Монтаж</th>
+                            <th>Дата планування збірка</th>
+                            <th>Дата планування монтаж</th>
+                            <th>Редагування</th>
+                        </tr>
+                    </thead>
+                    <tbody data-main-modal-details-body>
+                        <tr>
+                            <td colspan="9">Оберіть замовлення.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <form class="secondary-form main-order-form" data-main-modal-form>
+            <div class="main-order-form-grid">
+                <label class="main-order-form-span-2">
+                    <span>Адреса</span>
+                    <input type="text" name="address" placeholder="Вкажіть адресу замовлення" data-main-modal-address>
+                </label>
+                <label>
+                    <span>Примітка до адреси</span>
+                    <input type="text" name="address_note" placeholder="Додаткова прімітка" data-main-modal-address-note>
+                </label>
+            </div>
+
+            <div class="main-order-vat-block">
+                <span class="main-order-vat-hint">Вкажіть наявність ПДВ</span>
+                <label class="main-order-vat-label">
+                    <input type="checkbox" name="vat" data-main-modal-vat>
+                    <span>ПДВ</span>
+                </label>
+            </div>
+
+            <div class="main-order-form-grid">
+                <div class="main-order-form-span-2 main-order-note-field" data-main-note-field>
+                    <div class="main-order-note-head">
+                        <span>Загальна примітка на замовлення</span>
+                        <div class="main-order-note-toolbar">
+                            <button type="button" class="main-order-note-tool-button" data-main-note-tool="fill" aria-label="Заливка" title="Заливка">🪣</button>
+                            <button type="button" class="main-order-note-tool-button" data-main-note-tool="text" aria-label="Колір тексту" title="Колір тексту">A</button>
+                            <button type="button" class="main-order-note-tool-button" data-main-note-tool="emoji" aria-label="Смайлики" title="Смайлики">😊</button>
+                        </div>
+                    </div>
+                    <div class="main-order-note-popovers">
+                        <div class="main-order-note-popover hidden" data-main-note-popover="fill">
+                            <div class="main-order-note-tool-group">
+                                <span>Швидкі кольори</span>
+                                <div class="main-order-note-palette">
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#fff3bf" title="Світло-жовтий" aria-label="Світло-жовтий"></button>
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#ffd6a5" title="Персиковий" aria-label="Персиковий"></button>
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#fecdd3" title="Рожевий" aria-label="Рожевий"></button>
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#d9f99d" title="Лаймовий" aria-label="Лаймовий"></button>
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#bfdbfe" title="Блакитний" aria-label="Блакитний"></button>
+                                    <button type="button" class="main-order-note-swatch" data-main-note-fill-color="#ddd6fe" title="Лавандовий" aria-label="Лавандовий"></button>
+                                </div>
+                            </div>
+                            <div class="main-order-note-tool-group">
+                                <span>Останні заливки</span>
+                                <div class="main-order-note-recent" data-main-note-fill-recent></div>
+                            </div>
+                            <div class="main-order-note-tool-group is-inline">
+                                <label class="main-order-note-color-picker">
+                                    <span>Свій колір</span>
+                                    <input type="color" value="#fff3bf" data-main-note-fill-picker>
+                                </label>
+                                <button type="button" class="ghost-button main-order-note-clear" data-main-note-fill-clear>Без заливки</button>
+                            </div>
+                        </div>
+
+                        <div class="main-order-note-popover hidden" data-main-note-popover="text">
+                            <div class="main-order-note-tool-group">
+                                <span>Колір шрифту</span>
+                                <div class="main-order-note-palette">
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#0f172a" title="Темний" aria-label="Темний"></button>
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#b91c1c" title="Червоний" aria-label="Червоний"></button>
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#c2410c" title="Помаранчевий" aria-label="Помаранчевий"></button>
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#166534" title="Зелений" aria-label="Зелений"></button>
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#1d4ed8" title="Синій" aria-label="Синій"></button>
+                                    <button type="button" class="main-order-note-swatch is-text-swatch" data-main-note-text-color="#7c3aed" title="Фіолетовий" aria-label="Фіолетовий"></button>
+                                </div>
+                            </div>
+                            <div class="main-order-note-tool-group is-inline">
+                                <label class="main-order-note-color-picker">
+                                    <span>Свій колір</span>
+                                    <input type="color" value="#0f172a" data-main-note-text-picker>
+                                </label>
+                                <button type="button" class="ghost-button main-order-note-clear" data-main-note-text-clear>Стандартний текст</button>
+                            </div>
+                        </div>
+
+                        <div class="main-order-note-popover hidden" data-main-note-popover="emoji">
+                            <div class="main-order-note-tool-group">
+                                <span>Смайлики</span>
+                                <div class="main-order-note-emojis">
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="🙂" aria-label="Усмішка">🙂</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="✅" aria-label="Готово">✅</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="⚠️" aria-label="Увага">⚠️</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="📌" aria-label="Важливо">📌</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="🛠️" aria-label="В роботі">🛠️</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="🚚" aria-label="Доставка">🚚</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="📅" aria-label="Дата">📅</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="🔥" aria-label="Терміново">🔥</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="📞" aria-label="Дзвінок">📞</button>
+                                    <button type="button" class="main-order-note-emoji" data-main-note-emoji="⏳" aria-label="Очікування">⏳</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea class="main-order-note-textarea" name="note" rows="4" placeholder="Додайте примітку по замовленню" data-main-modal-note></textarea>
+                </div>
+            </div>
+
+            <div class="confirm-actions-row">
+                <button type="button" class="ghost-button" data-main-modal-close>Скасувати</button>
+                <button type="submit" class="module-link" data-main-modal-submit{% if not can_manage_main_orders %} hidden{% endif %}>Зберегти</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-main-detail-stage-modal>
+    <div class="modal-box modal-compact main-detail-stage-modal-box" role="dialog" aria-modal="true" aria-labelledby="main-detail-stage-title">
+        <div class="modal-header-row">
+            <div>
+                <p class="eyebrow">Редагування виробу</p>
+                <h3 id="main-detail-stage-title">Керування статусами</h3>
+            </div>
+            <button type="button" class="main-detail-stage-close-button" data-main-stage-modal-close>Закрити</button>
+        </div>
+
+        <p class="placeholder-copy" data-main-stage-modal-meta>Виберіть дію для етапу.</p>
+
+        <div class="main-order-stage-actions-grid">
+            <article class="main-order-stage-actions-card">
+                <h4>Збірка</h4>
+                <div class="main-order-stage-actions-status" data-main-stage-assembly-status>У черзі</div>
+                <div class="main-order-stage-actions-row">
+                    <button type="button" class="main-detail-stage-action is-primary" data-main-stage-assembly-complete>Завершити достроково</button>
+                    <button type="button" class="main-detail-stage-action is-secondary" data-main-stage-assembly-reset>Скасувати завершення</button>
+                </div>
+            </article>
+
+            <article class="main-order-stage-actions-card">
+                <h4>Монтаж</h4>
+                <div class="main-order-stage-actions-status" data-main-stage-install-status>У черзі</div>
+                <div class="main-order-stage-actions-row">
+                    <button type="button" class="main-detail-stage-action is-primary" data-main-stage-install-complete>Завершити достроково</button>
+                    <button type="button" class="main-detail-stage-action is-secondary" data-main-stage-install-reset>Скасувати завершення</button>
+                </div>
+            </article>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal-overlay hidden stage-confirm-overlay" data-stage-confirm-dialog aria-modal="true" role="alertdialog">
+    <div class="modal-box stage-confirm-box">
+        <div class="stage-confirm-icon" aria-hidden="true">⚠</div>
+        <p class="stage-confirm-message" data-stage-confirm-message></p>
+        <div class="stage-confirm-actions">
+            <button type="button" class="stage-confirm-ok">Підтвердити</button>
+            <button type="button" class="stage-confirm-cancel">Скасувати</button>
+        </div>
+    </div>
+</div>
+
+<div class="main-row-context-menu hidden" data-main-row-context-menu>
+    <button type="button" data-main-row-action="details">Деталі замовлення</button>
+    <button type="button" data-main-row-action="subcontracts">Підряди</button>
+</div>
+
+<div class="modal-overlay hidden" data-main-info-modal>
+    <div class="modal-box main-order-info-modal" role="dialog" aria-modal="true" aria-labelledby="main-info-modal-title">
+        <div class="modal-header-row">
+            <div>
+                <p class="eyebrow">Деталі замовлення</p>
+                <h3 id="main-info-modal-title">Інформація по замовленню</h3>
+            </div>
+            <button type="button" class="ghost-button" data-main-info-modal-close>Закрити</button>
+        </div>
+
+        <div class="main-order-summary">
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Номер замовлення</span>
+                <strong class="main-order-summary-value" data-main-info-order-number>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Замовник</span>
+                <strong class="main-order-summary-value" data-main-info-customer>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Статус</span>
+                <strong class="main-order-summary-value" data-main-info-status>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Дата підписання</span>
+                <strong class="main-order-summary-value" data-main-info-signed-at>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Дата монтажу</span>
+                <strong class="main-order-summary-value" data-main-info-install-at>—</strong>
+            </article>
+        </div>
+
+        <div class="main-info-plan-row">
+            <article class="main-info-plan-item">
+                <span class="main-order-summary-label">План кінця збірки</span>
+                <strong data-main-info-plan-assembly>—</strong>
+            </article>
+            <article class="main-info-plan-item">
+                <span class="main-order-summary-label">План кінця монтажу</span>
+                <strong data-main-info-plan-install>—</strong>
+            </article>
+        </div>
+
+        <div class="main-info-plan-row">
+            <article class="main-info-plan-item">
+                <span class="main-order-summary-label">Факт кінця збірки (100%)</span>
+                <strong data-main-info-fact-assembly>—</strong>
+            </article>
+            <article class="main-info-plan-item">
+                <span class="main-order-summary-label">Факт кінця монтажу (100%)</span>
+                <strong data-main-info-fact-install>—</strong>
+            </article>
+        </div>
+
+        <section class="main-order-details-card">
+            <div class="section-header main-order-details-head">
+                <div>
+                    <h3>Деталізація</h3>
+                    <p>Частини, вироби, вартість і планові дати.</p>
+                </div>
+            </div>
+
+            <div class="main-order-details-wrap">
+                <table class="buffer-table main-order-details-table">
+                    <thead>
+                        <tr>
+                            <th>Частина</th>
+                            <th>Виріб</th>
+                            <th>Вартість</th>
+                            <th>Відсоток</th>
+                            <th>План збірка</th>
+                            <th>План монтаж</th>
+                            <th>Статус збірки</th>
+                            <th>Статус монтажу</th>
+                        </tr>
+                    </thead>
+                    <tbody data-main-info-details-body>
+                        <tr>
+                            <td colspan="7">Оберіть замовлення.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-main-subcontracts-modal>
+    <div class="modal-box main-subcontracts-modal" role="dialog" aria-modal="true" aria-labelledby="main-subcontracts-modal-title">
+        <div class="modal-header-row">
+            <div>
+                <p class="eyebrow">Підряди замовлення</p>
+                <h3 id="main-subcontracts-modal-title">Підряди</h3>
+            </div>
+            <button type="button" class="ghost-button" data-main-subcontracts-close>Закрити</button>
+        </div>
+
+        <div class="main-order-summary main-subcontracts-summary">
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Номер замовлення</span>
+                <strong class="main-order-summary-value" data-main-subcontracts-order-number>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Замовник</span>
+                <strong class="main-order-summary-value" data-main-subcontracts-customer>—</strong>
+            </article>
+            <article class="main-order-summary-card">
+                <span class="main-order-summary-label">Статус</span>
+                <strong class="main-order-summary-value" data-main-subcontracts-status>—</strong>
+            </article>
+        </div>
+
+        <section class="main-order-details-card">
+            <div class="section-header main-order-details-head">
+                <div>
+                    <h3>Таблиця підрядів</h3>
+                    <p>Присутність підрядника у замовленні та поточний статус.</p>
+                </div>
+            </div>
+
+            <div class="main-order-details-wrap main-subcontracts-wrap">
+                <table class="buffer-table main-order-details-table main-subcontracts-table">
+                    <thead>
+                        <tr>
+                            <th>Підряд</th>
+                            <th>Присутність</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody data-main-subcontracts-body>
+                        <tr>
+                            <td colspan="3">Оберіть замовлення.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
+{% if page_script %}
+<script src="{{ url_for('static', path=page_script) }}?v=main-filters-8" defer></script>
+{% endif %}
+{% endblock %}

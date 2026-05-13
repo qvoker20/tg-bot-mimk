@@ -1,0 +1,29 @@
+﻿button {
+    border: none;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font: inherit;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand);
+    cursor: pointer;
+    transition: background 160ms ease;
+}
+
+button:hover {
+    background: var(--brand-deep);
+}
+
+.ghost-button {
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line);
+}
+
+.danger-button {
+    background: var(--danger);
+}
+
+.danger-button:hover {
+    background: #912018;
+}

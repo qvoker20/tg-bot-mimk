@@ -1,0 +1,10 @@
+﻿.schedule-admin-delete-button {
+    border-color: #dc2626;
+    color: #b91c1c;
+}
+
+.schedule-admin-delete-button:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #991b1b;
+}

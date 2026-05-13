@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | Збиральники | MIMK ERP{% endblock %}
+
+{% block body_class %}buffer-route{% endblock %}
+
+{% block content %}
+<main class="assemblers-layout buffer-screen assemblers-data-screen">
+    <section class="module-shell">
+        <aside class="module-sidebar">
+            <div class="module-sidebar-head">
+                <div>
+                    <p class="eyebrow">Модуль</p>
+                    <h2>Збиральники</h2>
+                </div>
+                <a href="/main" class="module-back-link">До модулів ERP</a>
+            </div>
+
+            <nav class="module-sidebar-nav">
+                {% for item in sub_nav %}
+                <a href="{{ item.href }}" class="module-sidebar-link{% if item.active %} is-active{% endif %}"{% if item.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.label }}</a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="module-content">
+            <section class="subpage-panel buffer-page assemblers-data-page" data-assemblers-page="details">
+                <header class="subpage-header">
+                    <p>{{ page.description }}</p>
+                </header>
+
+                <div class="buffer-filters-row">
+                    <label class="buffer-filter-field">
+                        <span>Пошук по номеру</span>
+                        <input type="search" placeholder="Наприклад, 7125" data-details-search-order autocomplete="off">
+                    </label>
+                    <div class="buffer-actions-row">
+                        <button type="button" class="ghost-button buffer-action-button" data-details-toggle-filters>Фільтри</button>
+                    </div>
+                </div>
+
+                <div class="buffer-filters-row hidden" data-details-filters-panel>
+                    <label class="buffer-filter-field">
+                        <span>Пошук по замовнику</span>
+                        <input type="search" placeholder="Назва замовника" data-details-search-customer autocomplete="off">
+                    </label>
+                    <label class="buffer-filter-field">
+                        <span>Пошук по виробу</span>
+                        <input type="search" placeholder="Назва виробу" data-details-search-product autocomplete="off">
+                    </label>
+                </div>
+
+                <div class="assemblers-table-wrap" data-assemblers-table-wrap>
+                    <table class="buffer-table assemblers-data-table" data-table-key="assemblers-details">
+                        <thead>
+                            <tr>
+                                <th>Номер замовлення</th>
+                                <th>Частина</th>
+                                <th>Клієнт</th>
+                                <th>Виріб</th>
+                                <th>Запланована кінцева дата зборки</th>
+                                <th>Хто збирає</th>
+                                <th>Початок збірки</th>
+                                <th>Завершено</th>
+                                <th>К-сть днів збірки</th>
+                                <th>Час на зборку</th>
+                                <th>Статус збірки</th>
+                                <th>Запланована кінцева дата монтажу</th>
+                                <th>Хто монтує</th>
+                                <th>Початок монтажу</th>
+                                <th>Монтаж завершено</th>
+                                <th>К-сть днів монтажу</th>
+                                <th>Час монтажу</th>
+                                <th>Статус монтажу</th>
+                                <th>Тип</th>
+                                <th>Статус конструктор</th>
+                                <th>Запуски виробництво</th>
+                                <th>Завершено виробництво</th>
+                                <th>Метал</th>
+                                <th>Скло/орієнтовна доставка</th>
+                                <th>Доставлено скло</th>
+                                <th>Годин на виконання</th>
+                                <th>Вартість</th>
+                                <th>Відсоток</th>
+                                <th>Всього годин</th>
+                            </tr>
+                        </thead>
+                        <tbody data-details-body></tbody>
+                    </table>
+                </div>
+
+                <div class="table-status-row">
+                    <div class="table-loader hidden" data-details-loader>Завантаження деталей...</div>
+                    <div class="table-meta" data-details-meta>Поки що деталей немає.</div>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
+{% if page_script %}
+<script src="{{ url_for('static', path=page_script) }}?v=details-filters-1" defer></script>
+{% endif %}
+{% endblock %}

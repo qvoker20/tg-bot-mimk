@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Головна | MIMK ERP{% endblock %}
+
+{% block content %}
+<main class="hub-layout">
+    <section class="hero-panel">
+        <p class="eyebrow">MIMK ERP</p>
+        <h1 class="hub-title">Хаб відділів</h1>
+        <p class="lead">
+            Це центральна точка входу в ERP. Тут будуть посилання на робочі модулі всіх відділів. Поки запускаємо перший модуль для збирального цеху.
+        </p>
+    </section>
+
+    <section class="section-header">
+        <div>
+            <p class="eyebrow">Доступні модулі</p>
+            <h2>Відділи</h2>
+        </div>
+    </section>
+
+    <section class="card-grid">
+        {% if can_access_assemblers_module %}
+        <a href="/assemblers" class="module-card module-card-featured module-card-link" aria-label="Відкрити модуль Збиральники">
+            <div class="module-card-body">
+                <p class="module-label">Цех</p>
+                <h3>Збиральники</h3>
+                <p>
+                    Вхід у модуль збирального цеху з окремими сторінками: головна, деталі, закриті замовлення, графік Приват, графік Тендер і буфер.
+                </p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge">Активний модуль</span>
+            </div>
+        </a>
+        {% endif %}
+
+        <article class="module-card">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Відділ продажу</h3>
+                <p>Функціонал відділу продажу буде додано в наступних оновленнях.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge is-dev">У розробці</span>
+            </div>
+        </article>
+
+        <article class="module-card">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Відділ замірів</h3>
+                <p>Сторінки та операції для відділу замірів будуть доступні після запуску модуля.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge is-dev">У розробці</span>
+            </div>
+        </article>
+
+        <article class="module-card">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Конструкторський</h3>
+                <p>Конструкторський модуль готується до інтеграції в єдиний хаб ERP.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge is-dev">У розробці</span>
+            </div>
+        </article>
+
+        <article class="module-card">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Закупівля</h3>
+                <p>Модуль закупівлі перебуває в реалізації та з'явиться в цьому блоці після релізу.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge is-dev">У розробці</span>
+            </div>
+        </article>
+
+        <article class="module-card">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Виробництво</h3>
+                <p>Модуль виробництва заплановано як окрему картку доступу після завершення розробки.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge is-dev">У розробці</span>
+            </div>
+        </article>
+    </section>
+</main>
+{% endblock %}

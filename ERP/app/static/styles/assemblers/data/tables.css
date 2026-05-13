@@ -1,0 +1,398 @@
+﻿.staff-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+}
+
+.staff-table th,
+.staff-table td {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.staff-row.is-clickable {
+    cursor: pointer;
+}
+
+.staff-row.is-clickable:hover {
+    background: #e8f0ff;
+}
+
+.staff-table select,
+.staff-table input {
+    min-width: 120px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.staff-save-button {
+    width: 100%;
+    min-width: 118px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.staff-settings-modal {
+    width: min(560px, 100%);
+    max-width: 560px;
+}
+
+.staff-settings-modal label {
+    gap: 6px;
+}
+
+.staff-settings-modal input,
+.staff-settings-modal select {
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 0.95rem;
+}
+
+.staff-settings-modal .ghost-button,
+.staff-settings-modal .module-link,
+.staff-settings-modal button {
+    min-height: 36px;
+    padding: 7px 12px;
+    font-size: 0.95rem;
+    border-radius: 10px;
+}
+
+.staff-settings-modal .confirm-actions-row {
+    justify-content: flex-end;
+}
+
+.staff-brigade-members-box {
+    padding: 10px 12px;
+    border: 1px solid #dbe6f3;
+    border-radius: 10px;
+    background: #f8fbff;
+    display: grid;
+    gap: 6px;
+}
+
+.staff-brigade-members-box strong {
+    font-size: 0.9rem;
+    color: #1e3a8a;
+}
+
+.staff-brigade-members-box p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+.buffer-table-wrap {
+    max-height: calc(100vh - 260px);
+    overflow-x: auto;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.94);
+}
+
+.buffer-table-inner {
+    display: inline-block;
+    width: max-content;
+    min-width: 2200px;
+}
+
+.buffer-table {
+    width: auto;
+    min-width: 2200px;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+    line-height: 1.25;
+}
+
+.buffer-table thead th {
+    position: sticky;
+    top: 0;
+    background: #eff6ff;
+    color: var(--brand-deep);
+    text-align: left;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.buffer-table th,
+.buffer-table td {
+    padding: 0.62rem 0.72rem;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+}
+
+.buffer-table tbody tr:nth-child(even) {
+    background: #f8fafc;
+}
+
+.buffer-table tbody tr:hover {
+    background: #eef4ff;
+}
+
+.buffer-table input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+.assemblers-table-wrap {
+    min-height: 0;
+    height: 100%;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.94);
+}
+
+.assemblers-data-table {
+    min-width: 3600px;
+}
+
+.table-col-header {
+    position: relative;
+    cursor: grab;
+    user-select: none;
+}
+
+.table-col-header.is-dragging {
+    opacity: 0.65;
+}
+
+.table-col-resizer {
+    position: absolute;
+    top: 0;
+    right: -1px;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+}
+
+.table-col-resizer::after {
+    content: "";
+    position: absolute;
+    top: 18%;
+    right: 4px;
+    width: 2px;
+    height: 64%;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.18);
+}
+
+.main-order-details-table {
+    width: 100%;
+    min-width: 980px;
+}
+
+.main-order-details-table td input[type="date"] {
+    min-width: 170px;
+    padding: 10px 12px;
+}
+
+.main-order-form {
+    min-height: 0;
+    overflow: auto;
+}
+
+.main-order-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.main-order-form-span-2 {
+    grid-column: 1 / -1;
+}
+
+.main-order-row.is-clickable td {
+    cursor: pointer;
+}
+
+.main-order-row.is-clickable:hover td:not(.main-order-note-cell) {
+    background: rgba(221, 109, 32, 0.08);
+}
+
+.assemblers-data-table .is-sticky-col,
+.buffer-table .is-sticky-col {
+    position: sticky;
+    left: var(--sticky-left, 0px);
+    z-index: 6;
+    box-shadow:
+        1px 0 0 var(--line),
+        10px 0 14px -12px rgba(15, 23, 42, 0.45);
+}
+
+.assemblers-data-table thead .is-sticky-col,
+.buffer-table thead .is-sticky-col {
+    z-index: 9;
+    background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #123a7a;
+    box-shadow:
+        1px 0 0 var(--line),
+        10px 0 14px -12px rgba(15, 23, 42, 0.45);
+}
+
+.assemblers-data-table tbody .is-sticky-col,
+.buffer-table tbody .is-sticky-col {
+    background: #ffffff;
+}
+
+.assemblers-data-table tbody tr:nth-child(even) .is-sticky-col,
+.buffer-table tbody tr:nth-child(even) .is-sticky-col {
+    background: #f8fafc;
+}
+
+.assemblers-data-table tbody tr:hover .is-sticky-col,
+.buffer-table tbody tr:hover .is-sticky-col {
+    background: #e0edff;
+}
+
+/* content */
+.assemblers-data-table thead .is-sticky-col::after,
+.buffer-table thead .is-sticky-col::after {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.12);
+    color: #1d4ed8;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+.assemblers-data-table thead .is-pinned-header::before,
+.buffer-table thead .is-pinned-header::before {
+    margin-right: 6px;
+    font-size: 12px;
+}
+
+/* Compact modal details table (must be at file end) */
+.main-order-modal .main-order-details-wrap {
+    max-height: min(34vh, 300px);
+    border-radius: 10px;
+}
+
+.main-order-modal .buffer-table.main-order-details-table {
+    width: 100%;
+    min-width: 680px;
+    font-size: 12px;
+    line-height: 1.15;
+}
+
+.main-order-modal .main-order-details-table th,
+.main-order-modal .main-order-details-table td {
+    padding: 6px 8px;
+}
+
+.main-order-modal .main-order-details-table td input[type="date"] {
+    min-width: 118px;
+    padding: 6px 8px;
+    font-size: 12px;
+    border-radius: 7px;
+}
+
+.main-order-modal .main-order-details-wrap {
+max-height: min(34vh, 300px);
+border-radius: 10px;
+}
+
+.main-order-modal .buffer-table.main-order-details-table {
+width: 100%;
+min-width: 680px;
+font-size: 12px;
+line-height: 1.15;
+}
+
+.main-order-modal .main-order-details-table th,
+.main-order-modal .main-order-details-table td {
+padding: 6px 8px;
+}
+
+.main-order-modal .main-order-details-table td input[type="date"] {
+min-width: 118px;
+padding: 6px 8px;
+font-size: 12px;
+border-radius: 7px;
+transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.main-order-modal .main-order-details-table td input[type="date"].is-empty {
+border-color: #ef4444;
+background: #fff1f2;
+box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.14) inset;
+}
+
+.main-order-modal .main-order-details-table td input[type="date"].has-value {
+border-color: #16a34a;
+background: #f0fdf4;
+box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.12) inset;
+}
+
+.main-order-modal .main-order-details-table td input[type="date"].is-empty:focus {
+box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+.main-order-modal .main-order-details-table td input[type="date"].has-value:focus {
+box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+
+/* Група "цехи/матеріали": індекси 24..39 */
+.assemblers-data-table [data-col-index="24"],
+.assemblers-data-table [data-col-index="25"],
+.assemblers-data-table [data-col-index="26"],
+.assemblers-data-table [data-col-index="27"],
+.assemblers-data-table [data-col-index="28"],
+.assemblers-data-table [data-col-index="29"],
+.assemblers-data-table [data-col-index="30"],
+.assemblers-data-table [data-col-index="31"],
+.assemblers-data-table [data-col-index="32"],
+.assemblers-data-table [data-col-index="33"],
+.assemblers-data-table [data-col-index="34"],
+.assemblers-data-table [data-col-index="35"],
+.assemblers-data-table [data-col-index="36"],
+.assemblers-data-table [data-col-index="37"],
+.assemblers-data-table [data-col-index="38"],
+.assemblers-data-table [data-col-index="39"] {
+  background: #fff7e6;
+}
+
+/* Більш контрастний хедер саме для цієї групи */
+.assemblers-data-table thead [data-col-index="24"],
+.assemblers-data-table thead [data-col-index="25"],
+.assemblers-data-table thead [data-col-index="26"],
+.assemblers-data-table thead [data-col-index="27"],
+.assemblers-data-table thead [data-col-index="28"],
+.assemblers-data-table thead [data-col-index="29"],
+.assemblers-data-table thead [data-col-index="30"],
+.assemblers-data-table thead [data-col-index="31"],
+.assemblers-data-table thead [data-col-index="32"],
+.assemblers-data-table thead [data-col-index="33"],
+.assemblers-data-table thead [data-col-index="34"],
+.assemblers-data-table thead [data-col-index="35"],
+.assemblers-data-table thead [data-col-index="36"],
+.assemblers-data-table thead [data-col-index="37"],
+.assemblers-data-table thead [data-col-index="38"],
+.assemblers-data-table thead [data-col-index="39"] {
+  background: #ffe8bf;
+  color: #7a4b00;
+}
+
+/* Візуальні межі групи */
+.assemblers-data-table [data-col-index="24"] {
+  box-shadow: inset 2px 0 0 #f5b041;
+}
+.assemblers-data-table [data-col-index="39"] {
+  box-shadow: inset -2px 0 0 #f5b041;
+}
