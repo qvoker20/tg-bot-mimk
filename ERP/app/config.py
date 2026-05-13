@@ -24,7 +24,11 @@ CODE_TTL_SECONDS = int(os.getenv("COLLECTORS_CODE_TTL_SECONDS", "300"))
 
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "lax")
-ALLOWED_HOSTS = _parse_csv_env("ALLOWED_HOSTS", "127.0.0.1,localhost")
+ALLOW_ALL_HOSTS = os.getenv("ALLOW_ALL_HOSTS", "0") == "1"
+ALLOWED_HOSTS = ["*"] if ALLOW_ALL_HOSTS else _parse_csv_env(
+    "ALLOWED_HOSTS",
+    "127.0.0.1,localhost,::1,*.trycloudflare.com",
+)
 SECURITY_HEADERS_FORCE_HTTPS = os.getenv("SECURITY_HEADERS_FORCE_HTTPS", "0") == "1"
 
 PG_CONN = {
