@@ -1232,7 +1232,7 @@ async def update_google_sheets():
                 f"Current sync {APPEND_PARTS_TABLE_NAME}: {parts_inserted} актуальних рядків."
             )
 
-            await asyncio.sleep(180)
+            await asyncio.sleep(600)
     except Exception as e:
         print(f"Помилка під час оновлення Google Sheets: {e}")
         raise
@@ -1489,7 +1489,7 @@ if __name__ == '__main__':
                 asyncio.run(update_google_sheets())
             except Exception as e:
                 print(f"Скрипт перезапускається через помилку: {e}")
-                time.sleep(5)
+                time.sleep(600)
         else:
             print("Інтернет недоступний. Очікування з'єднання...")
-            time.sleep(5)
+            time.sleep(600)
