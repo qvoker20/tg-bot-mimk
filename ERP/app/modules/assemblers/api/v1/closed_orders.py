@@ -3,20 +3,58 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.modules.assemblers.dependencies import require_user
-from app.modules.assemblers.services.main import load_main_rows, reopen_closed_orders
+from app.modules.assemblers.services.main import (
+    load_main_filter_options,
+    load_main_rows,
+    reopen_closed_orders,
+)
 
 
 router = APIRouter()
 
 
 @router.get("/api/closed-orders")
-async def assemblers_closed_orders_api(request: Request, offset: int = 0, limit: int = 30):
+async def assemblers_closed_orders_api(
+    request: Request,
+    offset: int = 0,
+    limit: int = 30,
+    order_number: str = "",
+    customer: str = "",
+    order_type: str = "",
+):
     _, redirect = require_user(request)
     if redirect:
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
-    rows = await run_in_threadpool(load_main_rows, offset=offset, limit=limit, closed_only=True)
+    rows = await run_in_threadpool(
+        load_main_rows,
+        offset=offset,
+        limit=limit,
+        closed_only=True,
+        order_number_query=order_number,
+        customer_query=customer,
+        order_type_query=order_type,
+    )
     return {"ok": True, **rows}
+
+
+@router.get("/api/closed-orders/filter-options")
+async def assemblers_closed_orders_filter_options_api(
+    request: Request,
+    order_number: str = "",
+    customer: str = "",
+):
+    _, redirect = require_user(request)
+    if redirect:
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+    options = await run_in_threadpool(
+        load_main_filter_options,
+        closed_only=True,
+        order_number_query=order_number,
+        customer_query=customer,
+    )
+    return {"ok": True, **options}
 
 @router.post("/api/closed-orders/reopen")
 async def assemblers_reopen_closed_orders(request: Request):

@@ -164,6 +164,26 @@ body.buffer-route .buffer-table-wrap {
     letter-spacing: normal;
 }
 
+.buffer-filter-field select {
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.closed-orders-filters-row {
+    grid-template-columns: minmax(180px, 260px) minmax(200px, 280px) minmax(170px, 220px);
+    justify-content: start;
+}
+
+.staff-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: auto;
+}
+
 .buffer-actions-row {
     display: flex;
     align-items: end;

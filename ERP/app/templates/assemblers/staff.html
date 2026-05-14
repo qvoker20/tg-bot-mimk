@@ -41,6 +41,17 @@
                 <p class="subpage-note">Показуються тільки користувачі з ролями: збиральник, керівник збиральників, керівник збиральників приват, керівник збиральників тендер.</p>
                 <p class="subpage-note">Натисни на рядок користувача, щоб відкрити вікно редагування підрозділу і бригади. Запис у базу відбувається після натискання кнопки Зберегти в модальному вікні.</p>
 
+                <div class="buffer-filters-row">
+                    <label class="buffer-filter-field">
+                        <span>Пошук по імені</span>
+                        <input type="search" placeholder="Наприклад, Антон" data-staff-search-name autocomplete="off">
+                    </label>
+                    <label class="buffer-filter-field">
+                        <span>Пошук по бригаді</span>
+                        <input type="search" placeholder="Наприклад, 1" data-staff-search-brigade autocomplete="off">
+                    </label>
+                </div>
+
                 {% with alert_text=alert_text, alert_kind=alert_kind %}
                 {% include "partials/action_alert.html" %}
                 {% endwith %}
@@ -51,7 +62,6 @@
                     <table class="buffer-table staff-table" data-table-key="assemblers-staff">
                         <thead>
                             <tr>
-                                <th>Telegram ID</th>
                                 <th>Ім'я</th>
                                 <th>Username</th>
                                 <th>Підрозділ</th>
@@ -68,7 +78,6 @@
                                 data-username="{{ row.username }}"
                                 data-subdivision="{{ row.subdivision_value }}"
                                 data-brigade-number="{{ row.brigade_number_value }}">
-                                <td>{{ row.telegram_id }}</td>
                                 <td>{{ row.name }}</td>
                                 <td>{{ row.username }}</td>
                                 <td>{{ row.subdivision }}</td>
@@ -76,7 +85,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5">Поки що користувачів цього напряму не знайдено.</td>
+                                <td colspan="4">Поки що користувачів цього напряму не знайдено.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -130,6 +139,6 @@
 {% block page_scripts %}
 <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
 {% if page_script %}
-<script src="{{ url_for('static', path=page_script) }}?v=staff-modal-5" defer></script>
+<script src="{{ url_for('static', path=page_script) }}?v=staff-modal-6" defer></script>
 {% endif %}
 {% endblock %}

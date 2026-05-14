@@ -3,7 +3,6 @@ from pathlib import Path
 
 import uvicorn
 
-
 PROJECT_DIR = Path(__file__).resolve().parent
 RELOAD_ENABLED = os.getenv("ERP_RELOAD", "0") == "1"
 HOST = os.getenv("ERP_HOST", "0.0.0.0")

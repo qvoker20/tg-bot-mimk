@@ -74,10 +74,6 @@
     background: #fff;
 }
 
-.schedule-mobile-hint {
-    display: none;
-}
-
 .schedule-grid-table {
     width: max-content;
     min-width: 100%;
@@ -575,14 +571,6 @@
 
     .schedule-grid-wrap {
         padding-bottom: 6px;
-    }
-
-    .schedule-mobile-hint {
-        display: block;
-        padding: 8px 10px 0;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 600;
     }
 
     .schedule-col-brigade,

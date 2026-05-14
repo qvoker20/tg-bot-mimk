@@ -4,7 +4,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const loader = page?.querySelector("[data-staff-loader]");
     const tableWrap = page?.querySelector("[data-assemblers-table-wrap]");
     const metaRow = page?.querySelector("[data-staff-meta-row]");
+    const metaText = metaRow?.querySelector(".table-meta");
     const tableBody = page?.querySelector("[data-staff-body]");
+    const searchNameInput = page?.querySelector("[data-staff-search-name]");
+    const searchBrigadeInput = page?.querySelector("[data-staff-search-brigade]");
     const modal = document.querySelector("[data-staff-modal]");
     const modalForm = document.querySelector("[data-staff-modal-form]");
     const modalUser = document.querySelector("[data-staff-modal-user]");
@@ -55,6 +58,38 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!tableBody || !modal || !modalForm || !modalUser || !modalSourceUserId || !modalSubdivision || !modalBrigade || !brigadeMembersText || !modalSubmit) {
         return;
     }
+
+    const rows = Array.from(tableBody.querySelectorAll("[data-staff-row]"));
+
+    const updateMetaCount = (visibleCount) => {
+        if (!metaText) {
+            return;
+        }
+        metaText.textContent = `Знайдено ${visibleCount} користувачів.`;
+    };
+
+    const applyFilters = () => {
+        const nameQuery = String(searchNameInput?.value || "").trim().toLowerCase();
+        const brigadeQuery = String(searchBrigadeInput?.value || "").trim().toLowerCase();
+        let visibleCount = 0;
+
+        rows.forEach((row) => {
+            const name = String(row.dataset.name || "").trim().toLowerCase();
+            const username = String(row.dataset.username || "").trim().toLowerCase();
+            const brigade = String(row.dataset.brigadeNumber || "").trim().toLowerCase();
+
+            const matchesName = !nameQuery || name.includes(nameQuery) || username.includes(nameQuery);
+            const matchesBrigade = !brigadeQuery || brigade.includes(brigadeQuery);
+            const isVisible = matchesName && matchesBrigade;
+
+            row.classList.toggle("hidden", !isVisible);
+            if (isVisible) {
+                visibleCount += 1;
+            }
+        });
+
+        updateMetaCount(visibleCount);
+    };
 
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get("saved") === "1") {
@@ -135,7 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
             modalBrigade.value = "1";
         }
         
-        modalUser.textContent = `${row.dataset.name || '—'} | ${row.dataset.username || '—'} | Telegram ID: ${row.dataset.telegramId || '—'}`;
+        modalUser.textContent = `${row.dataset.name || '—'} | ${row.dataset.username || '—'}`;
         setSubmittingState(false);
         renderBrigadeMembers();
         modal.classList.remove("hidden");
@@ -177,4 +212,8 @@ document.addEventListener("DOMContentLoaded", () => {
             closeModal();
         }
     });
+
+    searchNameInput?.addEventListener("input", applyFilters);
+    searchBrigadeInput?.addEventListener("input", applyFilters);
+    applyFilters();
 });
