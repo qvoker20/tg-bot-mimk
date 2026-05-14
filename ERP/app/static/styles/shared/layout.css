@@ -189,12 +189,6 @@
     font-weight: 700;
 }
 
-.module-sidebar-toggle,
-.module-sidebar-close,
-.module-sidebar-backdrop {
-    display: none;
-}
-
 .module-sidebar-nav {
     display: grid;
     gap: 8px;
