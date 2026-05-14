@@ -55,3 +55,20 @@
     </section>
 </main>
 {% endblock %}
+
+{% block page_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const forms = document.querySelectorAll("form.auth-form, form.secondary-form");
+    forms.forEach((form) => {
+        form.addEventListener("submit", () => {
+            const submitButton = form.querySelector("button[type='submit']");
+            if (!submitButton) return;
+            submitButton.disabled = true;
+            submitButton.dataset.originalText = submitButton.textContent || "";
+            submitButton.textContent = "Надсилаємо...";
+        });
+    });
+});
+</script>
+{% endblock %}

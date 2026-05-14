@@ -3,8 +3,10 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.dependencies import get_current_user
 from app.services.auth_service import (
+    CodeRequestRateLimitError,
     get_user_by_id,
     get_user_by_phone,
+    has_active_code,
     issue_code,
     normalize_phone_380,
     verify_code,
@@ -68,6 +70,13 @@ async def request_code(request: Request, phone_number: str = Form(...)):
             user=user,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
+        )
+    except CodeRequestRateLimitError as error:
+        return _render_login(
+            request,
+            stage="verify" if has_active_code(phone_380) else "phone",
+            phone_number=f"+{phone_380}",
+            error=str(error),
         )
     except Exception:
         return _render_login(

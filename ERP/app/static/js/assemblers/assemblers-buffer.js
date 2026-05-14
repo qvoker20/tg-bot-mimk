@@ -59,9 +59,17 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     let tableManager = null;
-    window.AssemblersTableTools?.initTable({ table, storageKey: table.dataset.tableKey || "assemblers-buffer" })
-        .then(manager => { tableManager = manager; })
-        .catch(e => console.warn("Failed to initialize table manager", e));
+    const tableToolsInit = window.AssemblersTableTools?.initTable?.({
+        table,
+        storageKey: table.dataset.tableKey || "assemblers-buffer",
+    });
+    if (tableToolsInit?.then) {
+        tableToolsInit
+            .then((manager) => {
+                tableManager = manager;
+            })
+            .catch((e) => console.warn("Failed to initialize table manager", e));
+    }
 
     const state = {
         offset: 0,
