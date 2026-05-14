@@ -53,7 +53,10 @@ def fetch_schedule_week_rows(*, subdivision: str, week_start: date, week_end: da
                     completed_location_label,
                     completed_latitude,
                     completed_longitude,
-                    completed_accuracy
+                    completed_accuracy,
+                    auto_closed_at,
+                    auto_close_note,
+                    pause_seconds
                 FROM {SCHEDULE_TASKS_TABLE}
                 WHERE subdivision = %s
                   AND scheduled_for BETWEEN %s AND %s
@@ -93,7 +96,10 @@ def fetch_user_day_task_rows(*, source_user_id: int, target_day: date) -> list[t
                     completed_location_label,
                     completed_latitude,
                     completed_longitude,
-                    completed_accuracy
+                    completed_accuracy,
+                    auto_closed_at,
+                    auto_close_note,
+                    pause_seconds
                 FROM {SCHEDULE_TASKS_TABLE}
                 WHERE source_user_id = %s
                   AND scheduled_for = %s
@@ -375,7 +381,9 @@ def fetch_task_for_user(*, task_id: int, source_user_id: int) -> tuple | None:
                     completed_latitude,
                     completed_longitude,
                     completed_accuracy,
-                    auto_closed_at
+                    auto_closed_at,
+                    auto_close_note,
+                    pause_seconds
                 FROM {SCHEDULE_TASKS_TABLE}
                 WHERE id = %s
                   AND source_user_id = %s
@@ -416,7 +424,9 @@ def fetch_task_by_id(task_id: int) -> tuple | None:
                     completed_latitude,
                     completed_longitude,
                     completed_accuracy,
-                    auto_closed_at
+                    auto_closed_at,
+                    auto_close_note,
+                    pause_seconds
                 FROM {SCHEDULE_TASKS_TABLE}
                 WHERE id = %s
                 LIMIT 1
@@ -438,6 +448,9 @@ def mark_task_started(*, task_id: int, location: dict) -> int:
                     paused_at = NULL,
                     completed_at = NULL,
                     pause_reason = '',
+                    pause_seconds = 0,
+                    auto_closed_at = NULL,
+                    auto_close_note = '',
                     started_location_label = %s,
                     started_latitude = %s,
                     started_longitude = %s,
@@ -467,6 +480,7 @@ def mark_task_paused(*, task_id: int, pause_reason: str) -> int:
                     status = %s,
                     paused_at = NOW(),
                     pause_reason = %s,
+                    auto_close_note = '',
                     updated_at = NOW()
                 WHERE id = %s
                 """,
@@ -483,7 +497,12 @@ def mark_task_resumed(*, task_id: int) -> int:
                 UPDATE {SCHEDULE_TASKS_TABLE}
                 SET
                     status = %s,
+                    pause_seconds = COALESCE(pause_seconds, 0) + CASE
+                        WHEN paused_at IS NULL THEN 0
+                        ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - paused_at))))::BIGINT
+                    END,
                     paused_at = NULL,
+                    pause_reason = '',
                     updated_at = NOW()
                 WHERE id = %s
                 """,
@@ -501,9 +520,14 @@ def mark_task_completed(*, task_id: int, location: dict) -> int:
                 SET
                     status = %s,
                     completed_at = NOW(),
+                    pause_seconds = COALESCE(pause_seconds, 0) + CASE
+                        WHEN paused_at IS NULL THEN 0
+                        ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - paused_at))))::BIGINT
+                    END,
                     paused_at = NULL,
                     auto_closed_at = NULL,
                     auto_close_note = COALESCE(auto_close_note, ''),
+                    pause_reason = '',
                     completed_location_label = %s,
                     completed_latitude = %s,
                     completed_longitude = %s,

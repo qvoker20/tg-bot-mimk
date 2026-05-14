@@ -71,6 +71,65 @@
         max-width: 100% !important;
         box-sizing: border-box !important;
     }
+
+    .main-info-timeline-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .main-info-timeline-col {
+        min-width: 0;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-wrap {
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table {
+        min-width: 100% !important;
+        table-layout: fixed;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th,
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(1),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(1) {
+        width: 9%;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(2),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(2) {
+        width: 24%;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(3),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(3) {
+        width: 18%;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(4),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(4),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(5),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(5) {
+        width: 14%;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(6),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(6) {
+        width: 9%;
+    }
+
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table th:nth-child(7),
+    .main-order-info-modal .main-info-timeline-col .main-order-details-table td:nth-child(7) {
+        width: 12%;
+    }
+
 </style>
 {% endblock %}
 

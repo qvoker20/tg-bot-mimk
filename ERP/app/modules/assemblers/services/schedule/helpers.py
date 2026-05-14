@@ -151,17 +151,38 @@ def _serialize_datetime(value) -> str:
     return value.isoformat()
 
 
+def _format_pause_hours_label(total_seconds) -> str:
+    try:
+        seconds = max(0, int(total_seconds or 0))
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    hours = round(seconds / 3600, 1)
+    return f"Пауза: {str(f'{hours:.1f}').replace('.', ',')} год"
+
+
 def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> dict:
     order_number = _safe_text(row[6])
     customer = (customer_fallbacks or {}).get(order_number, "") or _safe_text(row[7])
     scheduled_for = row[3]
+    auto_close_note = _safe_text(row[25]) if len(row) > 25 else ""
+    pause_seconds = int(row[26] or 0) if len(row) > 26 and row[26] is not None else 0
+    status = _safe_text(row[5]) or TASK_STATUS_QUEUED
+    status_label = (
+        "Пауза - завершено"
+        if status == TASK_STATUS_COMPLETED and auto_close_note.startswith("Пауза - завершено")
+        else status
+    )
+
     return {
         "id": int(row[0]),
         "source_user_id": int(row[1]),
         "assembler_name": _safe_text(row[2]),
         "scheduled_for": scheduled_for.isoformat() if scheduled_for else "",
         "task_type": _normalize_task_type(row[4]),
-        "status": _safe_text(row[5]) or TASK_STATUS_QUEUED,
+        "status": status,
+        "status_label": status_label,
         "order_number": order_number,
         "customer": customer,
         "part_number": _safe_text(row[8]),
@@ -181,6 +202,9 @@ def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> 
         "completed_longitude": row[22],
         "completed_accuracy": row[23],
         "auto_closed_at": _serialize_datetime(row[24]) if len(row) > 24 else None,
+        "auto_close_note": auto_close_note,
+        "pause_seconds": pause_seconds,
+        "pause_hours_label": _format_pause_hours_label(pause_seconds),
     }
 
 

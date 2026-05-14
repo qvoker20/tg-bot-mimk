@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0">
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles/shared/style.css') }}?v=global-loader-10">
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles/shared/style.css') }}?v=global-loader-11">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}{% if user %} has-topbar{% endif %}">
@@ -53,6 +53,7 @@
     </script>
     <script src="{{ url_for('static', path='/js/auth/auth-guard.js') }}?v=auth-refresh-1" defer></script>
     <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}?v=table-tools-3" defer></script>
+    <script src="{{ url_for('static', path='/js/shared/module-sidebar-toggle.js') }}?v=module-sidebar-1" defer></script>
     {% endif %}
     {% block page_scripts %}{% endblock %}
 </body>

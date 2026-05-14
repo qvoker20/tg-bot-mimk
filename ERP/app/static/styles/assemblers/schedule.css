@@ -66,9 +66,16 @@
     min-height: 0;
     height: 100%;
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: #fff;
+}
+
+.schedule-mobile-hint {
+    display: none;
 }
 
 .schedule-grid-table {
@@ -499,6 +506,23 @@
     color: #475569;
 }
 
+.schedule-task-auto-note,
+.schedule-task-pause-hours {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: left;
+}
+
+.schedule-task-auto-note {
+    color: #166534;
+}
+
+.schedule-task-pause-hours {
+    color: #92400e;
+}
+
 .schedule-slot-card.task-assembly {
     background: #ecfdf3;
     border-color: #86efac;
@@ -517,6 +541,107 @@
 .schedule-slot-card.task-mixed {
     background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
     border-color: #cbd5e1;
+}
+
+@media (max-width: 900px) {
+    .schedule-page {
+        gap: 10px;
+    }
+
+    .schedule-toolbar-row {
+        gap: 10px;
+    }
+
+    .schedule-week-controls,
+    .schedule-toolbar-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+        gap: 8px;
+    }
+
+    .schedule-week-label,
+    .schedule-date-picker-field,
+    .schedule-toolbar-row .ghost-button,
+    .schedule-toolbar-row .module-link {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .schedule-week-label,
+    .schedule-date-picker-field {
+        grid-column: 1 / -1;
+    }
+
+    .schedule-grid-wrap {
+        padding-bottom: 6px;
+    }
+
+    .schedule-mobile-hint {
+        display: block;
+        padding: 8px 10px 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .schedule-col-brigade,
+    .schedule-brigade-cell {
+        min-width: 42px;
+        width: 42px;
+    }
+
+    .schedule-col-worker,
+    .schedule-worker-cell {
+        min-width: 132px;
+        width: 132px;
+    }
+
+    .schedule-day-head,
+    .schedule-slot {
+        min-width: 118px;
+        width: 118px;
+    }
+
+    .schedule-day-head {
+        padding: 10px 8px;
+    }
+
+    .schedule-day-head span {
+        margin-bottom: 4px;
+        font-size: 10px;
+    }
+
+    .schedule-day-head strong {
+        font-size: 13px;
+    }
+
+    .schedule-worker-cell,
+    .schedule-slot {
+        padding: 6px;
+    }
+
+    .schedule-slot-card {
+        min-height: 76px;
+        padding: 8px;
+    }
+
+    .schedule-slot-card.has-task strong {
+        margin-bottom: 4px;
+        font-size: 12px;
+    }
+
+    .schedule-slot-card.has-task span,
+    .schedule-task-status-badge,
+    .schedule-task-pause-reason,
+    .schedule-task-auto-note,
+    .schedule-task-pause-hours {
+        font-size: 11px;
+    }
+
+    .schedule-task-status-badge {
+        white-space: normal;
+    }
 }
 
 .schedule-task-more {

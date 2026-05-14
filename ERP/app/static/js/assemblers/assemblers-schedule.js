@@ -175,6 +175,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return `<span class="schedule-task-status-badge ${taskStatusClass(label)}">${escapeHtml(label)}</span>`;
     }
 
+    function renderStatusBadgeForTask(task) {
+        const label = String(task?.status_label || task?.status || "—").trim() || "—";
+        const toneSource = String(task?.status || label).trim() || label;
+        return `<span class="schedule-task-status-badge ${taskStatusClass(toneSource)}">${escapeHtml(label)}</span>`;
+    }
+
     function renderPauseReason(task) {
         const isPaused = taskStatusClass(task?.status) === "is-paused";
         const reason = String(task?.pause_reason || "").trim();
@@ -182,6 +188,19 @@ document.addEventListener("DOMContentLoaded", () => {
             return "";
         }
         return `<div class="schedule-task-pause-reason">Причина паузи: ${escapeHtml(reason)}</div>`;
+    }
+
+    function renderTaskMetaNotes(task) {
+        const parts = [];
+        const pauseHoursLabel = String(task?.pause_hours_label || "").trim();
+        const autoCloseNote = String(task?.auto_close_note || "").trim();
+        if (pauseHoursLabel) {
+            parts.push(`<div class="schedule-task-pause-hours">${escapeHtml(pauseHoursLabel)}</div>`);
+        }
+        if (autoCloseNote) {
+            parts.push(`<div class="schedule-task-auto-note">${escapeHtml(autoCloseNote)}</div>`);
+        }
+        return parts.join("");
     }
 
     function getSelectedCellsData() {
@@ -553,12 +572,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     const orderLine = firstTask.task_type === "related"
                         ? `<span>${escapeHtml(firstTask.description || "—")}</span>`
                         : `<span>Замовлення: ${escapeHtml(firstTask.order_number || "—")}</span>`;
-                    const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadge(firstTask.status)}</div>`;
+                    const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadgeForTask(firstTask)}</div>`;
                     const pauseReasonLine = renderPauseReason(firstTask);
+                    const extraNotes = renderTaskMetaNotes(firstTask);
                     const hiddenCount = assignment.length > 1
                         ? `<span class="schedule-collapsed-more">+${assignment.length - 1}</span>`
                         : "";
-                    card.innerHTML = `<div class="schedule-task-item schedule-task-item-${firstTask.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${statusLine}${pauseReasonLine}</div>${hiddenCount}`;
+                    card.innerHTML = `<div class="schedule-task-item schedule-task-item-${firstTask.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${statusLine}${pauseReasonLine}${extraNotes}</div>${hiddenCount}`;
                 } else if (assignment.length) {
                     card.classList.add("has-task");
                     const uniqueTypes = Array.from(new Set(assignment.map((task) => task.task_type)));
@@ -576,9 +596,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         const customerLine = task.task_type === "related"
                             ? ""
                             : `<span>Замовник: ${escapeHtml(task.customer || "—")}</span>`;
-                        const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadge(task.status)}</div>`;
+                        const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadgeForTask(task)}</div>`;
                         const pauseReasonLine = renderPauseReason(task);
-                        return `<div class="schedule-task-item schedule-task-item-${task.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${customerLine}${statusLine}${pauseReasonLine}</div>`;
+                        const extraNotes = renderTaskMetaNotes(task);
+                        return `<div class="schedule-task-item schedule-task-item-${task.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${customerLine}${statusLine}${pauseReasonLine}${extraNotes}</div>`;
                     }).join("");
                     card.innerHTML = preview;
                 } else if (isCollapsed) {

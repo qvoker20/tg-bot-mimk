@@ -100,6 +100,9 @@ def ensure_schedule_schema() -> None:
                 cursor.execute(
                 f"ALTER TABLE {SCHEDULE_TASKS_TABLE} ADD COLUMN IF NOT EXISTS auto_close_note TEXT NOT NULL DEFAULT ''"
                 )
+                cursor.execute(
+                f"ALTER TABLE {SCHEDULE_TASKS_TABLE} ADD COLUMN IF NOT EXISTS pause_seconds BIGINT NOT NULL DEFAULT 0"
+                )
 
                 cursor.execute(
                 f"""
@@ -215,6 +218,7 @@ def ensure_schedule_schema() -> None:
                     normalized_execution TIMESTAMPTZ := COALESCE(execution_time, NOW());
                     cutoff_at TIMESTAMPTZ;
                     updated_completed INTEGER := 0;
+                    updated_paused_completed INTEGER := 0;
                     updated_no_execution INTEGER := 0;
                 BEGIN
                     normalized_day := COALESCE(target_day, (normalized_execution AT TIME ZONE 'Europe/Kyiv')::DATE);
@@ -238,12 +242,36 @@ def ensure_schedule_schema() -> None:
                     SET
                         status = '{TASK_STATUS_COMPLETED}',
                         completed_at = COALESCE(completed_at, normalized_execution),
+                        pause_seconds = COALESCE(pause_seconds, 0) + CASE
+                            WHEN paused_at IS NULL THEN 0
+                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (normalized_execution - paused_at))))::BIGINT
+                        END,
+                        paused_at = NULL,
+                        pause_reason = '',
                         auto_closed_at = normalized_execution,
                         auto_close_note = 'Автоматично завершено після 18:00',
                         updated_at = normalized_execution
                     WHERE scheduled_for = normalized_day
                       AND status = '{TASK_STATUS_IN_PROGRESS}';
                     GET DIAGNOSTICS updated_completed = ROW_COUNT;
+
+                    UPDATE {SCHEDULE_TASKS_TABLE}
+                    SET
+                        status = '{TASK_STATUS_COMPLETED}',
+                        completed_at = COALESCE(completed_at, normalized_execution),
+                        pause_seconds = COALESCE(pause_seconds, 0) + CASE
+                            WHEN paused_at IS NULL THEN 0
+                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (normalized_execution - paused_at))))::BIGINT
+                        END,
+                        paused_at = NULL,
+                        pause_reason = '',
+                        auto_closed_at = normalized_execution,
+                        auto_close_note = 'Пауза - завершено автоматично о 18:00',
+                        updated_at = normalized_execution
+                    WHERE scheduled_for = normalized_day
+                      AND status = '{TASK_STATUS_PAUSED}';
+                                        GET DIAGNOSTICS updated_paused_completed = ROW_COUNT;
+                                        updated_completed := updated_completed + updated_paused_completed;
 
                     UPDATE {SCHEDULE_TASKS_TABLE}
                     SET
