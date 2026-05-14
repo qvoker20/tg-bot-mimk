@@ -251,7 +251,8 @@ button {
 }
 
 button:hover {
-    background: var(--brand-deep);
+  background: #000;
+  color: white;
 }
 
 .ghost-button {

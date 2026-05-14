@@ -311,6 +311,7 @@ gap: 8px;
 .main-order-detail-edit-button:hover:not(:disabled) {
     border-color: #dd6d20;
     background: linear-gradient(180deg, #fff4ea 0%, #ffe8d0 100%);
+    color: #9a3412;
 }
 
 .main-order-detail-edit-button:disabled {
