@@ -287,9 +287,15 @@ const togglePinnedColumn = (headerCell) => {
             headerCells.forEach((cell, index) => {
                 cell.dataset.colIndex = String(index);
                 cell.classList.add("table-col-header");
-                cell.draggable = true;
+                
+                // Disable resizing and dragging for staff table
+                const disableResizeAndDrag = storageKey === "assemblers-staff";
+                
+                if (!disableResizeAndDrag) {
+                    cell.draggable = true;
+                }
 
-                if (!cell.querySelector(".table-col-resizer")) {
+                if (!disableResizeAndDrag && !cell.querySelector(".table-col-resizer")) {
                     const handle = document.createElement("span");
                     handle.className = "table-col-resizer";
                     handle.addEventListener("mousedown", (event) => {
@@ -319,7 +325,7 @@ const togglePinnedColumn = (headerCell) => {
                 }
 
                 cell.addEventListener("dragstart", (event) => {
-                    if (isResizing) {
+                    if (isResizing || storageKey === "assemblers-staff") {
                         event.preventDefault();
                         return;
                     }
@@ -333,11 +339,17 @@ const togglePinnedColumn = (headerCell) => {
                 });
 
                 cell.addEventListener("dragover", (event) => {
+                    if (storageKey === "assemblers-staff") {
+                        return;
+                    }
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "move";
                 });
 
                 cell.addEventListener("drop", (event) => {
+                    if (storageKey === "assemblers-staff") {
+                        return;
+                    }
                     event.preventDefault();
                     const draggedIndex = Number(event.dataTransfer.getData("text/plain"));
                     const targetIndex = Number(cell.dataset.colIndex);
@@ -354,7 +366,7 @@ const togglePinnedColumn = (headerCell) => {
                 });
 
                 cell.addEventListener("dblclick", (event) => {
-                    if (isResizing) {
+                    if (isResizing || storageKey === "assemblers-staff") {
                         event.preventDefault();
                         return;
                     }

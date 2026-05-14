@@ -45,7 +45,9 @@
                 {% include "partials/action_alert.html" %}
                 {% endwith %}
 
-                <div class="assemblers-table-wrap" data-assemblers-table-wrap>
+                <div class="table-loader" data-staff-loader>Завантаження збиральників...</div>
+
+                <div class="assemblers-table-wrap hidden" data-assemblers-table-wrap>
                     <table class="buffer-table staff-table" data-table-key="assemblers-staff">
                         <thead>
                             <tr>
@@ -81,7 +83,7 @@
                     </table>
                 </div>
 
-                <div class="table-status-row">
+                <div class="table-status-row hidden" data-staff-meta-row>
                     <div class="table-meta">Знайдено {{ staff_rows|length }} користувачів.</div>
                 </div>
             </section>
@@ -128,6 +130,6 @@
 {% block page_scripts %}
 <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
 {% if page_script %}
-<script src="{{ url_for('static', path=page_script) }}?v=staff-modal-3" defer></script>
+<script src="{{ url_for('static', path=page_script) }}?v=staff-modal-5" defer></script>
 {% endif %}
 {% endblock %}

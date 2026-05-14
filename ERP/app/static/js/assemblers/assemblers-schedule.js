@@ -144,6 +144,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return "Супутня задача";
     }
 
+    function escapeHtml(value) {
+        return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
     function taskStatusClass(status) {
         const normalizedStatus = String(status || "").trim().toLowerCase();
         if (normalizedStatus === "у черзі") {
@@ -163,7 +172,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderStatusBadge(status) {
         const label = status || "—";
-        return `<span class="schedule-task-status-badge ${taskStatusClass(label)}">${label}</span>`;
+        return `<span class="schedule-task-status-badge ${taskStatusClass(label)}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderPauseReason(task) {
+        const isPaused = taskStatusClass(task?.status) === "is-paused";
+        const reason = String(task?.pause_reason || "").trim();
+        if (!isPaused || !reason) {
+            return "";
+        }
+        return `<div class="schedule-task-pause-reason">Причина паузи: ${escapeHtml(reason)}</div>`;
     }
 
     function getSelectedCellsData() {
@@ -402,9 +420,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const groups = new Map();
 
         tasks.forEach((task) => {
+            const reasonKey = String(task.pause_reason || "").trim();
             const key = task.task_type === "related"
-                ? `${task.task_type}:${task.description}:${task.status}`
-                : `${task.task_type}:${task.order_number}:${task.status}`;
+                ? `${task.task_type}:${task.description}:${task.status}:${reasonKey}`
+                : `${task.task_type}:${task.order_number}:${task.status}:${reasonKey}`;
             const existing = groups.get(key) || {
                 ids: [],
                 task_type: task.task_type,
@@ -412,6 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 customer: "",
                 status: task.status,
                 description: task.description,
+                pause_reason: task.pause_reason || "",
                 customers: [],
             };
 
@@ -529,14 +549,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     card.classList.add("has-task");
                     const firstTask = assignment[0];
                     const title = taskTypeLabel(firstTask.task_type);
+                    const statusClass = taskStatusClass(firstTask.status).replace("is-", "");
                     const orderLine = firstTask.task_type === "related"
-                        ? `<span>${firstTask.description || "—"}</span>`
-                        : `<span>Замовлення: ${firstTask.order_number || "—"}</span>`;
+                        ? `<span>${escapeHtml(firstTask.description || "—")}</span>`
+                        : `<span>Замовлення: ${escapeHtml(firstTask.order_number || "—")}</span>`;
                     const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadge(firstTask.status)}</div>`;
+                    const pauseReasonLine = renderPauseReason(firstTask);
                     const hiddenCount = assignment.length > 1
                         ? `<span class="schedule-collapsed-more">+${assignment.length - 1}</span>`
                         : "";
-                    card.innerHTML = `<div class="schedule-task-item schedule-task-item-${firstTask.task_type}"><strong>${title}</strong>${orderLine}${statusLine}</div>${hiddenCount}`;
+                    card.innerHTML = `<div class="schedule-task-item schedule-task-item-${firstTask.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${statusLine}${pauseReasonLine}</div>${hiddenCount}`;
                 } else if (assignment.length) {
                     card.classList.add("has-task");
                     const uniqueTypes = Array.from(new Set(assignment.map((task) => task.task_type)));
@@ -547,14 +569,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                     const preview = assignment.map((task) => {
                         const title = taskTypeLabel(task.task_type);
+                        const statusClass = taskStatusClass(task.status).replace("is-", "");
                         const orderLine = task.task_type === "related"
-                            ? `<span>${task.description || "—"}</span>`
-                            : `<span>Замовлення: ${task.order_number || "—"}</span>`;
+                            ? `<span>${escapeHtml(task.description || "—")}</span>`
+                            : `<span>Замовлення: ${escapeHtml(task.order_number || "—")}</span>`;
                         const customerLine = task.task_type === "related"
                             ? ""
-                            : `<span>Замовник: ${task.customer || "—"}</span>`;
+                            : `<span>Замовник: ${escapeHtml(task.customer || "—")}</span>`;
                         const statusLine = `<div class="schedule-task-status-row"><span class="schedule-task-status-label">Статус</span>${renderStatusBadge(task.status)}</div>`;
-                        return `<div class="schedule-task-item schedule-task-item-${task.task_type}"><strong>${title}</strong>${orderLine}${customerLine}${statusLine}</div>`;
+                        const pauseReasonLine = renderPauseReason(task);
+                        return `<div class="schedule-task-item schedule-task-item-${task.task_type} schedule-task-item-status-${statusClass}"><strong>${escapeHtml(title)}</strong>${orderLine}${customerLine}${statusLine}${pauseReasonLine}</div>`;
                     }).join("");
                     card.innerHTML = preview;
                 } else if (isCollapsed) {

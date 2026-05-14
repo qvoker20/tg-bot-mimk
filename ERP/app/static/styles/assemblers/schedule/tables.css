@@ -29,13 +29,13 @@
 
 .schedule-grid-table tbody .schedule-sticky-col,
 .schedule-grid-table tbody .schedule-sticky-col-2 {
-    z-index: 3;
+    z-index: 20;
 }
 
 .schedule-grid-table thead .schedule-sticky-col,
 .schedule-grid-table thead .schedule-sticky-col-2 {
     top: 0;
-    z-index: 8;
+    z-index: 30;
     background: #f7fbff;
 }
 
@@ -49,13 +49,13 @@
 .schedule-sticky-col {
     position: sticky;
     left: 0;
-    z-index: 5;
+    z-index: 22;
 }
 
 .schedule-sticky-col-2 {
     position: sticky;
     left: 54px;
-    z-index: 5;
+    z-index: 22;
 }
 
 .schedule-col-brigade,

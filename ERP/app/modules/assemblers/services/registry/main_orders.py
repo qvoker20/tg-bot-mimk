@@ -181,7 +181,10 @@ def load_main_rows(
                             TRIM(COALESCE(order_number, '')),
                             scheduled_for,
                             TRIM(COALESCE(task_type, '')),
-                            TRIM(COALESCE(status, ''))
+                            TRIM(COALESCE(status, '')),
+                            paused_at,
+                            TRIM(COALESCE(pause_reason, '')),
+                            updated_at
                         FROM {SCHEDULE_TASKS_TABLE}
                         WHERE TRIM(COALESCE(order_number, '')) = ANY(%s)
                         """,
@@ -196,6 +199,9 @@ def load_main_rows(
                                 "scheduled_for": schedule_row[1],
                                 "task_type": schedule_row[2],
                                 "status": schedule_row[3],
+                                "paused_at": schedule_row[4],
+                                "pause_reason": schedule_row[5],
+                                "updated_at": schedule_row[6],
                             }
                         )
 
@@ -288,6 +294,40 @@ def load_main_rows(
         assembly_details = _filter_required_stage_details(details, required_key="requires_assembly")
         install_details = _filter_required_stage_details(details, required_key="requires_install")
         schedule_tasks = schedule_tasks_by_order.get(order_number, [])
+        paused_tasks = [
+            task
+            for task in schedule_tasks
+            if _safe_text(task.get("status")).casefold() == TASK_STATUS_PAUSED.casefold()
+        ]
+
+        latest_paused_task = None
+        if paused_tasks:
+            latest_paused_task = max(
+                paused_tasks,
+                key=lambda task: (
+                    _normalize_datetime(task.get("paused_at"))
+                    or _normalize_datetime(task.get("updated_at"))
+                    or _normalize_datetime(task.get("scheduled_for"))
+                    or _normalize_datetime(record[15])
+                ),
+            )
+
+        latest_pause_at = (
+            _normalize_datetime(latest_paused_task.get("paused_at"))
+            if latest_paused_task
+            else None
+        ) or (
+            _normalize_datetime(latest_paused_task.get("updated_at"))
+            if latest_paused_task
+            else None
+        ) or _normalize_datetime(record[15])
+
+        latest_pause_reason = (
+            _safe_text(latest_paused_task.get("pause_reason"))
+            if latest_paused_task
+            else ""
+        )
+
         live = live_context.get(order_number, {})
         total_value = sum(
             (Decimal(detail.get("item_value") or 0) for detail in details), start=Decimal("0")
@@ -450,13 +490,13 @@ def load_main_rows(
                 "recorded_at": _format_datetime(record[10]),
                 "address": _safe_text(record[11]) or "-",
                 "address_note": _safe_text(record[12]) or "-",
-                "assembler_stop_note": "-",
+                "assembler_stop_note": latest_pause_reason or "-",
                 "completion_percent": "-",
                 "warehouse_status": "-",
                 "warehouse_note": "-",
                 "materials": live.get("materials") or _safe_text(record[13]) or "-",
                 "constructor_name": live.get("constructor_name") or _safe_text(record[14]) or "-",
-                "assembler_pause_at": _format_datetime(record[15]),
+                "assembler_pause_at": _format_datetime(latest_pause_at),
                 "manager_name": live.get("manager_name") or _safe_text(record[16]) or "-",
                 "signed_at": live.get("signed_at") or _format_date(record[17]),
                 "planned_install_at": live.get("planned_install_at") or _format_date(record[18]),
@@ -655,17 +695,20 @@ def load_main_order_card(order_number: str) -> dict | None:
                     SELECT
                         scheduled_for,
                         TRIM(COALESCE(task_type, '')),
-                        TRIM(COALESCE(status, ''))
+                        TRIM(COALESCE(status, '')),
+                        TRIM(COALESCE(assembler_name, ''))
                     FROM {SCHEDULE_TASKS_TABLE}
                     WHERE TRIM(COALESCE(order_number, '')) = %s
+                    ORDER BY scheduled_for, assembler_name
                     """,
                     (normalized_order,),
                 )
                 schedule_tasks = [
                     {
-                        "scheduled_for": row[0],
+                        "scheduled_for": row[0].isoformat() if row[0] else None,
                         "task_type": row[1],
                         "status": row[2],
+                        "assembler_name": row[3],
                     }
                     for row in cursor.fetchall()
                 ]
@@ -797,6 +840,7 @@ def load_main_order_card(order_number: str) -> dict | None:
         "install_completed_at": _format_datetime(last_install_completed),
         "install_hours": _format_duration(install_hours_minutes) if install_hours_minutes else "-",
         "install_workers_count": install_workers_count,
+        "schedule_tasks": schedule_tasks,
         "details": [
             {
                 "detail_id": d["detail_id"],

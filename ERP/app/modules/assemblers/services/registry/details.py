@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.modules.assemblers.db.connection import get_db_connection
 
-from .constants import CLOSED_STATUS, DETAILS_TABLE_NAME, MAIN_TABLE_NAME
+from .constants import CLOSED_STATUS, DETAILS_TABLE_NAME, MAIN_TABLE_NAME, SCHEDULE_TASKS_TABLE
 from .context import _load_detail_production_context
 from .schema import ensure_schema
 from .status import _build_detail_status_value, _normalize_execution_status
@@ -93,7 +93,9 @@ def load_detail_rows(
                     d.requires_assembly,
                     d.requires_install,
                     d.total_hours,
-                    d.item_percent
+                    d.item_percent,
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), '')
                 FROM {DETAILS_TABLE_NAME} d
                 LEFT JOIN {MAIN_TABLE_NAME} m ON m.order_number = d.order_number
                 {where_sql}
@@ -147,6 +149,10 @@ def load_detail_rows(
                     is_required=bool(record[28]),
                     skipped_label="Без монтажу",
                 ),
+                "assembly_paused": bool(_safe_text(record[31])),
+                "assembly_pause_reason": _safe_text(record[31]) or "",
+                "install_paused": bool(_safe_text(record[32])),
+                "install_pause_reason": _safe_text(record[32]) or "",
                 "detail_status": _build_detail_status_value(
                     assembly_status=_normalize_execution_status(
                         _safe_text(record[10]),

@@ -129,6 +129,76 @@ body.application-mobile-route .page-shell {
     line-height: 1.35;
 }
 
+.application-mobile-location-check {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: 0.75rem;
+    background: #fff4e5;
+    border: 1px solid #fdba74;
+}
+
+.application-mobile-location-status {
+    margin: 0;
+    color: #7c2d12;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.application-mobile-location-gate {
+    display: grid;
+    gap: 14px;
+}
+
+.application-mobile-location-gate-card {
+    display: grid;
+    gap: 12px;
+    padding: 20px 18px;
+    border-radius: 0.875rem;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+    border: 1px solid #fdba74;
+    box-shadow: 0 0.25rem 0.75rem rgba(251, 146, 60, 0.12);
+}
+
+.application-mobile-location-gate-eyebrow {
+    margin: 0;
+    color: #c2410c;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.application-mobile-location-gate-card h2 {
+    margin: 0;
+    color: #7c2d12;
+    font-size: 1.35rem;
+    line-height: 1.2;
+}
+
+.application-mobile-location-gate-card p {
+    margin: 0;
+    color: #9a3412;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.application-mobile-location-gate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.application-mobile-shell.is-location-blocked .application-mobile-day-switch,
+.application-mobile-shell.is-location-blocked .application-mobile-board,
+.application-mobile-shell.is-location-blocked .application-mobile-tabbar {
+    display: none;
+}
+
+.application-mobile-shell.is-location-blocked .application-mobile-location-gate {
+    display: grid;
+}
+
 .application-mobile-board {
     display: grid;
     gap: 14px;

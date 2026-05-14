@@ -73,10 +73,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return "is-default";
     };
 
-    const makeStatusBadge = (status) => {
+    const makeStatusBadge = (status, paused = false, pauseReason = "") => {
         const span = document.createElement("span");
         span.className = `assemblers-status-badge ${statusClassByValue(status)}`;
-        span.textContent = status || "—";
+        
+        if (paused && pauseReason) {
+            span.textContent = `${status || "—"} (Пауза: ${pauseReason})`;
+        } else if (paused) {
+            span.textContent = `${status || "—"} (Пауза)`;
+        } else {
+            span.textContent = status || "—";
+        }
         return span;
     };
 
@@ -94,7 +101,15 @@ document.addEventListener("DOMContentLoaded", () => {
         values.forEach((value, index) => {
             const td = document.createElement("td");
             td.dataset.colIndex = String(index);
-            if (index === 10 || index === 17 || index === 19) {
+            if (index === 10) {
+                // assembly_status with pause indicator
+                td.classList.add("assemblers-status-cell");
+                td.appendChild(makeStatusBadge(value, row.assembly_paused, row.assembly_pause_reason));
+            } else if (index === 17) {
+                // install_status with pause indicator
+                td.classList.add("assemblers-status-cell");
+                td.appendChild(makeStatusBadge(value, row.install_paused, row.install_pause_reason));
+            } else if (index === 19) {
                 td.classList.add("assemblers-status-cell");
                 td.appendChild(makeStatusBadge(value));
             } else {

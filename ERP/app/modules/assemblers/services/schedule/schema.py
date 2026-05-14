@@ -228,7 +228,7 @@ def ensure_schedule_schema() -> None:
                     IF EXISTS (
                         SELECT 1
                         FROM {_SCHEDULE_AUTO_CLOSE_RUNS_TABLE}
-                        WHERE run_date = normalized_day
+                        WHERE {_SCHEDULE_AUTO_CLOSE_RUNS_TABLE}.run_date = normalized_day
                     ) THEN
                         RETURN QUERY SELECT normalized_day, 0, 0, FALSE;
                         RETURN;
@@ -267,7 +267,7 @@ def ensure_schedule_schema() -> None:
                         updated_no_execution,
                         normalized_execution
                     )
-                    ON CONFLICT (run_date) DO NOTHING;
+                    ON CONFLICT ON CONSTRAINT assemblers_schedule_auto_close_runs_pkey DO NOTHING;
 
                     RETURN QUERY SELECT normalized_day, updated_completed, updated_no_execution, TRUE;
                 END;

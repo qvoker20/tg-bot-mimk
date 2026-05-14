@@ -96,13 +96,13 @@
 
 .schedule-grid-table tbody .schedule-sticky-col,
 .schedule-grid-table tbody .schedule-sticky-col-2 {
-    z-index: 3;
+    z-index: 20;
 }
 
 .schedule-grid-table thead .schedule-sticky-col,
 .schedule-grid-table thead .schedule-sticky-col-2 {
     top: 0;
-    z-index: 8;
+    z-index: 30;
     background: #f7fbff;
 }
 
@@ -124,13 +124,13 @@
 .schedule-sticky-col {
     position: sticky;
     left: 0;
-    z-index: 5;
+    z-index: 22;
 }
 
 .schedule-sticky-col-2 {
     position: sticky;
     left: 54px;
-    z-index: 5;
+    z-index: 22;
 }
 
 .schedule-col-brigade,
@@ -390,6 +390,39 @@
     border-radius: 8px;
     padding: 6px 8px 4px;
     background: rgba(249, 115, 22, 0.1);
+}
+
+.schedule-task-item.schedule-task-item-status-queued {
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+    border-top-color: #fb923c;
+}
+
+.schedule-task-item.schedule-task-item-status-in-progress {
+    background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+    border-top-color: #3b82f6;
+}
+
+.schedule-task-item.schedule-task-item-status-paused {
+    background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+    border-top-color: #f59e0b;
+}
+
+.schedule-task-item.schedule-task-item-status-completed {
+    background: linear-gradient(180deg, #ecfdf3 0%, #dcfce7 100%);
+    border-top-color: #22c55e;
+}
+
+.schedule-task-pause-reason {
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(146, 64, 14, 0.08);
+    border: 1px solid rgba(217, 119, 6, 0.28);
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: left;
 }
 
 .schedule-slot-card.has-task strong {

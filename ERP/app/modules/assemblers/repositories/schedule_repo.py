@@ -503,7 +503,7 @@ def mark_task_completed(*, task_id: int, location: dict) -> int:
                     completed_at = NOW(),
                     paused_at = NULL,
                     auto_closed_at = NULL,
-                    auto_close_note = NULL,
+                    auto_close_note = COALESCE(auto_close_note, ''),
                     completed_location_label = %s,
                     completed_latitude = %s,
                     completed_longitude = %s,

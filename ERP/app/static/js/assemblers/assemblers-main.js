@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const infoFactAssembly = document.querySelector("[data-main-info-fact-assembly]");
     const infoFactInstall = document.querySelector("[data-main-info-fact-install]");
     const infoDetailsBody = document.querySelector("[data-main-info-details-body]");
+    const infoAssemblyBody = document.querySelector("[data-main-info-assembly-body]");
+    const infoInstallBody = document.querySelector("[data-main-info-install-body]");
+    const infoScheduleBody = document.querySelector("[data-main-info-schedule-body]");
     const subcontractsModal = document.querySelector("[data-main-subcontracts-modal]");
     const subcontractsCloseButtons = document.querySelectorAll("[data-main-subcontracts-close]");
     const subcontractsOrderNumber = document.querySelector("[data-main-subcontracts-order-number]");
@@ -890,6 +893,93 @@ const renderInfoDetails = (details) => {
     });
 };
 
+const TASK_TYPE_LABELS = {
+    assembly: "Збірка",
+    install: "Монтаж",
+    related: "Супутня",
+};
+
+const calcDaysBetween = (startStr, endStr) => {
+    const s = parseFlexibleDate(startStr);
+    const e = parseFlexibleDate(endStr);
+    if (!s || !e) return "—";
+    const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? String(diff + 1) : "—";
+};
+
+const renderInfoTimeline = (details, stage, tbody) => {
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const relevant = details.filter((d) => d[`requires_${stage}`] !== false);
+    if (!relevant.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.textContent = "Даних немає.";
+        tr.appendChild(td); tbody.appendChild(tr);
+        return;
+    }
+    relevant.forEach((d) => {
+        const tr = document.createElement("tr");
+        const workerKey = stage === "assembly" ? "assembly_worker" : "install_worker";
+        const startKey = stage === "assembly" ? "assembly_started_at" : "install_started_at";
+        const endKey = stage === "assembly" ? "assembly_completed_at" : "install_completed_at";
+        const statusKey = stage === "assembly" ? "assembly_status" : "install_status";
+        const days = calcDaysBetween(d[startKey], d[endKey]);
+        const actionState = cloneDetailActionDefaults();
+        const statusText = resolveStageStatus(d, stage, actionState);
+        [
+            d.part_number || "—",
+            d.product_name || "—",
+            d[workerKey] || "—",
+            displayValue(d[startKey]),
+            displayValue(d[endKey]),
+            days,
+            statusText,
+        ].forEach((val, i) => {
+            const td = document.createElement("td");
+            if (i === 6) {
+                td.appendChild(makeStatusBadge(val));
+            } else {
+                td.textContent = displayValue(val);
+            }
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+};
+
+const renderInfoSchedule = (scheduleTasks, tbody) => {
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (!scheduleTasks || !scheduleTasks.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.textContent = "Запланованих днів немає.";
+        tr.appendChild(td); tbody.appendChild(tr);
+        return;
+    }
+    scheduleTasks.forEach((t) => {
+        const tr = document.createElement("tr");
+        const dateStr = t.scheduled_for ? ((() => {
+            const d = new Date(t.scheduled_for + "T00:00:00");
+            return Number.isNaN(d.getTime()) ? t.scheduled_for : formatUaDate(d);
+        })()) : "—";
+        const typeLabel = TASK_TYPE_LABELS[t.task_type] || displayValue(t.task_type);
+        [dateStr, t.assembler_name || "—", typeLabel, t.status || "—"].forEach((val, i) => {
+            const td = document.createElement("td");
+            if (i === 3) {
+                td.appendChild(makeStatusBadge(val));
+            } else {
+                td.textContent = displayValue(val);
+            }
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+};
+
 const openInfoModal = async (orderNumber) => {
     const response = await fetch("/assemblers/api/main/" + encodeURIComponent(orderNumber));
     const result = await response.json();
@@ -918,6 +1008,9 @@ const openInfoModal = async (orderNumber) => {
     applySummaryField(infoFactInstall, installFact);
 
     renderInfoDetails(details);
+    renderInfoTimeline(details, "assembly", infoAssemblyBody);
+    renderInfoTimeline(details, "install", infoInstallBody);
+    renderInfoSchedule(Array.isArray(order.schedule_tasks) ? order.schedule_tasks : [], infoScheduleBody);
     infoModal.classList.remove("hidden");
 };
 
@@ -1675,15 +1768,15 @@ const closeSubcontractsModal = () => {
             row.order_number, row.customer, row.order_type, row.status, row.note, row.products,
             row.contract_due_at, row.deadline, row.planned_hours, row.actual_hours, row.remaining_hours,
             row.planned_assembly_parts, row.planned_install_parts, row.assembly_status, row.assembly_started_at,
-            row.assembly_completed_at, row.assembly_hours, row.assembly_workers_count, row.install_status, row.install_started_at, 
+            row.assembly_completed_at, row.assembly_hours, row.install_status, row.install_started_at, 
             row.install_completed_at, row.install_hours, row.assembly_workers, row.install_workers, 
             row.paint_shop, row.paint_status, row.metal,
             row.metal_status, row.veneer, row.plastic_hpl, row.joinery_shop, row.soft_shop, row.artificial_stone,
             row.compact_plate, row.dsp_countertop, row.sliding_systems, row.glass_mirror, row.glass_status,
             row.frame_facades, row.ceramic_granite, row.constructor_status, row.production_status, row.order_value,
             row.vat, row.parts_count, row.launches_count,
-            row.recorded_at, row.address, row.address_note, row.assembler_stop_note,
-            row.materials, row.constructor_name, row.assembler_pause_at, row.manager_name,
+            row.recorded_at, row.address, row.address_note,
+            row.materials, row.constructor_name, row.manager_name,
         ];
 
         values.forEach((value, index) => {

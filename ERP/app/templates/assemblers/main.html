@@ -147,7 +147,6 @@
                                 <th>Початок збірки</th>
                                 <th>Заверш. збірка</th>
                                 <th>Годин на збірку</th>
-                                <th>Збиральники збірка (кількість)</th>
                                 <th>Статус монтаж</th>
                                 <th>Початок монтажу</th>
                                 <th>Кінець монтажу</th>
@@ -179,10 +178,8 @@
                                 <th>Дата запису</th>
                                 <th>Адреса</th>
                                 <th>Примітки до адреси</th>
-                                <th>Примітка стопу задачі від збиральника</th>
                                 <th>Матеріали</th>
                                 <th>Конструктор</th>
-                                <th>Пауза від збиральників дата та час</th>
                                 <th>Менеджер</th>
                             </tr>
                         </thead>
@@ -558,6 +555,83 @@
             </div>
         </section>
 
+        <section class="main-order-details-card">
+            <div class="section-header main-order-details-head">
+                <div>
+                    <h3>Хронологія виконання</h3>
+                    <p>Дні збірки та монтажу по кожній частині — хто, коли і скільки днів.</p>
+                </div>
+            </div>
+            <div class="main-info-timeline-grid">
+                <div class="main-info-timeline-col">
+                    <h4 class="main-info-timeline-label">Збірка</h4>
+                    <div class="main-order-details-wrap">
+                        <table class="buffer-table main-order-details-table">
+                            <thead>
+                                <tr>
+                                    <th>Ч.</th>
+                                    <th>Виріб</th>
+                                    <th>Збиральник</th>
+                                    <th>Початок</th>
+                                    <th>Кінець</th>
+                                    <th>Днів</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody data-main-info-assembly-body>
+                                <tr><td colspan="7">Оберіть замовлення.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="main-info-timeline-col">
+                    <h4 class="main-info-timeline-label">Монтаж</h4>
+                    <div class="main-order-details-wrap">
+                        <table class="buffer-table main-order-details-table">
+                            <thead>
+                                <tr>
+                                    <th>Ч.</th>
+                                    <th>Виріб</th>
+                                    <th>Монтажник</th>
+                                    <th>Початок</th>
+                                    <th>Кінець</th>
+                                    <th>Днів</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody data-main-info-install-body>
+                                <tr><td colspan="7">Оберіть замовлення.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="main-order-details-card">
+            <div class="section-header main-order-details-head">
+                <div>
+                    <h3>Графік (заплановані дні)</h3>
+                    <p>Заплановані дні з розкладу збиральників для цього замовлення.</p>
+                </div>
+            </div>
+            <div class="main-order-details-wrap">
+                <table class="buffer-table main-order-details-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Збиральник</th>
+                            <th>Тип задачі</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody data-main-info-schedule-body>
+                        <tr><td colspan="4">Оберіть замовлення.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
     </div>
 </div>
 
@@ -619,6 +693,6 @@
 {% block page_scripts %}
 <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
 {% if page_script %}
-<script src="{{ url_for('static', path=page_script) }}?v=main-filters-8" defer></script>
+<script src="{{ url_for('static', path=page_script) }}?v=main-filters-11" defer></script>
 {% endif %}
 {% endblock %}

@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
     const page = document.querySelector("[data-assemblers-page='staff']");
     const table = page?.querySelector("table");
+    const loader = page?.querySelector("[data-staff-loader]");
+    const tableWrap = page?.querySelector("[data-assemblers-table-wrap]");
+    const metaRow = page?.querySelector("[data-staff-meta-row]");
     const tableBody = page?.querySelector("[data-staff-body]");
     const modal = document.querySelector("[data-staff-modal]");
     const modalForm = document.querySelector("[data-staff-modal-form]");
@@ -16,10 +19,38 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    const loaderStartedAt = Date.now();
+    const minLoaderMs = 550;
+    const globalLoaderId = window.ERPLoading?.show?.();
+
+    const revealTable = () => {
+        const elapsed = Date.now() - loaderStartedAt;
+        const delay = Math.max(0, minLoaderMs - elapsed);
+
+        window.setTimeout(() => {
+            loader?.classList.add("hidden");
+            tableWrap?.classList.remove("hidden");
+            metaRow?.classList.remove("hidden");
+            if (typeof globalLoaderId === "number") {
+                window.ERPLoading?.hide?.(globalLoaderId);
+            }
+        }, delay);
+    };
+
+    // Fallback: even if table tools fail, still reveal the table.
+    window.setTimeout(revealTable, 1800);
+
     window.AssemblersTableTools?.initTable({
         table,
         storageKey: table.dataset.tableKey || "assemblers-staff",
-    }).catch(e => console.warn("Failed to initialize table manager", e));
+    })
+        .then(() => {
+            revealTable();
+        })
+        .catch(e => {
+            console.warn("Failed to initialize table manager", e);
+            revealTable();
+        });
 
     if (!tableBody || !modal || !modalForm || !modalUser || !modalSourceUserId || !modalSubdivision || !modalBrigade || !brigadeMembersText || !modalSubmit) {
         return;
@@ -36,8 +67,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let isSubmitting = false;
     const setSubmittingState = (value) => {
         isSubmitting = value;
-        modalSubdivision.disabled = value;
-        modalBrigade.disabled = value;
         modalSubmit.disabled = value;
         modalSubmit.textContent = value ? "Збереження..." : "Зберегти";
     };
@@ -87,9 +116,25 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const openModal = (row) => {
-        modalSourceUserId.value = row.dataset.sourceUserId || "";
-        modalSubdivision.value = row.dataset.subdivision || "";
-        modalBrigade.value = row.dataset.brigadeNumber || "";
+        const sourceUserId = row.dataset.sourceUserId || "";
+        const subdivision = row.dataset.subdivision || "";
+        const brigadeNumber = row.dataset.brigadeNumber || "";
+        
+        modalSourceUserId.value = sourceUserId;
+        modalSubdivision.value = subdivision;
+        modalBrigade.value = brigadeNumber;
+        
+        // Validate and set defaults if empty
+        if (!modalSourceUserId.value) {
+            console.warn("Warning: source_user_id is empty");
+        }
+        if (!modalSubdivision.value) {
+            modalSubdivision.value = "Приват";
+        }
+        if (!modalBrigade.value) {
+            modalBrigade.value = "1";
+        }
+        
         modalUser.textContent = `${row.dataset.name || '—'} | ${row.dataset.username || '—'} | Telegram ID: ${row.dataset.telegramId || '—'}`;
         setSubmittingState(false);
         renderBrigadeMembers();

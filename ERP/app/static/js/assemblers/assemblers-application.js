@@ -18,6 +18,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const finishCancelButtons = document.querySelectorAll("[data-app-finish-cancel]");
     const finishSelectAll = document.querySelector("[data-app-finish-select-all]");
     const finishClearAll = document.querySelector("[data-app-finish-clear-all]");
+    const checkLocationButtons = document.querySelectorAll("[data-app-check-location]");
+    const locationStatus = document.querySelector("[data-app-location-status]");
+    const locationGate = document.querySelector("[data-app-location-gate]");
 
     if (!root || !dayLabel || !dayDate || !meta || !taskList || !pauseModal || !pauseInput || !pauseError || !pauseConfirm || !finishModal || !finishList || !finishError || !finishConfirm) {
         return;
@@ -26,6 +29,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const withGlobalLoader = (operation, message) => window.ERPLoading?.withLoader
         ? window.ERPLoading.withLoader(operation, { message })
         : operation();
+
+    const setLocationGateState = (blocked) => {
+        root.classList.toggle("is-location-blocked", blocked);
+        if (!locationGate) {
+            return;
+        }
+        locationGate.classList.toggle("hidden", !blocked);
+        locationGate.setAttribute("aria-hidden", blocked ? "false" : "true");
+        if (blocked) {
+            locationGate.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    };
 
     const STATUS_CLASS_MAP = {
         "У черзі": "status-queued",
@@ -381,6 +396,50 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    const setLocationStatus = (text, kind = "info") => {
+        if (!locationStatus) {
+            return;
+        }
+        locationStatus.textContent = text;
+        locationStatus.dataset.statusKind = kind;
+    };
+
+    const checkLocationAccess = async () => {
+        if (!navigator.geolocation) {
+            setLocationGateState(true);
+            setLocationStatus("Геолокація не підтримується браузером.", "error");
+            return;
+        }
+
+        if (navigator.permissions?.query) {
+            try {
+                const permission = await navigator.permissions.query({ name: "geolocation" });
+                if (permission.state === "granted") {
+                    setLocationGateState(false);
+                    setLocationStatus("Доступ до геолокації дозволено.", "success");
+                } else if (permission.state === "denied") {
+                    setLocationGateState(true);
+                    setLocationStatus("Доступ до геолокації заборонено. Увімкніть дозвіл у браузері.", "error");
+                } else {
+                    setLocationGateState(false);
+                    setLocationStatus("Дозвіл на геолокацію ще не підтверджено.", "info");
+                }
+                return;
+            } catch (error) {
+                console.warn("Permission query failed", error);
+            }
+        }
+
+        try {
+            await getLocationPayload();
+            setLocationGateState(false);
+            setLocationStatus("Доступ до геолокації працює.", "success");
+        } catch (error) {
+            setLocationGateState(true);
+            setLocationStatus(error.message || "Не вдалося перевірити геолокацію.", "error");
+        }
+    };
+
     const openPauseModal = (taskId) => {
         state.pendingPauseTaskId = taskId;
         pauseInput.value = "";
@@ -542,6 +601,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    checkLocationButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            void checkLocationAccess();
+        });
+    });
+
     swipeZone?.addEventListener("touchstart", (event) => {
         const firstTouch = event.changedTouches?.[0];
         touchStartX = firstTouch?.clientX ?? null;
@@ -664,5 +729,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     renderDayHeader();
+    void checkLocationAccess();
     void loadTasks();
 });

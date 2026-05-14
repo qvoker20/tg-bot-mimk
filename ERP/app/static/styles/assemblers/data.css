@@ -96,7 +96,9 @@
 .buffer-table thead th {
     position: sticky;
     top: 0;
+    z-index: 26;
     background: #eff6ff;
+    background-clip: padding-box;
     color: var(--brand-deep);
     text-align: left;
     font-size: 0.72rem;
@@ -672,4 +674,8 @@ body.buffer-route .buffer-table-wrap {
 
 .main-order-row.is-clickable:hover td:not(.main-order-note-cell) {
     background: rgba(221, 109, 32, 0.08);
+}
+
+.main-order-row.is-clickable:hover td.is-sticky-col {
+    background: #e0edff !important;
 }

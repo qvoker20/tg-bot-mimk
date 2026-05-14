@@ -112,7 +112,9 @@
 .buffer-table thead th {
     position: sticky;
     top: 0;
+    z-index: 26;
     background: #eff6ff;
+    background-clip: padding-box;
     color: var(--brand-deep);
     text-align: left;
     font-size: 0.72rem;
@@ -140,6 +142,12 @@
     background: #eef4ff;
 }
 
+.assemblers-data-table tbody td,
+.buffer-table tbody td {
+    position: relative;
+    z-index: 1;
+}
+
 .buffer-table input[type="checkbox"] {
     width: 16px;
     height: 16px;
@@ -152,6 +160,7 @@
     border: 1px solid var(--line);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.94);
+    width: 100%;
 }
 
 .assemblers-data-table {
@@ -221,24 +230,26 @@
     background: rgba(221, 109, 32, 0.08);
 }
 
+/* Keep pinned cells fully opaque above hovered row background. */
+.main-order-row.is-clickable:hover td.is-sticky-col {
+    background: #e0edff !important;
+}
+
 .assemblers-data-table .is-sticky-col,
 .buffer-table .is-sticky-col {
     position: sticky;
     left: var(--sticky-left, 0px);
-    z-index: 6;
-    box-shadow:
-        1px 0 0 var(--line),
-        10px 0 14px -12px rgba(15, 23, 42, 0.45);
+    z-index: 20;
+    background-clip: padding-box;
+    box-shadow: 1px 0 0 var(--line);
 }
 
 .assemblers-data-table thead .is-sticky-col,
 .buffer-table thead .is-sticky-col {
-    z-index: 9;
+    z-index: 40;
     background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
     color: #123a7a;
-    box-shadow:
-        1px 0 0 var(--line),
-        10px 0 14px -12px rgba(15, 23, 42, 0.45);
+    box-shadow: 1px 0 0 var(--line);
 }
 
 .assemblers-data-table tbody .is-sticky-col,
@@ -253,6 +264,7 @@
 
 .assemblers-data-table tbody tr:hover .is-sticky-col,
 .buffer-table tbody tr:hover .is-sticky-col {
+    z-index: 21;
     background: #e0edff;
 }
 

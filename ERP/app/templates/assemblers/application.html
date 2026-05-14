@@ -33,6 +33,24 @@
             </button>
         </section>
 
+        <section class="application-mobile-location-check" aria-label="Перевірка геолокації">
+            <button type="button" class="application-mobile-action ghost" data-app-check-location>Перевірити геолокацію</button>
+            <p class="application-mobile-location-status" data-app-location-status>Геолокацію ще не перевірено.</p>
+        </section>
+
+        <section class="application-mobile-location-gate hidden" data-app-location-gate aria-hidden="true">
+            <div class="application-mobile-location-gate-card">
+                <p class="application-mobile-location-gate-eyebrow">Потрібен доступ до геолокації</p>
+                <h2>Увімкніть локацію в браузері</h2>
+                <p>
+                    Без доступу до геолокації не можна стартувати та завершувати задачі. Після надання дозволу поверніться сюди і натисніть перевірку ще раз.
+                </p>
+                <div class="application-mobile-location-gate-actions">
+                    <button type="button" class="application-mobile-action primary" data-app-check-location>Надати доступ</button>
+                </div>
+            </div>
+        </section>
+
         <section class="application-mobile-board" data-app-swipe-zone>
             <div class="application-mobile-meta" data-app-meta>Завантаження задач...</div>
             <div class="application-mobile-task-list" data-app-task-list>
