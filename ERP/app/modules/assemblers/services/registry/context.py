@@ -408,7 +408,7 @@ def _load_live_order_context(order_numbers: list[str]) -> dict[str, dict]:
             item[key] = record[offset]
 
         if not _safe_text(item.get("sliding_systems")):
-            item["sliding_systems"] = item.get("frame_facades")
+            item["sliding_systems"] = item.get("sliding_systems_status")
         if not _safe_text(item.get("glass_mirror")):
             item["glass_mirror"] = item.get("glass_status")
         if not _safe_text(item.get("frame_facades")):

@@ -5,6 +5,7 @@ import threading
 from app.modules.assemblers.db.connection import get_db_connection
 
 from .constants import (
+    DATA_DESIGNER_TABLE,
     MAIN_TABLE_NAME,
     DETAILS_TABLE_NAME,
     DETAIL_RECALC_QUEUE_TABLE,
@@ -335,6 +336,83 @@ def ensure_schema() -> None:
                     EXECUTE FUNCTION assemblers_details_after_write_enqueue_recalc();
                     """
                 )
+
+                cursor.execute("SELECT to_regclass(%s)", (DATA_DESIGNER_TABLE,))
+                designer_table_exists = cursor.fetchone()[0] is not None
+                if designer_table_exists:
+                    cursor.execute(
+                        f"""
+                        CREATE OR REPLACE FUNCTION assemblers_sync_main_order_from_designer()
+                        RETURNS TRIGGER AS $$
+                        DECLARE
+                            target_order_number TEXT;
+                        BEGIN
+                            target_order_number := TRIM(COALESCE(
+                                CASE WHEN TG_OP = 'DELETE' THEN OLD.column_1 ELSE NEW.column_1 END,
+                                ''
+                            ));
+
+                            IF target_order_number = '' THEN
+                                RETURN COALESCE(NEW, OLD);
+                            END IF;
+
+                            UPDATE {MAIN_TABLE_NAME} mo
+                            SET
+                                customer = COALESCE(src.customer, mo.customer),
+                                order_type = COALESCE(src.order_type, mo.order_type),
+                                manager_name = COALESCE(src.manager_name, mo.manager_name),
+                                constructor_name = COALESCE(src.constructor_name, mo.constructor_name),
+                                signed_at = COALESCE(src.signed_at, mo.signed_at),
+                                contract_due_at = COALESCE(src.contract_due_at, mo.contract_due_at),
+                                planned_install_at = COALESCE(src.contract_due_at, mo.planned_install_at),
+                                updated_at = NOW()
+                            FROM (
+                                SELECT
+                                    NULLIF(TRIM(COALESCE(column_3, '')), '') AS customer,
+                                    NULLIF(TRIM(COALESCE(column_9, '')), '') AS order_type,
+                                    NULLIF(TRIM(COALESCE(column_7, '')), '') AS manager_name,
+                                    NULLIF(TRIM(COALESCE(column_11, '')), '') AS constructor_name,
+                                    CASE
+                                        WHEN TRIM(COALESCE(column_30, '')) ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$'
+                                            THEN TO_DATE(TRIM(column_30), 'DD.MM.YYYY')
+                                        WHEN TRIM(COALESCE(column_30, '')) ~ '^\\d{2}\\.\\d{2}\\.\\d{2}$'
+                                            THEN TO_DATE(TRIM(column_30), 'DD.MM.YY')
+                                        WHEN TRIM(COALESCE(column_30, '')) ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                                            THEN TO_DATE(TRIM(column_30), 'YYYY-MM-DD')
+                                        ELSE NULL
+                                    END AS signed_at,
+                                    CASE
+                                        WHEN COALESCE(NULLIF(TRIM(COALESCE(column_32, '')), ''), NULLIF(TRIM(COALESCE(column_31, '')), '')) ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$'
+                                            THEN TO_DATE(COALESCE(NULLIF(TRIM(column_32), ''), NULLIF(TRIM(column_31), '')), 'DD.MM.YYYY')
+                                        WHEN COALESCE(NULLIF(TRIM(COALESCE(column_32, '')), ''), NULLIF(TRIM(COALESCE(column_31, '')), '')) ~ '^\\d{2}\\.\\d{2}\\.\\d{2}$'
+                                            THEN TO_DATE(COALESCE(NULLIF(TRIM(column_32), ''), NULLIF(TRIM(column_31), '')), 'DD.MM.YY')
+                                        WHEN COALESCE(NULLIF(TRIM(COALESCE(column_32, '')), ''), NULLIF(TRIM(COALESCE(column_31, '')), '')) ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                                            THEN TO_DATE(COALESCE(NULLIF(TRIM(column_32), ''), NULLIF(TRIM(column_31), '')), 'YYYY-MM-DD')
+                                        ELSE NULL
+                                    END AS contract_due_at
+                                FROM {DATA_DESIGNER_TABLE}
+                                WHERE TRIM(COALESCE(column_1, '')) = target_order_number
+                                ORDER BY id DESC
+                                LIMIT 1
+                            ) src
+                            WHERE TRIM(COALESCE(mo.order_number, '')) = target_order_number;
+
+                            RETURN COALESCE(NEW, OLD);
+                        END;
+                        $$ LANGUAGE plpgsql;
+                        """
+                    )
+                    cursor.execute(
+                        f"DROP TRIGGER IF EXISTS trg_{DATA_DESIGNER_TABLE}_after_write_sync_main ON {DATA_DESIGNER_TABLE}"
+                    )
+                    cursor.execute(
+                        f"""
+                        CREATE TRIGGER trg_{DATA_DESIGNER_TABLE}_after_write_sync_main
+                        AFTER INSERT OR UPDATE OR DELETE ON {DATA_DESIGNER_TABLE}
+                        FOR EACH ROW
+                        EXECUTE FUNCTION assemblers_sync_main_order_from_designer();
+                        """
+                    )
             conn.commit()
 
         _SCHEMA_READY = True

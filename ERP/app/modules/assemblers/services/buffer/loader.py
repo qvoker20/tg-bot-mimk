@@ -11,6 +11,7 @@ from app.modules.assemblers.repositories.buffer_sources import (
     fetch_production_rows,
     fetch_transferred_order_numbers,
 )
+from app.modules.assemblers.services.registry.context import _load_live_order_context
 
 from .constants import NOT_SENT_STATUS
 from .grouping import group_designer_rows, group_metal_rows, group_production_rows
@@ -75,6 +76,7 @@ async def load_buffer_rows(
     grouped = group_designer_rows(raw_rows)
     grouped_production = group_production_rows(production_rows)
     grouped_metal = group_metal_rows(metal_rows, set(grouped))
+    live_context = _load_live_order_context(list(grouped.keys()))
 
     items: list[dict] = []
     today = date.today()
@@ -85,6 +87,7 @@ async def load_buffer_rows(
 
         production = grouped_production.get(order_number, [])
         metal = grouped_metal.get(order_number, [])
+        live = live_context.get(order_number, {})
 
         total_products = len(rows)
         constructor_done = sum(1 for row in rows if parse_uk_date(row.get("constructor_completed_at", "")))
@@ -182,22 +185,22 @@ async def load_buffer_rows(
             }
         )
         items[-1]["subcontracts"] = {
-            "paint_shop": _pick_shop(rows, "paint_shop"),
-            "paint_status": "-",
-            "metal": _pick_shop(rows, "metal"),
-            "metal_status": f"{metal_constructor_done}/{metal_total}" if metal_total > 0 else "-",
-            "veneer": _pick_shop(rows, "veneer"),
-            "plastic_hpl": _pick_shop(rows, "plastic_hpl"),
-            "joinery_shop": _pick_shop(rows, "joinery_shop"),
-            "soft_shop": _pick_shop(rows, "soft_shop"),
-            "artificial_stone": _pick_shop(rows, "artificial_stone"),
-            "compact_plate": _pick_shop(rows, "compact_plate"),
-            "dsp_countertop": _pick_shop(rows, "dsp_countertop"),
-            "sliding_systems": _pick_shop(rows, "sliding_systems"),
-            "glass_mirror": _pick_shop(rows, "glass_mirror"),
-            "glass_status": _pick_shop(rows, "glass_status"),
-            "frame_facades": _pick_shop(rows, "frame_facades"),
-            "ceramic_granite": _pick_shop(rows, "ceramic_granite"),
+            "paint_shop": live.get("paint_shop") or _pick_shop(rows, "paint_shop"),
+            "paint_status": "немає",
+            "metal": live.get("metal") or _pick_shop(rows, "metal"),
+            "metal_status": live.get("metal_status") or (f"{metal_constructor_done}/{metal_total}" if metal_total > 0 else "-"),
+            "veneer": live.get("veneer") or _pick_shop(rows, "veneer"),
+            "plastic_hpl": live.get("plastic_hpl") or _pick_shop(rows, "plastic_hpl"),
+            "joinery_shop": live.get("joinery_shop") or _pick_shop(rows, "joinery_shop"),
+            "soft_shop": live.get("soft_shop") or _pick_shop(rows, "soft_shop"),
+            "artificial_stone": live.get("artificial_stone") or _pick_shop(rows, "artificial_stone"),
+            "compact_plate": live.get("compact_plate") or _pick_shop(rows, "compact_plate"),
+            "dsp_countertop": live.get("dsp_countertop") or _pick_shop(rows, "dsp_countertop"),
+            "sliding_systems": live.get("sliding_systems") or _pick_shop(rows, "sliding_systems"),
+            "glass_mirror": live.get("glass_mirror") or _pick_shop(rows, "glass_mirror"),
+            "glass_status": "немає",
+            "frame_facades": live.get("frame_facades") or _pick_shop(rows, "frame_facades"),
+            "ceramic_granite": live.get("ceramic_granite") or _pick_shop(rows, "ceramic_granite"),
         }
 
     # Фільтр по відсотку статусу

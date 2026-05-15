@@ -17,7 +17,7 @@ async def fetch_designer_rows() -> list[tuple]:
                 SELECT
                     column_1, column_3, column_6, column_7, column_9,
                     column_10, column_11, column_12, column_13, column_15,
-                    column_30, column_31, column_32
+                    column_30, column_31, column_32,
                     column_14, column_16, hpl, column_18, column_19,
                     column_20, column_21, c, column_23, column_24,
                     column_25, column_26, column_29,

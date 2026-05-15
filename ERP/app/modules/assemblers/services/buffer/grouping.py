@@ -53,8 +53,8 @@ def group_designer_rows(raw_rows: list[tuple]) -> dict[str, list[dict]]:
                 "glass_mirror": record[22] if len(record) > 22 else None,
                 "frame_facades": record[23] if len(record) > 23 else None,
                 "glass_status": record[24] if len(record) > 24 else None,
-                "ceramic_granite": record[26] if len(record) > 26 else None,
-                "part_number": record[25] if len(record) > 25 else None,
+                "ceramic_granite": record[25] if len(record) > 25 else None,
+                "part_number": record[26] if len(record) > 26 else None,
             }
         )
     return grouped
