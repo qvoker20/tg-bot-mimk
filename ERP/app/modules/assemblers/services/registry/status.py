@@ -214,6 +214,7 @@ def _derive_order_status(
     }
 
     has_schedule_history = False
+    has_today_pause = False
 
     for task in schedule_tasks:
         task_type = _safe_text(task.get("task_type")).casefold()
@@ -226,8 +227,13 @@ def _derive_order_status(
         if not isinstance(scheduled_for, date) or scheduled_for < today:
             continue
 
+        is_paused = task_status == TASK_STATUS_PAUSED.casefold()
         is_closed_status = task_status in closed_task_statuses
         is_active_status = task_status in active_task_statuses or (task_status and not is_closed_status)
+
+        # Track paused tasks on today specifically
+        if is_paused and scheduled_for == today:
+            has_today_pause = True
 
         if not is_active_status:
             continue
@@ -257,6 +263,8 @@ def _derive_order_status(
         return "Монтаж"
     if has_today_assembly:
         return "Збірка"
+    if has_today_pause:
+        return TASK_STATUS_PAUSED
     if nearest_future_type == INSTALL_TASK_TYPE:
         return "Заплановано монтаж"
     if nearest_future_type == ASSEMBLY_TASK_TYPE:
