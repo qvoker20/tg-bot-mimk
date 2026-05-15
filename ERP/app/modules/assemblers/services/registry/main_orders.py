@@ -291,6 +291,8 @@ def load_main_rows(
                             "constructor_status": record[6],
                             "assembly_hours": record[7],
                             "install_hours": record[8],
+                            "planned_assembly_due_at": record[9],
+                            "planned_install_due_at": record[10],
                             "has_assembly_plan": record[9] is not None,
                             "has_install_plan": record[10] is not None,
                             "assembly_status": record[11],
@@ -773,7 +775,7 @@ def load_main_order_card(order_number: str) -> dict | None:
                 )
                 schedule_tasks = [
                     {
-                        "scheduled_for": row[0].isoformat() if row[0] else None,
+                        "scheduled_for": row[0],
                         "task_type": row[1],
                         "status": row[2],
                         "started_at": row[3],
@@ -797,8 +799,10 @@ def load_main_order_card(order_number: str) -> dict | None:
             "part_number": _safe_text(record[1]) or "-",
             "product_name": _safe_text(record[2]) or "-",
             "item_value": _format_money(Decimal(record[3] or 0)),
-            "planned_assembly_due_at": _format_date(record[4]),
-            "planned_install_due_at": _format_date(record[5]),
+            "planned_assembly_due_at": record[4],
+            "planned_install_due_at": record[5],
+            "planned_assembly_due_at_display": _format_date(record[4]),
+            "planned_install_due_at_display": _format_date(record[5]),
             "planned_assembly_due_at_input": _format_date_input(record[4]),
             "planned_install_due_at_input": _format_date_input(record[5]),
             "assembly_hours": record[6],

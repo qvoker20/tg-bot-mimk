@@ -233,6 +233,27 @@ def _derive_order_status(
             elif is_future and is_queued:
                 has_future_install_tasks = True
 
+    # Also check planned dates in details if no schedule tasks found
+    if not has_future_assembly_tasks and not has_today_assembly and details:
+        for detail in details:
+            if detail.get("requires_assembly"):
+                planned_assembly = detail.get("planned_assembly_due_at")
+                if isinstance(planned_assembly, date):
+                    if planned_assembly == today:
+                        has_today_assembly = True
+                    elif planned_assembly > today:
+                        has_future_assembly_tasks = True
+
+    if not has_future_install_tasks and not has_today_install and details:
+        for detail in details:
+            if detail.get("requires_install"):
+                planned_install = detail.get("planned_install_due_at")
+                if isinstance(planned_install, date):
+                    if planned_install == today:
+                        has_today_install = True
+                    elif planned_install > today:
+                        has_future_install_tasks = True
+
     if has_today_install:
         return "Монтаж"
     if has_today_assembly:
