@@ -215,6 +215,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return normalizedStatus === "завершено" || hasRealCompletedAt;
     };
 
+    const hasRealTimestamp = (value) => {
+        const s = String(value || "").trim();
+        return Boolean(s && s !== "—" && s !== "-");
+    };
+
     const resolveStageStatus = (detail, stage, actionState) => {
         const requiresAssembly = detail.requires_assembly !== false;
         const requiresInstall = detail.requires_install !== false;
@@ -228,6 +233,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (actionState.reset_assembly_completed) {
                 return "У черзі";
             }
+            if (hasRealTimestamp(detail.assembly_completed_at)) {
+                return "Завершено";
+            }
             return normalizeStageStatus(detail.assembly_status);
         }
 
@@ -239,6 +247,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (actionState.reset_install_completed) {
             return "У черзі";
+        }
+        if (hasRealTimestamp(detail.install_completed_at)) {
+            return "Завершено";
         }
         return normalizeStageStatus(detail.install_status);
     };
@@ -1636,7 +1647,7 @@ const closeSubcontractsModal = () => {
                     row.dataset.installStatus || "",
                     row.dataset.installCompletedAt || "",
                 );
-                const productCompletedBySystem = row.dataset.productCompleted === "true" || isCurrentOrderCompleted();
+                const productCompletedBySystem = row.dataset.productCompleted === "true";
 
                 if (!assemblyRequired && !installRequired) {
                     showToast("Не можна одночасно зняти збірку і монтаж для виробу.", "error");
@@ -1705,7 +1716,7 @@ const closeSubcontractsModal = () => {
             actionButton.type = "button";
             actionButton.className = "main-order-detail-edit-button";
             actionButton.textContent = "Редагувати";
-            actionButton.disabled = !canEditCurrentOrder() || detailProductCompletedBySystem || isCurrentOrderCompleted();
+            actionButton.disabled = !canEditCurrentOrder();
             actionButton.addEventListener("click", () => openDetailStageModal(detail));
             actionsCell.appendChild(actionButton);
 
