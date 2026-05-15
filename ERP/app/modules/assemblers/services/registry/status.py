@@ -218,6 +218,11 @@ def _derive_order_status(
         if not isinstance(scheduled_for, date) or scheduled_for < today:
             continue
 
+        # Only consider active tasks (not completed)
+        is_active = task_status != TASK_STATUS_COMPLETED.casefold()
+        if not is_active:
+            continue
+
         is_today = scheduled_for == today
         is_future = scheduled_for > today
         is_queued = task_status == "у черзі"
