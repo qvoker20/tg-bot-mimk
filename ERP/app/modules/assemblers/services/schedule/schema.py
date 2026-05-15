@@ -253,24 +253,24 @@ def ensure_schedule_schema() -> None:
                             END IF;
                         END IF;
 
-                        action_key := CASE TG_OP
-                            WHEN 'INSERT' THEN 'schedule.system.insert'
-                            WHEN 'DELETE' THEN 'schedule.system.delete'
-                            WHEN 'UPDATE' AND is_auto_close THEN 'schedule.system.auto_close'
+                        action_key := CASE
+                            WHEN TG_OP = 'INSERT' THEN 'schedule.system.insert'
+                            WHEN TG_OP = 'DELETE' THEN 'schedule.system.delete'
+                            WHEN TG_OP = 'UPDATE' AND is_auto_close THEN 'schedule.system.auto_close'
                             ELSE 'schedule.system.update'
                         END;
 
-                        action_label := CASE TG_OP
-                            WHEN 'INSERT' THEN 'Створено запис графіку'
-                            WHEN 'DELETE' THEN 'Видалено запис графіку'
-                            WHEN 'UPDATE' AND is_auto_close THEN 'Автоматично завершено графік'
+                        action_label := CASE
+                            WHEN TG_OP = 'INSERT' THEN 'Створено запис графіку'
+                            WHEN TG_OP = 'DELETE' THEN 'Видалено запис графіку'
+                            WHEN TG_OP = 'UPDATE' AND is_auto_close THEN 'Автоматично завершено графік'
                             ELSE 'Оновлено запис графіку'
                         END;
 
-                        action_description := CASE TG_OP
-                            WHEN 'DELETE' THEN format('Видалено задачу графіку: %s %s', row_order, row_part)
-                            WHEN 'INSERT' THEN format('Додано задачу графіку: %s %s', row_order, row_part)
-                            WHEN 'UPDATE' AND is_auto_close THEN format('Автозавершення після 18:00: %s %s', row_order, row_part)
+                        action_description := CASE
+                            WHEN TG_OP = 'DELETE' THEN format('Видалено задачу графіку: %s %s', row_order, row_part)
+                            WHEN TG_OP = 'INSERT' THEN format('Додано задачу графіку: %s %s', row_order, row_part)
+                            WHEN TG_OP = 'UPDATE' AND is_auto_close THEN format('Автозавершення після 18:00: %s %s', row_order, row_part)
                             ELSE format('Оновлено задачу графіку: %s %s', row_order, row_part)
                         END;
 
