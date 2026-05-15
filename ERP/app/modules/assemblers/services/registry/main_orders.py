@@ -931,8 +931,8 @@ def load_main_order_card(order_number: str) -> dict | None:
                 "part_number": d["part_number"],
                 "product_name": d["product_name"],
                 "item_value": d["item_value"],
-                "planned_assembly_due_at": d["planned_assembly_due_at"],
-                "planned_install_due_at": d["planned_install_due_at"],
+                "planned_assembly_due_at": d.get("planned_assembly_due_at_display") or "-",
+                "planned_install_due_at": d.get("planned_install_due_at_display") or "-",
                 "planned_assembly_due_at_input": d["planned_assembly_due_at_input"],
                 "planned_install_due_at_input": d["planned_install_due_at_input"],
                 "assembly_status": _resolve_detail_stage_status(
