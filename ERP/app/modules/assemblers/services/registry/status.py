@@ -253,33 +253,6 @@ def _derive_order_status(
         ):
             nearest_future_type = INSTALL_TASK_TYPE
 
-    # Fallback to planned detail dates only when there are no active schedule tasks for today/future.
-    if not has_today_assembly and not has_today_install and nearest_future_date is None and details:
-        for detail in details:
-            if detail.get("requires_assembly"):
-                planned_assembly = detail.get("planned_assembly_due_at")
-                if isinstance(planned_assembly, date) and planned_assembly >= today:
-                    if planned_assembly == today:
-                        has_today_assembly = True
-                    elif nearest_future_date is None or planned_assembly < nearest_future_date:
-                        nearest_future_date = planned_assembly
-                        nearest_future_type = ASSEMBLY_TASK_TYPE
-
-            if detail.get("requires_install"):
-                planned_install = detail.get("planned_install_due_at")
-                if isinstance(planned_install, date) and planned_install >= today:
-                    if planned_install == today:
-                        has_today_install = True
-                    elif nearest_future_date is None or planned_install < nearest_future_date:
-                        nearest_future_date = planned_install
-                        nearest_future_type = INSTALL_TASK_TYPE
-                    elif (
-                        nearest_future_date is not None
-                        and planned_install == nearest_future_date
-                        and nearest_future_type != INSTALL_TASK_TYPE
-                    ):
-                        nearest_future_type = INSTALL_TASK_TYPE
-
     if has_today_install:
         return "Монтаж"
     if has_today_assembly:
