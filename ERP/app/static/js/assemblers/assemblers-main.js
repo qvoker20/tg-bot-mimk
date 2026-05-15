@@ -1185,13 +1185,14 @@ const renderSubcontractsTable = (order) => {
         row.appendChild(nameCell);
 
         const presenceCell = document.createElement("td");
-        presenceCell.appendChild(makePresenceBadge(order[item.presenceKey]));
+        const rawPresence = String(order[item.presenceKey] ?? "").trim();
+        const hasPresence = rawPresence !== "" && rawPresence !== "-" && rawPresence !== "—";
+        presenceCell.textContent = hasPresence ? "Так" : "—";
         row.appendChild(presenceCell);
 
         const statusCell = document.createElement("td");
         if (item.statusKey) {
-            statusCell.classList.add("assemblers-status-cell");
-            statusCell.appendChild(makeStatusBadge(order[item.statusKey]));
+            statusCell.textContent = displayValue(order[item.statusKey]);
         } else {
             statusCell.textContent = "—";
         }
