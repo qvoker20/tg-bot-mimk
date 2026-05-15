@@ -145,12 +145,12 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                 final_assembly_status = (
                     assembly_status
                     if assembly_completed_at is not None
-                    else ("Завершено" if persisted_assembly_completed_at is not None else assembly_status)
+                    else assembly_status
                 )
                 final_install_status = (
                     install_status
                     if install_completed_at is not None
-                    else ("Завершено" if persisted_install_completed_at is not None else install_status)
+                    else install_status
                 )
 
                 assembly_days_count, assembly_hours = _calculate_stage_metrics(
@@ -237,7 +237,6 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     assembly_completed_at = COALESCE(%s, assembly_completed_at),
                     assembly_status = CASE
                         WHEN %s IS NOT NULL THEN %s
-                        WHEN assembly_completed_at IS NOT NULL THEN 'Завершено'
                         ELSE %s
                     END,
                     assembly_days_count = %s,
@@ -247,7 +246,6 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     install_completed_at = COALESCE(%s, install_completed_at),
                     install_status = CASE
                         WHEN %s IS NOT NULL THEN %s
-                        WHEN install_completed_at IS NOT NULL THEN 'Завершено'
                         ELSE %s
                     END,
                     install_days_count = %s,
