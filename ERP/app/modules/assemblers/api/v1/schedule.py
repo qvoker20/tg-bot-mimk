@@ -62,6 +62,7 @@ async def assemblers_schedule_tasks_create_api(request: Request):
             order_number=payload.get("order_number"),
             selected_parts=payload.get("selected_parts") or [],
             description=payload.get("description"),
+            actor=user,
         )
     except ValueError as error:
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
@@ -98,6 +99,7 @@ async def assemblers_schedule_tasks_edit_api(request: Request):
             task_ids=payload.get("task_ids") or [],
             order_number=payload.get("order_number"),
             selected_parts=payload.get("selected_parts") or [],
+            actor=user,
         )
     except ValueError as error:
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)

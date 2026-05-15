@@ -5,12 +5,16 @@ from decimal import Decimal
 import re
 
 from app.modules.assemblers.db.connection import get_db_connection
+from app.modules.assemblers.services.activity_log import record_activity_event
 
 from .constants import (
     ACTIVE_STATUS,
+    ASSEMBLY_TASK_TYPE,
     CLOSED_STATUS,
     DETAILS_TABLE_NAME,
     MAIN_TABLE_NAME,
+    INSTALL_TASK_TYPE,
+    RECLAMATION_STATUS,
     SCHEDULE_TASKS_TABLE,
     TASK_STATUS_COMPLETED,
     TASK_STATUS_IN_PROGRESS,
@@ -50,6 +54,8 @@ from .utils import (
 
 _HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _DEFAULT_NOTE_TEXT_COLOR = "#0f172a"
+_CLOSED_LIKE_STATUSES = (CLOSED_STATUS, RECLAMATION_STATUS)
+_CLOSED_LIKE_STATUS_CASEFOLDS = {status.casefold() for status in _CLOSED_LIKE_STATUSES}
 
 
 def _normalize_note_color(value) -> str:
@@ -90,6 +96,37 @@ def _resolve_detail_stage_status(
     return TASK_STATUS_QUEUED
 
 
+def _calculate_schedule_effective_minutes(
+    schedule_tasks: list[dict],
+    *,
+    task_type: str | None = None,
+) -> int:
+    daily_minutes: dict[object, int] = {}
+
+    for task in schedule_tasks:
+        normalized_task_type = _safe_text(task.get("task_type")).casefold()
+        if task_type and normalized_task_type != task_type.casefold():
+            continue
+
+        started_at = _normalize_datetime(task.get("started_at"))
+        completed_at = _normalize_datetime(task.get("completed_at"))
+        if not started_at or not completed_at or completed_at < started_at:
+            continue
+
+        day_key = started_at.date()
+        total_seconds = int((completed_at - started_at).total_seconds())
+        effective_seconds = max(0, total_seconds - int(task.get("pause_seconds") or 0))
+        effective_minutes = effective_seconds // 60
+        if effective_minutes <= 0:
+            continue
+
+        current_minutes = int(daily_minutes.get(day_key) or 0)
+        if effective_minutes > current_minutes:
+            daily_minutes[day_key] = effective_minutes
+
+    return sum(daily_minutes.values())
+
+
 def load_main_rows(
     offset: int = 0,
     limit: int = 30,
@@ -110,12 +147,13 @@ def load_main_rows(
     normalized_order_type_query = _safe_text(order_type_query).casefold()
     normalized_deadline_bucket = _safe_text(deadline_bucket).casefold()
 
+    status_filter_values = tuple(_CLOSED_LIKE_STATUSES) if closed_only else (CLOSED_STATUS,)
     filter_clauses = [
-        "TRIM(COALESCE(status, '')) = %s"
+        "TRIM(COALESCE(status, '')) IN %s"
         if closed_only
-        else "TRIM(COALESCE(status, '')) <> %s"
+        else "TRIM(COALESCE(status, '')) NOT IN %s"
     ]
-    filter_params: list[object] = [CLOSED_STATUS]
+    filter_params: list[object] = [status_filter_values]
 
     if normalized_order_query:
         filter_clauses.append("TRIM(COALESCE(order_number, '')) ILIKE %s")
@@ -156,6 +194,7 @@ def load_main_rows(
                     closed_by_name,
                     closed_by_role,
                     total_planned_hours,
+                    vat,
                     note_color,
                     note_text_color
                 FROM {MAIN_TABLE_NAME}
@@ -182,6 +221,9 @@ def load_main_rows(
                             scheduled_for,
                             TRIM(COALESCE(task_type, '')),
                             TRIM(COALESCE(status, '')),
+                            started_at,
+                            completed_at,
+                            COALESCE(pause_seconds, 0),
                             paused_at,
                             TRIM(COALESCE(pause_reason, '')),
                             updated_at
@@ -199,9 +241,12 @@ def load_main_rows(
                                 "scheduled_for": schedule_row[1],
                                 "task_type": schedule_row[2],
                                 "status": schedule_row[3],
-                                "paused_at": schedule_row[4],
-                                "pause_reason": schedule_row[5],
-                                "updated_at": schedule_row[6],
+                                "started_at": schedule_row[4],
+                                "completed_at": schedule_row[5],
+                                "pause_seconds": schedule_row[6],
+                                "paused_at": schedule_row[7],
+                                "pause_reason": schedule_row[8],
+                                "updated_at": schedule_row[9],
                             }
                         )
 
@@ -333,11 +378,13 @@ def load_main_rows(
             (Decimal(detail.get("item_value") or 0) for detail in details), start=Decimal("0")
         )
         contract_due_at = record[5]
-        actual_minutes = sum(
-            _parse_duration_minutes(d.get("assembly_hours") or "")
-            + _parse_duration_minutes(d.get("install_hours") or "")
-            for d in details
-        )
+        actual_minutes = _calculate_schedule_effective_minutes(schedule_tasks)
+        if not schedule_tasks:
+            actual_minutes = sum(
+                _parse_duration_minutes(d.get("assembly_hours") or "")
+                + _parse_duration_minutes(d.get("install_hours") or "")
+                for d in details
+            )
 
         assembly_started_values = [
             _normalize_datetime(d.get("assembly_started_at"))
@@ -379,7 +426,7 @@ def load_main_rows(
         )
 
         order_status = _safe_text(record[3]) or ACTIVE_STATUS
-        if not closed_only:
+        if not closed_only and order_status.casefold() not in _CLOSED_LIKE_STATUS_CASEFOLDS:
             order_status = _derive_order_status(
                 details=details,
                 schedule_tasks=schedule_tasks,
@@ -390,12 +437,21 @@ def load_main_rows(
         all_install_completed = bool(install_details) and len(install_completed_values) == len(install_details)
         last_install_completed = max(install_completed_values) if all_install_completed else None
 
-        assembly_hours_minutes = sum(
-            _parse_duration_minutes(d.get("assembly_hours") or "") for d in details
+        assembly_hours_minutes = _calculate_schedule_effective_minutes(
+            schedule_tasks,
+            task_type=ASSEMBLY_TASK_TYPE,
         )
-        install_hours_minutes = sum(
-            _parse_duration_minutes(d.get("install_hours") or "") for d in details
+        install_hours_minutes = _calculate_schedule_effective_minutes(
+            schedule_tasks,
+            task_type=INSTALL_TASK_TYPE,
         )
+        if not schedule_tasks:
+            assembly_hours_minutes = sum(
+                _parse_duration_minutes(d.get("assembly_hours") or "") for d in details
+            )
+            install_hours_minutes = sum(
+                _parse_duration_minutes(d.get("install_hours") or "") for d in details
+            )
 
         assembly_workers_list = _build_workers_list(details, "assembly_worker")
         assembly_workers_count = _count_workers(assembly_workers_list)
@@ -408,8 +464,9 @@ def load_main_rows(
                 "order_type": live.get("order_type") or _safe_text(record[2]) or "-",
                 "status": order_status,
                 "note": _clean_free_text(record[4]) or "-",
-                "note_color": _normalize_note_color(record[24]),
-                "note_text_color": _normalize_note_text_color(record[25]),
+                "vat": bool(record[24]),
+                "note_color": _normalize_note_color(record[25]),
+                "note_text_color": _normalize_note_text_color(record[26]),
                 "products": live.get("products") or _build_products_text(
                     [detail.get("product_name") for detail in details]
                 ),
@@ -455,7 +512,7 @@ def load_main_rows(
                 "assembly_workers": assembly_workers_list,
                 "install_workers": install_workers_value,
                 "paint_shop": live.get("paint_shop", "-"),
-                "paint_status": "-",
+                "paint_status": "немає",
                 "metal": live.get("metal", "-"),
                 "metal_status": live.get("metal_status", "0/0"),
                 "veneer": live.get("veneer", "-"),
@@ -467,7 +524,7 @@ def load_main_rows(
                 "dsp_countertop": live.get("dsp_countertop", "-"),
                 "sliding_systems": live.get("sliding_systems", "-"),
                 "glass_mirror": live.get("glass_mirror", "-"),
-                "glass_status": "-",
+                "glass_status": "немає",
                 "frame_facades": live.get("frame_facades", "-"),
                 "ceramic_granite": live.get("ceramic_granite", "-"),
                 "constructor_status": live.get("constructor_status")
@@ -479,7 +536,7 @@ def load_main_rows(
                     else "-"
                 ),
                 "order_value": _format_money(total_value),
-                "vat": "-",
+                "vat": bool(record[24]),
                 "install_percent": "-",
                 "assembly_percent": "-",
                 "parts_count": live.get("parts_count", len(details)),
@@ -549,12 +606,13 @@ def load_main_filter_options(
     normalized_order_query = _safe_text(order_number_query)
     normalized_customer_query = _safe_text(customer_query)
 
+    status_filter_values = tuple(_CLOSED_LIKE_STATUSES) if closed_only else (CLOSED_STATUS,)
     filter_clauses = [
-        "TRIM(COALESCE(status, '')) = %s"
+        "TRIM(COALESCE(status, '')) IN %s"
         if closed_only
-        else "TRIM(COALESCE(status, '')) <> %s"
+        else "TRIM(COALESCE(status, '')) NOT IN %s"
     ]
-    filter_params: list[object] = [CLOSED_STATUS]
+    filter_params: list[object] = [status_filter_values]
 
     if normalized_order_query:
         filter_clauses.append("TRIM(COALESCE(order_number, '')) ILIKE %s")
@@ -566,16 +624,21 @@ def load_main_filter_options(
 
     filter_sql = f"WHERE {' AND '.join(filter_clauses)}"
 
-    statuses: list[str] = [
-        ACTIVE_STATUS,
-        "Простой",
-        "Збірка",
-        "Монтаж",
-        "Запланована збірка",
-        "Заплановано монтаж",
-        TASK_STATUS_PAUSED,
-        TASK_STATUS_COMPLETED,
-    ]
+    statuses: list[str] = (
+        [CLOSED_STATUS, RECLAMATION_STATUS]
+        if closed_only
+        else [
+            ACTIVE_STATUS,
+            "Простой",
+            "Збірка",
+            "Монтаж",
+            "Запланована збірка",
+            "Заплановано монтаж",
+            TASK_STATUS_PAUSED,
+            TASK_STATUS_COMPLETED,
+            RECLAMATION_STATUS,
+        ]
+    )
     status_seen = {s.casefold() for s in statuses}
     order_types: list[str] = []
     type_seen: set[str] = set()
@@ -592,9 +655,11 @@ def load_main_filter_options(
             )
             for (raw_status,) in cursor.fetchall():
                 status_text = _safe_text(raw_status)
-                if not status_text or status_text.casefold() == CLOSED_STATUS.casefold():
-                    continue
                 lowered = status_text.casefold()
+                if not status_text:
+                    continue
+                if not closed_only and lowered in _CLOSED_LIKE_STATUS_CASEFOLDS:
+                    continue
                 if lowered in status_seen:
                     continue
                 status_seen.add(lowered)
@@ -696,6 +761,9 @@ def load_main_order_card(order_number: str) -> dict | None:
                         scheduled_for,
                         TRIM(COALESCE(task_type, '')),
                         TRIM(COALESCE(status, '')),
+                        started_at,
+                        completed_at,
+                        COALESCE(pause_seconds, 0),
                         TRIM(COALESCE(assembler_name, ''))
                     FROM {SCHEDULE_TASKS_TABLE}
                     WHERE TRIM(COALESCE(order_number, '')) = %s
@@ -708,7 +776,10 @@ def load_main_order_card(order_number: str) -> dict | None:
                         "scheduled_for": row[0].isoformat() if row[0] else None,
                         "task_type": row[1],
                         "status": row[2],
-                        "assembler_name": row[3],
+                        "started_at": row[3],
+                        "completed_at": row[4],
+                        "pause_seconds": row[5],
+                        "assembler_name": row[6],
                     }
                     for row in cursor.fetchall()
                 ]
@@ -779,12 +850,21 @@ def load_main_order_card(order_number: str) -> dict | None:
     all_install_completed = bool(install_details) and len(install_completed_values) == len(install_details)
     last_install_completed = max(install_completed_values) if all_install_completed else None
 
-    assembly_hours_minutes = sum(
-        _parse_duration_minutes(d.get("assembly_hours") or "") for d in details_list
+    assembly_hours_minutes = _calculate_schedule_effective_minutes(
+        schedule_tasks,
+        task_type=ASSEMBLY_TASK_TYPE,
     )
-    install_hours_minutes = sum(
-        _parse_duration_minutes(d.get("install_hours") or "") for d in details_list
+    install_hours_minutes = _calculate_schedule_effective_minutes(
+        schedule_tasks,
+        task_type=INSTALL_TASK_TYPE,
     )
+    if not schedule_tasks:
+        assembly_hours_minutes = sum(
+            _parse_duration_minutes(d.get("assembly_hours") or "") for d in details_list
+        )
+        install_hours_minutes = sum(
+            _parse_duration_minutes(d.get("install_hours") or "") for d in details_list
+        )
 
     assembly_workers_list = _build_workers_list(details_list, "assembly_worker")
     assembly_workers_count = _count_workers(assembly_workers_list)
@@ -798,7 +878,7 @@ def load_main_order_card(order_number: str) -> dict | None:
     )
 
     derived_status = _safe_text(order_row[3]) or ACTIVE_STATUS
-    if derived_status != CLOSED_STATUS:
+    if derived_status.casefold() not in _CLOSED_LIKE_STATUS_CASEFOLDS:
         derived_status = _derive_order_status(
             details=details_list,
             schedule_tasks=schedule_tasks,
@@ -900,6 +980,7 @@ def update_main_order_card(
     note_text_color=None,
     vat=None,
     details=None,
+    actor=None,
 ) -> dict | None:
     ensure_schema()
     normalized_order = _safe_text(order_number)
@@ -908,6 +989,23 @@ def update_main_order_card(
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT TRIM(COALESCE(status, ''))
+                FROM {MAIN_TABLE_NAME}
+                WHERE order_number = %s
+                LIMIT 1
+                FOR UPDATE
+                """,
+                (normalized_order,),
+            )
+            status_row = cursor.fetchone()
+            if not status_row:
+                return None
+            current_status_key = _safe_text(status_row[0]).casefold()
+            if current_status_key == CLOSED_STATUS.casefold():
+                raise ValueError("Закрите замовлення не можна редагувати.")
+
             cursor.execute(
                 f"""
                 UPDATE {MAIN_TABLE_NAME}
@@ -934,6 +1032,37 @@ def update_main_order_card(
             updated = cursor.fetchone()
 
             if updated and isinstance(details, list):
+                cursor.execute(
+                    f"""
+                    SELECT
+                        id,
+                        requires_assembly,
+                        requires_install,
+                        TRIM(COALESCE(assembly_status, '')),
+                        assembly_completed_at,
+                        TRIM(COALESCE(install_status, '')),
+                        install_completed_at,
+                        planned_assembly_due_at,
+                        planned_install_due_at
+                    FROM {DETAILS_TABLE_NAME}
+                    WHERE order_number = %s
+                    """,
+                    (normalized_order,),
+                )
+                detail_state_by_id = {
+                    int(row[0]): {
+                        "requires_assembly": bool(row[1]),
+                        "requires_install": bool(row[2]),
+                        "assembly_status": _safe_text(row[3]),
+                        "assembly_completed_at": row[4],
+                        "install_status": _safe_text(row[5]),
+                        "install_completed_at": row[6],
+                        "planned_assembly_due_at": row[7],
+                        "planned_install_due_at": row[8],
+                    }
+                    for row in cursor.fetchall()
+                }
+
                 detail_updates = []
                 for item in details:
                     if not isinstance(item, dict):
@@ -951,10 +1080,59 @@ def update_main_order_card(
                     complete_install_now = bool(item.get("complete_install_now"))
                     requires_assembly = bool(item.get("requires_assembly", True))
                     requires_install = bool(item.get("requires_install", True))
+                    planned_assembly_due_at = _pud(_safe_text(item.get("planned_assembly_due_at")))
+                    planned_install_due_at = _pud(_safe_text(item.get("planned_install_due_at")))
+
+                    current_detail = detail_state_by_id.get(normalized_detail_id)
+                    if not current_detail:
+                        continue
+
+                    if not requires_assembly and not requires_install:
+                        raise ValueError("Не можна одночасно зняти позначки 'Збірка' і 'Монтаж'.")
+
+                    current_requires_assembly = bool(current_detail.get("requires_assembly"))
+                    current_requires_install = bool(current_detail.get("requires_install"))
+                    assembly_completed = bool(current_detail.get("assembly_completed_at")) or (
+                        _safe_text(current_detail.get("assembly_status")).casefold() == TASK_STATUS_COMPLETED.casefold()
+                    )
+                    install_completed = bool(current_detail.get("install_completed_at")) or (
+                        _safe_text(current_detail.get("install_status")).casefold() == TASK_STATUS_COMPLETED.casefold()
+                    )
+                    product_completed = (
+                        (not current_requires_assembly or assembly_completed)
+                        and (not current_requires_install or install_completed)
+                    )
+
+                    if assembly_completed:
+                        if planned_assembly_due_at != current_detail.get("planned_assembly_due_at"):
+                            raise ValueError("Збірку вже завершено: дату планування збірки змінювати не можна.")
+                        if requires_assembly != current_requires_assembly:
+                            raise ValueError("Збірку вже завершено: змінювати позначку 'Збірка' не можна.")
+
+                    if install_completed:
+                        if planned_install_due_at != current_detail.get("planned_install_due_at"):
+                            raise ValueError("Монтаж вже завершено: дату планування монтажу змінювати не можна.")
+                        if requires_install != current_requires_install:
+                            raise ValueError("Монтаж вже завершено: змінювати позначку 'Монтаж' не можна.")
+
+                    if product_completed:
+                        if (
+                            requires_assembly != current_requires_assembly
+                            or requires_install != current_requires_install
+                        ):
+                            raise ValueError("Завершений виріб: змінювати позначки 'Збірка'/'Монтаж' заборонено.")
+                        if (
+                            planned_assembly_due_at != current_detail.get("planned_assembly_due_at")
+                            or planned_install_due_at != current_detail.get("planned_install_due_at")
+                        ):
+                            raise ValueError("Завершений виріб: змінювати дати планування заборонено.")
+
                     detail_updates.append(
                         (
-                            _pud(_safe_text(item.get("planned_assembly_due_at"))),
-                            _pud(_safe_text(item.get("planned_install_due_at"))),
+                            TASK_STATUS_COMPLETED,
+                            planned_assembly_due_at,
+                            TASK_STATUS_COMPLETED,
+                            planned_install_due_at,
                             float(item.get("item_percent") or 0),
                             requires_assembly,
                             requires_install,
@@ -983,8 +1161,18 @@ def update_main_order_card(
                     cursor.executemany(
                         f"""
                         UPDATE {DETAILS_TABLE_NAME}
-                        SET planned_assembly_due_at = %s,
-                            planned_install_due_at = %s,
+                        SET planned_assembly_due_at = CASE
+                                WHEN assembly_completed_at IS NOT NULL
+                                     OR TRIM(COALESCE(assembly_status, '')) ILIKE %s
+                                THEN planned_assembly_due_at
+                                ELSE %s
+                            END,
+                            planned_install_due_at = CASE
+                                WHEN install_completed_at IS NOT NULL
+                                     OR TRIM(COALESCE(install_status, '')) ILIKE %s
+                                THEN planned_install_due_at
+                                ELSE %s
+                            END,
                             item_percent = %s,
                             requires_assembly = %s,
                             requires_install = %s,
@@ -1022,11 +1210,262 @@ def update_main_order_card(
                         """,
                         detail_updates,
                     )
+
+        detail_action_notes = []
+        if isinstance(details, list):
+            for item in details:
+                if not isinstance(item, dict):
+                    continue
+                detail_label = _safe_text(item.get("part_number")) or f"ID {item.get('detail_id')}"
+                action_notes = []
+                if item.get("complete_assembly_now"):
+                    action_notes.append("достроково завершено збірку")
+                if item.get("reset_assembly_completed"):
+                    action_notes.append("скасовано завершення збірки")
+                if item.get("complete_install_now"):
+                    action_notes.append("достроково завершено монтаж")
+                if item.get("reset_install_completed"):
+                    action_notes.append("скасовано завершення монтажу")
+                if action_notes:
+                    detail_action_notes.append(f"{detail_label}: {', '.join(action_notes)}")
         conn.commit()
 
     enqueue_detail_metrics_recalculation([normalized_order], source="update_main_order_card")
 
     if not updated:
         return None
+
+    record_activity_event(
+        action_key="main.order.update",
+        action_label="Оновлено замовлення",
+        description=(
+            f"Оновлено картку замовлення {normalized_order}"
+            + (f"; дії по деталях: {'; '.join(detail_action_notes)}" if detail_action_notes else "")
+        ),
+        actor=actor,
+        entity_type="main_order",
+        entity_id=normalized_order,
+        order_number=normalized_order,
+        source_table=MAIN_TABLE_NAME,
+        source_op="UPDATE",
+        details={
+            "details_count": len(details or []) if isinstance(details, list) else 0,
+            "detail_actions": detail_action_notes[:25],
+            "vat": bool(vat),
+        },
+    )
+
+    return load_main_order_card(normalized_order)
+
+
+def update_main_order_status(
+    order_number: str,
+    *,
+    action: str,
+    actor=None,
+) -> dict | None:
+    ensure_schema()
+    normalized_order = _safe_text(order_number)
+    if not normalized_order:
+        return None
+
+    normalized_action = _safe_text(action).casefold()
+    action_map = {
+        "close": {
+            "label": "Закрито замовлення",
+            "log_key": "main.order.close",
+            "next_status": CLOSED_STATUS,
+        },
+        "mark_reclamation": {
+            "label": "Позначено рекламацію",
+            "log_key": "main.order.mark_reclamation",
+            "next_status": RECLAMATION_STATUS,
+        },
+        "cancel_reclamation": {
+            "label": "Скасовано рекламацію",
+            "log_key": "main.order.cancel_reclamation",
+            "next_status": CLOSED_STATUS,
+        },
+    }
+    if normalized_action not in action_map:
+        raise ValueError("Некоректна дія для зміни статусу.")
+
+    current_order = load_main_order_card(normalized_order)
+    if not current_order:
+        return None
+
+    current_display_status = _safe_text(current_order.get("status"))
+    current_display_key = current_display_status.casefold()
+    reclamation_key = RECLAMATION_STATUS.casefold()
+    completed_key = TASK_STATUS_COMPLETED.casefold()
+
+    closer_name = _safe_text((actor or {}).get("name")) or "Корисувач"
+    closer_role = _safe_text((actor or {}).get("role")) or "-"
+    closer_telegram_id = (actor or {}).get("telegram_id")
+    actual_status = action_map[normalized_action]["next_status"]
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT TRIM(COALESCE(status, ''))
+                FROM {MAIN_TABLE_NAME}
+                WHERE order_number = %s
+                LIMIT 1
+                FOR UPDATE
+                """,
+                (normalized_order,),
+            )
+            raw_row = cursor.fetchone()
+            if not raw_row:
+                return None
+            current_raw_status = _safe_text(raw_row[0])
+            current_raw_key = current_raw_status.casefold()
+
+            if normalized_action == "close":
+                can_close = (
+                    current_raw_key == reclamation_key
+                    or current_display_key == completed_key
+                )
+                if not can_close:
+                    raise ValueError("Закриття доступне лише для статусів 'Завершено' або 'Рекламація'.")
+
+                cursor.execute(
+                    f"""
+                    UPDATE {MAIN_TABLE_NAME}
+                    SET status = %s,
+                        closed_at = NOW(),
+                        closed_by_name = %s,
+                        closed_by_role = %s,
+                        closed_by_telegram_id = %s,
+                        updated_at = NOW()
+                    WHERE order_number = %s
+                    """,
+                    (
+                        CLOSED_STATUS,
+                        closer_name,
+                        closer_role,
+                        closer_telegram_id,
+                        normalized_order,
+                    ),
+                )
+            elif normalized_action == "mark_reclamation":
+                can_mark_reclamation = (
+                    current_display_key == completed_key
+                    or current_raw_key == completed_key
+                )
+                if not can_mark_reclamation:
+                    raise ValueError("Рекламацію можна поставити лише для завершеного замовлення.")
+
+                cursor.execute(
+                    f"""
+                    UPDATE {MAIN_TABLE_NAME}
+                    SET status = %s,
+                        updated_at = NOW()
+                    WHERE order_number = %s
+                    """,
+                    (RECLAMATION_STATUS, normalized_order),
+                )
+            else:
+                if current_raw_key != reclamation_key:
+                    raise ValueError("Скасувати рекламацію можна лише для статусу 'Рекламація'.")
+
+                cursor.execute(
+                    f"""
+                    SELECT id, requires_assembly, requires_install,
+                           assembly_status, assembly_completed_at,
+                           install_status, install_completed_at
+                    FROM {DETAILS_TABLE_NAME}
+                    WHERE order_number = %s
+                    ORDER BY id
+                    """,
+                    (normalized_order,),
+                )
+                detail_rows = cursor.fetchall()
+                details_for_status = [
+                    {
+                        "detail_id": row[0],
+                        "requires_assembly": bool(row[1]),
+                        "requires_install": bool(row[2]),
+                        "assembly_status": row[3],
+                        "assembly_completed_at": row[4],
+                        "install_status": row[5],
+                        "install_completed_at": row[6],
+                    }
+                    for row in detail_rows
+                ]
+
+                cursor.execute("SELECT to_regclass(%s)", (SCHEDULE_TASKS_TABLE,))
+                schedule_tasks = []
+                if cursor.fetchone()[0] is not None:
+                    cursor.execute(
+                        f"""
+                        SELECT scheduled_for, TRIM(COALESCE(task_type, '')),
+                               TRIM(COALESCE(status, '')),
+                               started_at, completed_at, COALESCE(pause_seconds, 0)
+                        FROM {SCHEDULE_TASKS_TABLE}
+                        WHERE TRIM(COALESCE(order_number, '')) = %s
+                        ORDER BY scheduled_for
+                        """,
+                        (normalized_order,),
+                    )
+                    schedule_tasks = [
+                        {
+                            "scheduled_for": row[0],
+                            "task_type": row[1],
+                            "status": row[2],
+                            "started_at": row[3],
+                            "completed_at": row[4],
+                            "pause_seconds": row[5],
+                        }
+                        for row in cursor.fetchall()
+                    ]
+
+                has_assignment = any(
+                    _safe_text(detail.get("assembly_status")).strip() != ""
+                    or _safe_text(detail.get("install_status")).strip() != ""
+                    for detail in details_for_status
+                )
+
+                actual_status = _derive_order_status(
+                    details=details_for_status,
+                    schedule_tasks=schedule_tasks,
+                    has_assignment=has_assignment,
+                )
+
+                cursor.execute(
+                    f"""
+                    UPDATE {MAIN_TABLE_NAME}
+                    SET status = %s,
+                        updated_at = NOW()
+                    WHERE order_number = %s
+                    """,
+                    (actual_status, normalized_order),
+                )
+
+        conn.commit()
+
+    enqueue_detail_metrics_recalculation([normalized_order], source="update_main_order_status")
+
+    action_meta = action_map[normalized_action]
+    record_activity_event(
+        action_key=action_meta["log_key"],
+        action_label=action_meta["label"],
+        description=(
+            f"{action_meta['label']}: {normalized_order}"
+            f" (було: {current_display_status or '-'}, стало: {actual_status})"
+        ),
+        actor=actor,
+        entity_type="main_order",
+        entity_id=normalized_order,
+        order_number=normalized_order,
+        source_table=MAIN_TABLE_NAME,
+        source_op="UPDATE",
+        details={
+            "action": normalized_action,
+            "previous_status": current_display_status,
+            "next_status": actual_status,
+        },
+    )
 
     return load_main_order_card(normalized_order)

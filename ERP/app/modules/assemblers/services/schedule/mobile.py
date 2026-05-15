@@ -14,6 +14,7 @@ from app.modules.assemblers.repositories.schedule_repo import (
     mark_task_resumed,
     mark_task_started,
 )
+from app.modules.assemblers.services.activity_log import record_activity_event
 from app.modules.assemblers.services.registry import enqueue_detail_metrics_recalculation
 
 from .constants import (
@@ -22,6 +23,7 @@ from .constants import (
     TASK_STATUS_IN_PROGRESS,
     TASK_STATUS_PAUSED,
     TASK_STATUS_QUEUED,
+    SCHEDULE_TASKS_TABLE,
 )
 from .helpers import (
     _detail_row_matches_selected_product,
@@ -57,7 +59,7 @@ def load_user_schedule_tasks(*, source_user_id: int, day: str) -> dict:
     }
 
 
-def update_user_task_status(*, source_user_id: int, task_id: int, action: str, pause_reason=None, location=None, selected_products=None) -> dict:
+def update_user_task_status(*, source_user_id: int, task_id: int, action: str, pause_reason=None, location=None, selected_products=None, actor=None) -> dict:
     """Perform start/pause/resume/finish transition for a mobile task."""
     ensure_schedule_schema()
     try:
@@ -90,6 +92,19 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
             raise ValueError("Розпочати можна лише сьогоднішню задачу")
         mark_task_started(task_id=normalized_task_id, location=normalized_location)
         message = "Задачу розпочато."
+        record_activity_event(
+            action_key="schedule.mobile.start",
+            action_label="Розпочато задачу",
+            description=f"Розпочато задачу {task.get('order_number', '')} {task.get('part_number', '')}".strip(),
+            actor=actor,
+            entity_type="schedule_task",
+            entity_id=str(normalized_task_id),
+            order_number=_safe_text(task.get("order_number")),
+            subdivision=_safe_text(task.get("subdivision")),
+            source_table=SCHEDULE_TASKS_TABLE,
+            source_op="UPDATE",
+            details={"task_id": normalized_task_id, "task_type": normalized_task_type},
+        )
     elif normalized_action == "pause":
         if current_status != TASK_STATUS_IN_PROGRESS:
             raise ValueError("На паузу можна поставити лише задачу зі статусом В роботі")
@@ -97,16 +112,46 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
             raise ValueError("Вкажіть причину паузи")
         mark_task_paused(task_id=normalized_task_id, pause_reason=normalized_pause_reason)
         message = "Задачу поставлено на паузу."
+        record_activity_event(
+            action_key="schedule.mobile.pause",
+            action_label="Поставлено на паузу",
+            description=f"Пауза задачі {task.get('order_number', '')} {task.get('part_number', '')}: {normalized_pause_reason}",
+            actor=actor,
+            entity_type="schedule_task",
+            entity_id=str(normalized_task_id),
+            order_number=_safe_text(task.get("order_number")),
+            subdivision=_safe_text(task.get("subdivision")),
+            source_table=SCHEDULE_TASKS_TABLE,
+            source_op="UPDATE",
+            details={"task_id": normalized_task_id, "pause_reason": normalized_pause_reason},
+        )
     elif normalized_action == "resume":
         if current_status != TASK_STATUS_PAUSED:
             raise ValueError("Продовжити можна лише задачу зі статусом Пауза")
         mark_task_resumed(task_id=normalized_task_id)
         message = "Задачу повернуто в роботу."
+        record_activity_event(
+            action_key="schedule.mobile.resume",
+            action_label="Продовжено задачу",
+            description=f"Продовжено задачу {task.get('order_number', '')} {task.get('part_number', '')}".strip(),
+            actor=actor,
+            entity_type="schedule_task",
+            entity_id=str(normalized_task_id),
+            order_number=_safe_text(task.get("order_number")),
+            subdivision=_safe_text(task.get("subdivision")),
+            source_table=SCHEDULE_TASKS_TABLE,
+            source_op="UPDATE",
+            details={"task_id": normalized_task_id},
+        )
     else:
         auto_closed_at = task.get("auto_closed_at")
-        if current_status not in {TASK_STATUS_IN_PROGRESS, TASK_STATUS_PAUSED}:
-            if not (current_status == TASK_STATUS_COMPLETED and auto_closed_at):
-                raise ValueError("Завершити можна лише активну або призупинену задачу")
+        if not row[12]:
+            raise ValueError("Завершити можна лише після фіксації початку виконання")
+        if not (
+            current_status in {TASK_STATUS_IN_PROGRESS, TASK_STATUS_PAUSED}
+            or (current_status == TASK_STATUS_COMPLETED and auto_closed_at)
+        ):
+            raise ValueError("Завершити можна лише активну задачу")
         if normalized_task_type in {"assembly", "install"} and normalized_selected_products:
             detail_rows = fetch_detail_rows_for_product_match(order_number=task.get("order_number", ""))
             matched_detail_ids = []
@@ -126,6 +171,23 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
             )
         mark_task_completed(task_id=normalized_task_id, location=normalized_location)
         message = "Задачу завершено."
+        record_activity_event(
+            action_key="schedule.mobile.finish",
+            action_label="Завершено задачу",
+            description=f"Завершено задачу {task.get('order_number', '')} {task.get('part_number', '')}".strip(),
+            actor=actor,
+            entity_type="schedule_task",
+            entity_id=str(normalized_task_id),
+            order_number=_safe_text(task.get("order_number")),
+            subdivision=_safe_text(task.get("subdivision")),
+            source_table=SCHEDULE_TASKS_TABLE,
+            source_op="UPDATE",
+            details={
+                "task_id": normalized_task_id,
+                "task_type": normalized_task_type,
+                "selected_products_count": len(normalized_selected_products),
+            },
+        )
 
     updated_row = fetch_task_by_id(normalized_task_id)
     customer_fallbacks = fetch_order_customer_map(

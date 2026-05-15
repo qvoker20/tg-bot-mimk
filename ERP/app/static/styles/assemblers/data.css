@@ -37,6 +37,17 @@
     border-radius: 4px;
 }
 
+.main-order-status-warning {
+    margin: 12px 0 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #fca5a5;
+    background: #fee2e2;
+    color: #b91c1c;
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .staff-table {
     min-width: 1160px;
 }
@@ -211,6 +222,36 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+}
+
+.confirm-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-action-button {
+    background-color: #f3f4f6;
+    color: #1f2937;
+    border: 1px solid #d1d5db;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.status-action-button:hover:not(:disabled) {
+    background-color: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.status-action-button:active:not(:disabled) {
+    background-color: #d1d5db;
+}
+
+.status-action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .table-status-row {

@@ -10,6 +10,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 try:
@@ -23,6 +24,7 @@ try:
         TEMPLATES_DIR,
     )
     from .modules.assemblers.db.async_connection import dispose_async_engines
+    from .modules.assemblers.services.activity_log import record_activity_event
     from .modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
     from .modules.assemblers.services.schedule.worker import run_schedule_daily_cutoff_worker
     from .modules.router import router as modules_router
@@ -44,6 +46,7 @@ except ImportError:
         TEMPLATES_DIR,
     )
     from app.modules.assemblers.db.async_connection import dispose_async_engines
+    from app.modules.assemblers.services.activity_log import record_activity_event
     from app.modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
     from app.modules.assemblers.services.schedule.worker import run_schedule_daily_cutoff_worker
     from app.modules.router import router as modules_router
@@ -96,6 +99,61 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 set_templates(templates)
+
+
+@app.middleware("http")
+async def assemblers_error_audit_middleware(request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception as error:
+        if request.url.path.startswith("/assemblers"):
+            try:
+                await run_in_threadpool(
+                    record_activity_event,
+                    action_key="api.exception",
+                    action_label="Неперехоплена помилка",
+                    description=f"{request.method} {request.url.path}: {error}",
+                    actor=request.session.get("user") or {"kind": "system"},
+                    entity_type="api_error",
+                    entity_id=request.url.path,
+                    source_table="http",
+                    source_op="EXCEPTION",
+                    status_code=500,
+                    details={
+                        "method": request.method,
+                        "path": request.url.path,
+                        "query": str(request.url.query),
+                        "error_type": type(error).__name__,
+                    },
+                )
+            except Exception:
+                pass
+        raise
+
+    if request.url.path.startswith("/assemblers") and response.status_code >= 400:
+        try:
+            await run_in_threadpool(
+                record_activity_event,
+                action_key="api.error",
+                action_label="HTTP помилка",
+                description=f"{request.method} {request.url.path} -> {response.status_code}",
+                actor=request.session.get("user") or {"kind": "system"},
+                entity_type="api_error",
+                entity_id=request.url.path,
+                source_table="http",
+                source_op="RESPONSE",
+                status_code=int(response.status_code),
+                details={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query": str(request.url.query),
+                    "status_code": int(response.status_code),
+                },
+            )
+        except Exception:
+            pass
+
+    return response
 
 app.include_router(modules_router)
 

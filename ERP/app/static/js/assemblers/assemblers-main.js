@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const meta = page?.querySelector("[data-main-meta]");
     const orderSearch = page?.querySelector("[data-main-search-order]");
     const customerSearch = page?.querySelector("[data-main-search-customer]");
+    const searchApplyButton = page?.querySelector("[data-main-search-apply]");
     const openFiltersButton = page?.querySelector("[data-main-open-filters]");
     const activeFiltersEl = page?.querySelector("[data-main-active-filters]");
     const filtersModal = document.querySelector("[data-main-filters-modal]");
@@ -45,6 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalOrderNumber = document.querySelector("[data-main-modal-order-number]");
     const modalCustomer = document.querySelector("[data-main-modal-customer]");
     const modalStatus = document.querySelector("[data-main-modal-status]");
+    const modalReclamationWarning = document.querySelector("[data-main-reclamation-warning]");
     const modalDeadline = document.querySelector("[data-main-modal-deadline]");
     const modalOrderType = document.querySelector("[data-main-modal-order-type]");
     const modalAddress = document.querySelector("[data-main-modal-address]");
@@ -58,6 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const noteTextClear = document.querySelector("[data-main-note-text-clear]");
     const modalVat = document.querySelector("[data-main-modal-vat]");
     const modalSubmit = document.querySelector("[data-main-modal-submit]");
+    const modalCloseOrderButton = document.querySelector("[data-main-modal-close-order]");
+    const modalMarkReclamationButton = document.querySelector("[data-main-modal-mark-reclamation]");
+    const modalCancelReclamationButton = document.querySelector("[data-main-modal-cancel-reclamation]");
     const detailStageModal = document.querySelector("[data-main-detail-stage-modal]");
     const detailStageModalMeta = document.querySelector("[data-main-stage-modal-meta]");
     const detailStageAssemblyStatus = document.querySelector("[data-main-stage-assembly-status]");
@@ -81,6 +86,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const withGlobalLoader = (operation, message) => window.ERPLoading?.withLoader
         ? window.ERPLoading.withLoader(operation, { message })
         : operation();
+
+    const fetchLiveOrder = async (orderNumber) => {
+        const response = await fetch(`/assemblers/api/main/${encodeURIComponent(orderNumber)}`, {
+            cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+            throw new Error(result.error || "Не вдалося завантажити дані.");
+        }
+        return result.order || null;
+    };
 
     const stageConfirmDialog = document.querySelector("[data-stage-confirm-dialog]");
     const stageConfirmMessage = document.querySelector("[data-stage-confirm-message]");
@@ -124,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
         rowsByOrder: new Map(),
         rowElements: new Map(),
         activeOrderNumber: "",
+        activeOrderStatus: "",
         modalLoading: false,
         modalSaving: false,
         contextOrderNumber: "",
@@ -144,7 +161,12 @@ document.addEventListener("DOMContentLoaded", () => {
         activeDetailId: null,
         detailActionState: new Map(),
     };
-    let searchTimer = null;
+
+    const canEditCurrentOrder = () => {
+        const normalizedStatus = String(state.activeOrderStatus || "").trim().toLowerCase();
+        return canManageOrders && normalizedStatus !== "закрито" && normalizedStatus !== "рекламація";
+    };
+    const isCurrentOrderCompleted = () => String(state.activeOrderStatus || "").trim().toLowerCase() === "завершено";
     const NOTE_FILL_RECENT_COLORS_KEY = "assemblers-main-note-fill-recent-colors";
     const NOTE_FILL_PICKER_FALLBACK = "#fff3bf";
     const NOTE_TEXT_PICKER_FALLBACK = "#0f172a";
@@ -185,7 +207,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const isStageCompleted = (statusValue, completedAtValue) => {
         const normalizedStatus = String(statusValue || "").trim().toLowerCase();
         const normalizedCompletedAt = String(completedAtValue || "").trim();
-        return normalizedStatus === "завершено" || Boolean(normalizedCompletedAt && normalizedCompletedAt !== "—");
+        const hasRealCompletedAt = Boolean(
+            normalizedCompletedAt
+            && normalizedCompletedAt !== "—"
+            && normalizedCompletedAt !== "-"
+        );
+        return normalizedStatus === "завершено" || hasRealCompletedAt;
     };
 
     const resolveStageStatus = (detail, stage, actionState) => {
@@ -253,19 +280,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (detailStageAssemblyCompleteButton) {
             detailStageAssemblyCompleteButton.hidden = !requiresAssembly || assemblyCompleted;
-            detailStageAssemblyCompleteButton.disabled = !canManageOrders;
+            detailStageAssemblyCompleteButton.disabled = !canEditCurrentOrder();
         }
         if (detailStageAssemblyResetButton) {
             detailStageAssemblyResetButton.hidden = !requiresAssembly || !assemblyCompleted;
-            detailStageAssemblyResetButton.disabled = !canManageOrders;
+            detailStageAssemblyResetButton.disabled = !canEditCurrentOrder();
         }
         if (detailStageInstallCompleteButton) {
             detailStageInstallCompleteButton.hidden = !requiresInstall || installCompleted;
-            detailStageInstallCompleteButton.disabled = !canManageOrders;
+            detailStageInstallCompleteButton.disabled = !canEditCurrentOrder();
         }
         if (detailStageInstallResetButton) {
             detailStageInstallResetButton.hidden = !requiresInstall || !installCompleted;
-            detailStageInstallResetButton.disabled = !canManageOrders;
+            detailStageInstallResetButton.disabled = !canEditCurrentOrder();
         }
 
         syncDetailActionInputs(row, detailId);
@@ -288,7 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const applyDetailStageAction = async (stage, actionKind) => {
-        if (!canManageOrders || state.activeDetailId == null) {
+        if (!canEditCurrentOrder() || state.activeDetailId == null) {
             return;
         }
 
@@ -478,6 +505,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const normalized = String(value).trim();
         return normalized || "—";
+    };
+    const resolveDisplayedOrderStatus = (order) => {
+        const apiStatus = String(order?.status || "").trim();
+        if (apiStatus) {
+            return apiStatus;
+        }
+
+        const orderNumber = String(order?.order_number || "").trim();
+        const tableRow = orderNumber ? state.rowsByOrder.get(orderNumber) : null;
+        const tableStatus = String(tableRow?.status || "").trim();
+        return tableStatus || "—";
     };
 
     const normalizeHexColor = (value) => {
@@ -682,63 +720,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const setModalBusy = (busy) => {
         state.modalLoading = busy;
-        modalSubmit.disabled = !canManageOrders || busy || state.modalSaving;
-        modalAddress.disabled = !canManageOrders || busy || state.modalSaving;
-        modalAddressNote.disabled = !canManageOrders || busy || state.modalSaving;
-        modalNote.disabled = !canManageOrders || busy || state.modalSaving;
-        noteFillPicker.disabled = !canManageOrders || busy || state.modalSaving;
-        noteFillClear.disabled = !canManageOrders || busy || state.modalSaving;
-        noteTextPicker.disabled = !canManageOrders || busy || state.modalSaving;
-        noteTextClear.disabled = !canManageOrders || busy || state.modalSaving;
+        modalSubmit.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        modalAddress.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        modalAddressNote.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        modalNote.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        noteFillPicker.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        noteFillClear.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        noteTextPicker.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
+        noteTextClear.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         noteToolButtons.forEach((button) => {
-            button.disabled = !canManageOrders || busy || state.modalSaving;
+            button.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
         noteFillButtons.forEach((button) => {
-            button.disabled = !canManageOrders || busy || state.modalSaving;
+            button.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
         noteTextButtons.forEach((button) => {
-            button.disabled = !canManageOrders || busy || state.modalSaving;
+            button.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
         noteEmojiButtons.forEach((button) => {
-            button.disabled = !canManageOrders || busy || state.modalSaving;
+            button.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
         noteFillRecent.querySelectorAll("button").forEach((button) => {
-            button.disabled = !canManageOrders || busy || state.modalSaving;
+            button.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
         getDetailDateInputs().forEach((input) => {
-            input.disabled = !canManageOrders || busy || state.modalSaving;
+            input.disabled = !canEditCurrentOrder() || busy || state.modalSaving;
         });
+        updateModalStatusActionButtons();
     };
 
     const setModalSaving = (saving) => {
         state.modalSaving = saving;
-        modalSubmit.disabled = !canManageOrders || saving || state.modalLoading;
-        modalAddress.disabled = !canManageOrders || saving || state.modalLoading;
-        modalAddressNote.disabled = !canManageOrders || saving || state.modalLoading;
-        modalNote.disabled = !canManageOrders || saving || state.modalLoading;
-        noteFillPicker.disabled = !canManageOrders || saving || state.modalLoading;
-        noteFillClear.disabled = !canManageOrders || saving || state.modalLoading;
-        noteTextPicker.disabled = !canManageOrders || saving || state.modalLoading;
-        noteTextClear.disabled = !canManageOrders || saving || state.modalLoading;
+        modalSubmit.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        modalAddress.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        modalAddressNote.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        modalNote.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        noteFillPicker.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        noteFillClear.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        noteTextPicker.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
+        noteTextClear.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         noteToolButtons.forEach((button) => {
-            button.disabled = !canManageOrders || saving || state.modalLoading;
+            button.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         noteFillButtons.forEach((button) => {
-            button.disabled = !canManageOrders || saving || state.modalLoading;
+            button.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         noteTextButtons.forEach((button) => {
-            button.disabled = !canManageOrders || saving || state.modalLoading;
+            button.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         noteEmojiButtons.forEach((button) => {
-            button.disabled = !canManageOrders || saving || state.modalLoading;
+            button.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         noteFillRecent.querySelectorAll("button").forEach((button) => {
-            button.disabled = !canManageOrders || saving || state.modalLoading;
+            button.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         getDetailDateInputs().forEach((input) => {
-            input.disabled = !canManageOrders || saving || state.modalLoading;
+            input.disabled = !canEditCurrentOrder() || saving || state.modalLoading;
         });
         modalSubmit.textContent = saving ? "Збереження..." : "Зберегти";
+        updateModalStatusActionButtons();
     };
 
     const parseYmd = (value) => {
@@ -981,19 +1021,23 @@ const renderInfoSchedule = (scheduleTasks, tbody) => {
 };
 
 const openInfoModal = async (orderNumber) => {
-    const response = await fetch("/assemblers/api/main/" + encodeURIComponent(orderNumber));
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-        showToast(result.error || "Не вдалося завантажити дані.", "error");
+    let order;
+    try {
+        order = await fetchLiveOrder(orderNumber);
+    } catch (error) {
+        showToast(error.message || "Не вдалося завантажити дані.", "error");
         return;
     }
 
-    const order = result.order || {};
+    if (!order) {
+        showToast("Не вдалося завантажити дані.", "error");
+        return;
+    }
     const details = Array.isArray(order.details) ? order.details : [];
 
     infoOrderNumber.textContent = order.order_number || "—";
     infoCustomer.textContent = order.customer || "—";
-    setStatusBadgeToNode(infoStatus, order.status);
+    setStatusBadgeToNode(infoStatus, resolveDisplayedOrderStatus(order));
     infoSignedAt.textContent = order.signed_at || "—";
     infoInstallAt.textContent = order.planned_install_at || "—";
 
@@ -1033,6 +1077,9 @@ const statusClassFromText = (value) => {
 
     if (text.includes("закрит")) {
         return "is-closed";
+    }
+    if (text.includes("рекламац")) {
+        return "is-alert";
     }
     if (text.includes("розпод")) {
         return "is-distributed";
@@ -1078,6 +1125,14 @@ const setStatusBadgeToNode = (node, value) => {
     if (!node) return;
     node.textContent = "";
     node.appendChild(makeStatusBadge(value));
+};
+
+const normalizePaintStatusDisplay = (value) => {
+    const text = String(value ?? "").trim().toLowerCase();
+    if (!text || text === "немає" || text === "нема") {
+        return "-";
+    }
+    return value;
 };
 
 const SUBCONTRACT_FIELDS = [
@@ -1138,18 +1193,24 @@ const renderSubcontractsTable = (order) => {
 const openSubcontractsModal = (orderNumber) => {
     if (!subcontractsModal) return;
 
-    const order = state.rowsByOrder.get(orderNumber);
-    if (!order) {
-        showToast("Не вдалося знайти дані замовлення для підрядів.", "error");
-        return;
-    }
+        void (async () => {
+            try {
+                const order = await fetchLiveOrder(orderNumber);
+                if (!order) {
+                    showToast("Не вдалося знайти дані замовлення для підрядів.", "error");
+                    return;
+                }
 
-    if (subcontractsOrderNumber) subcontractsOrderNumber.textContent = displayValue(order.order_number);
-    if (subcontractsCustomer) subcontractsCustomer.textContent = displayValue(order.customer);
-    if (subcontractsStatus) setStatusBadgeToNode(subcontractsStatus, order.status);
+                if (subcontractsOrderNumber) subcontractsOrderNumber.textContent = displayValue(order.order_number);
+                if (subcontractsCustomer) subcontractsCustomer.textContent = displayValue(order.customer);
+                if (subcontractsStatus) setStatusBadgeToNode(subcontractsStatus, resolveDisplayedOrderStatus(order));
 
-    renderSubcontractsTable(order);
-    subcontractsModal.classList.remove("hidden");
+                renderSubcontractsTable(order);
+                subcontractsModal.classList.remove("hidden");
+            } catch (error) {
+                showToast(error.message || "Не вдалося завантажити дані замовлення для підрядів.", "error");
+            }
+        })();
 };
 
 const closeSubcontractsModal = () => {
@@ -1197,6 +1258,44 @@ const closeSubcontractsModal = () => {
         "заплановано монтаж": "Заплановано монтаж",
         "пауза": "Пауза",
         "завершено": "Завершено",
+        "рекламація": "Рекламація",
+        "закрито": "Закрито",
+    };
+
+    const normalizeOrderStatus = (value) => String(value || "").trim().toLowerCase();
+
+    const updateReclamationWarning = () => {
+        if (!modalReclamationWarning) {
+            return;
+        }
+        const isReclamation = normalizeOrderStatus(state.activeOrderStatus) === "рекламація";
+        modalReclamationWarning.classList.toggle("hidden", !isReclamation);
+    };
+
+    const updateModalStatusActionButtons = () => {
+        if (!modalCloseOrderButton && !modalMarkReclamationButton && !modalCancelReclamationButton) {
+            return;
+        }
+
+        const status = normalizeOrderStatus(state.activeOrderStatus);
+        const canCloseOrder = status === "рекламація" || status === "завершено";
+        const canMarkReclamation = status === "завершено";
+        const canCancelReclamation = status === "рекламація";
+        const disableActions = !canManageOrders || state.modalLoading || state.modalSaving || !state.activeOrderNumber;
+
+        // Show buttons only if specific status matches and user can manage orders
+        if (modalCloseOrderButton) {
+            modalCloseOrderButton.hidden = !canManageOrders || !canCloseOrder;
+            modalCloseOrderButton.disabled = disableActions;
+        }
+        if (modalMarkReclamationButton) {
+            modalMarkReclamationButton.hidden = !canManageOrders || !canMarkReclamation;
+            modalMarkReclamationButton.disabled = disableActions;
+        }
+        if (modalCancelReclamationButton) {
+            modalCancelReclamationButton.hidden = !canManageOrders || !canCancelReclamation;
+            modalCancelReclamationButton.disabled = disableActions;
+        }
     };
 
     const DEADLINE_LABELS = {
@@ -1430,6 +1529,21 @@ const closeSubcontractsModal = () => {
             row.dataset.installCompletedAt = String(detail.install_completed_at || "");
             row.dataset.requiresAssembly = String(detail.requires_assembly !== false);
             row.dataset.requiresInstall = String(detail.requires_install !== false);
+            const detailAssemblyRequiredBySystem = detail.requires_assembly !== false;
+            const detailInstallRequiredBySystem = detail.requires_install !== false;
+            const detailAssemblyCompletedBySystem = isStageCompleted(
+                row.dataset.assemblyStatus || "",
+                row.dataset.assemblyCompletedAt || "",
+            );
+            const detailInstallCompletedBySystem = isStageCompleted(
+                row.dataset.installStatus || "",
+                row.dataset.installCompletedAt || "",
+            );
+            const detailProductCompletedBySystem = (
+                (!detailAssemblyRequiredBySystem || detailAssemblyCompletedBySystem)
+                && (!detailInstallRequiredBySystem || detailInstallCompletedBySystem)
+            );
+            row.dataset.productCompleted = String(detailProductCompletedBySystem);
 
             if (detailId != null) {
                 state.detailActionState.set(detailId, cloneDetailActionDefaults());
@@ -1511,9 +1625,32 @@ const closeSubcontractsModal = () => {
                 label: "Дата планування монтаж",
             }));
 
-            const applyRequirementState = () => {
-                const assemblyRequired = requiresAssemblyInput.checked;
-                const installRequired = requiresInstallInput.checked;
+            const applyRequirementState = (changedInput = null) => {
+                let assemblyRequired = requiresAssemblyInput.checked;
+                let installRequired = requiresInstallInput.checked;
+                const assemblyStageCompleted = isStageCompleted(
+                    row.dataset.assemblyStatus || "",
+                    row.dataset.assemblyCompletedAt || "",
+                );
+                const installStageCompleted = isStageCompleted(
+                    row.dataset.installStatus || "",
+                    row.dataset.installCompletedAt || "",
+                );
+                const productCompletedBySystem = row.dataset.productCompleted === "true" || isCurrentOrderCompleted();
+
+                if (!assemblyRequired && !installRequired) {
+                    showToast("Не можна одночасно зняти збірку і монтаж для виробу.", "error");
+                    if (changedInput === requiresAssemblyInput) {
+                        requiresAssemblyInput.checked = true;
+                        assemblyRequired = true;
+                    } else if (changedInput === requiresInstallInput) {
+                        requiresInstallInput.checked = true;
+                        installRequired = true;
+                    } else {
+                        requiresAssemblyInput.checked = true;
+                        assemblyRequired = true;
+                    }
+                }
 
                 row.dataset.requiresAssembly = String(assemblyRequired);
                 row.dataset.requiresInstall = String(installRequired);
@@ -1528,10 +1665,13 @@ const closeSubcontractsModal = () => {
                     actionState.reset_install_completed = false;
                 }
 
+                requiresAssemblyInput.disabled = !canEditCurrentOrder() || productCompletedBySystem;
+                requiresInstallInput.disabled = !canEditCurrentOrder() || productCompletedBySystem;
+
                 const assemblyDateInput = row.querySelector("input[data-detail-field='planned_assembly_due_at']");
                 const installDateInput = row.querySelector("input[data-detail-field='planned_install_due_at']");
                 if (assemblyDateInput) {
-                    assemblyDateInput.disabled = !assemblyRequired || !canManageOrders;
+                    assemblyDateInput.disabled = !assemblyRequired || !canEditCurrentOrder() || assemblyStageCompleted || productCompletedBySystem;
                     const assemblyWrap = assemblyDateInput.closest(".main-order-detail-stage-control");
                     if (!assemblyRequired) {
                         assemblyDateInput.value = "";
@@ -1542,7 +1682,7 @@ const closeSubcontractsModal = () => {
                     }
                 }
                 if (installDateInput) {
-                    installDateInput.disabled = !installRequired || !canManageOrders;
+                    installDateInput.disabled = !installRequired || !canEditCurrentOrder() || installStageCompleted || productCompletedBySystem;
                     const installWrap = installDateInput.closest(".main-order-detail-stage-control");
                     if (!installRequired) {
                         installDateInput.value = "";
@@ -1554,8 +1694,8 @@ const closeSubcontractsModal = () => {
                 }
             };
 
-            requiresAssemblyInput.addEventListener("change", applyRequirementState);
-            requiresInstallInput.addEventListener("change", applyRequirementState);
+            requiresAssemblyInput.addEventListener("change", () => applyRequirementState(requiresAssemblyInput));
+            requiresInstallInput.addEventListener("change", () => applyRequirementState(requiresInstallInput));
             applyRequirementState();
 
             const actionsCell = document.createElement("td");
@@ -1565,7 +1705,7 @@ const closeSubcontractsModal = () => {
             actionButton.type = "button";
             actionButton.className = "main-order-detail-edit-button";
             actionButton.textContent = "Редагувати";
-            actionButton.disabled = !canManageOrders;
+            actionButton.disabled = !canEditCurrentOrder() || detailProductCompletedBySystem || isCurrentOrderCompleted();
             actionButton.addEventListener("click", () => openDetailStageModal(detail));
             actionsCell.appendChild(actionButton);
 
@@ -1597,10 +1737,11 @@ const closeSubcontractsModal = () => {
         }
 
         state.activeOrderNumber = order.order_number || "";
+        state.activeOrderStatus = resolveDisplayedOrderStatus(order);
         modalTitle.textContent = order.order_number ? `Замовлення ${order.order_number}` : "Замовлення";
         modalOrderNumber.textContent = displayValue(order.order_number);
         modalCustomer.textContent = displayValue(order.customer);
-        setStatusBadgeToNode(modalStatus, order.status);
+        setStatusBadgeToNode(modalStatus, state.activeOrderStatus);
         modalDeadline.textContent = displayValue(order.deadline);
         modalOrderType.textContent = displayValue(order.order_type);
         modalAddress.value = order.address || "";
@@ -1610,10 +1751,13 @@ const closeSubcontractsModal = () => {
         modalVat.checked = Boolean(order.vat);
         renderDetails(order.details || []);
         modalSubmit.hidden = !canManageOrders;
+        updateReclamationWarning();
+        updateModalStatusActionButtons();
     };
 
     const closeModal = () => {
         state.activeOrderNumber = "";
+        state.activeOrderStatus = "";
         closeDetailStageModal();
         state.detailActionState.clear();
         modal.classList.add("hidden");
@@ -1628,8 +1772,10 @@ const closeSubcontractsModal = () => {
         closeNotePopovers();
         applyNoteAppearanceToField("", NOTE_TEXT_PICKER_FALLBACK);
         renderDetails([]);
+        updateReclamationWarning();
         setModalBusy(false);
         setModalSaving(false);
+        updateModalStatusActionButtons();
     };
 
     const openModal = async (orderNumber) => {
@@ -1641,12 +1787,8 @@ const closeSubcontractsModal = () => {
 
         try {
             const payload = await withGlobalLoader(async () => {
-                const response = await fetch(`/assemblers/api/main/${encodeURIComponent(orderNumber)}`);
-                const result = await response.json();
-                if (!response.ok || !result.ok) {
-                    throw new Error(result.error || "Не вдалося завантажити замовлення.");
-                }
-                return result;
+                const order = await fetchLiveOrder(orderNumber);
+                return { ok: true, order };
             }, "Завантаження замовлення...");
 
             applyOrderCard(payload.order);
@@ -1656,6 +1798,47 @@ const closeSubcontractsModal = () => {
             closeModal();
         } finally {
             setModalBusy(false);
+        }
+    };
+
+    const applyOrderStatusAction = async ({ action, loadingMessage, successMessage, confirmMessage }) => {
+        if (!canManageOrders || !state.activeOrderNumber || state.modalLoading || state.modalSaving) {
+            showToast("Недостатньо прав для керування замовленням.", "error");
+            return;
+        }
+
+        if (confirmMessage) {
+            const isConfirmed = await showStyledConfirm(confirmMessage);
+            if (!isConfirmed) {
+                return;
+            }
+        }
+
+        setModalSaving(true);
+
+        try {
+            const payload = await withGlobalLoader(async () => {
+                const response = await fetch(`/assemblers/api/main/${encodeURIComponent(state.activeOrderNumber)}/status`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ action }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) {
+                    throw new Error(result.error || "Не вдалося змінити статус замовлення.");
+                }
+                return result;
+            }, loadingMessage);
+
+            applyOrderCard(payload.order);
+            await refreshLoadedRows();
+            showToast(payload.message || successMessage || "Статус замовлення оновлено.");
+        } catch (error) {
+            showToast(error.message || "Не вдалося змінити статус замовлення.", "error");
+        } finally {
+            setModalSaving(false);
         }
     };
 
@@ -1710,40 +1893,68 @@ const closeSubcontractsModal = () => {
         return span;
     };
 
-    const SUBCONTRACT_PRESENCE_INDEXES = new Set([
-        24, // paint_shop
-        26, // metal
-        28, // veneer
-        29, // plastic_hpl
-        30, // joinery_shop
-        31, // soft_shop
-        32, // artificial_stone
-        33, // compact_plate
-        34, // dsp_countertop
-        35, // sliding_systems
-        36, // glass_mirror
-        38, // frame_facades
-        39, // ceramic_granite
+    const ratioClassByValue = (value) => {
+        const text = String(value ?? "").trim();
+        const match = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (!match) {
+            return statusClassFromDistribution(value);
+        }
+
+        const completed = Number(match[1]);
+        const total = Number(match[2]);
+        if (!Number.isFinite(completed) || !Number.isFinite(total) || total <= 0) {
+            return "is-default";
+        }
+
+        const percent = (completed / total) * 100;
+        if (percent <= 0) return "is-plan-none";
+        if (percent < 50) return "is-plan-low";
+        if (percent < 100) return "is-plan-mid";
+        return "is-completed";
+    };
+
+    const makeRatioBadge = (value) => {
+        const span = document.createElement("span");
+        span.textContent = String(value ?? "—").trim() || "—";
+        span.className = `assemblers-status-badge ${ratioClassByValue(value)}`;
+        return span;
+    };
+
+    const SUBCONTRACT_PRESENCE_KEYS = new Set([
+        "paint_shop",
+        "metal",
+        "veneer",
+        "plastic_hpl",
+        "joinery_shop",
+        "soft_shop",
+        "artificial_stone",
+        "compact_plate",
+        "dsp_countertop",
+        "sliding_systems",
+        "glass_mirror",
+        "frame_facades",
+        "ceramic_granite",
     ]);
 
-    const STATUS_TEXT_INDEXES = new Set([
-        3,  // status
-        25, // paint_status
-        27, // metal_status
-        37, // glass_status
-        40, // constructor_status
-        41, // production_status
+    const SUBCONTRACT_STATUS_KEYS = new Set([
+        "paint_status",
+        "metal_status",
+        "glass_status",
     ]);
 
-    const HOURS_COLUMNS_INDEXES = new Set([
-        8,  // planned_hours
-        9,  // actual_hours
-        10, // remaining_hours
-        16, // assembly_hours
-        21, // install_hours
+    const STATUS_TEXT_KEYS = new Set([
+        "status",
+        "paint_status",
+        "metal_status",
+        "glass_status",
     ]);
 
-    const isSubcontractColumn = (index) => SUBCONTRACT_PRESENCE_INDEXES.has(index);
+    const HOURS_COLUMNS_KEYS = new Set([
+        "planned_hours",
+        "actual_hours",
+        "assembly_hours",
+        "install_hours",
+    ]);
 
     const hasDbValue = (value) => {
         if (value == null) return false;
@@ -1764,48 +1975,89 @@ const closeSubcontractsModal = () => {
         const tr = document.createElement("tr");
         tr.dataset.orderNumber = row.order_number || "";
         tr.classList.add("main-order-row", "is-clickable");
-        const values = [
-            row.order_number, row.customer, row.order_type, row.status, row.note, row.products,
-            row.contract_due_at, row.deadline, row.planned_hours, row.actual_hours, row.remaining_hours,
-            row.planned_assembly_parts, row.planned_install_parts, row.assembly_status, row.assembly_started_at,
-            row.assembly_completed_at, row.assembly_hours, row.install_status, row.install_started_at, 
-            row.install_completed_at, row.install_hours, row.assembly_workers, row.install_workers, 
-            row.paint_shop, row.paint_status, row.metal,
-            row.metal_status, row.veneer, row.plastic_hpl, row.joinery_shop, row.soft_shop, row.artificial_stone,
-            row.compact_plate, row.dsp_countertop, row.sliding_systems, row.glass_mirror, row.glass_status,
-            row.frame_facades, row.ceramic_granite, row.constructor_status, row.production_status, row.order_value,
-            row.vat, row.parts_count, row.launches_count,
-            row.recorded_at, row.address, row.address_note,
-            row.materials, row.constructor_name, row.manager_name,
+        const columns = [
+            ["order_number", row.order_number],
+            ["customer", row.customer],
+            ["order_type", row.order_type],
+            ["status", row.status],
+            ["note", row.note],
+            ["products", row.products],
+            ["contract_due_at", row.contract_due_at],
+            ["deadline", row.deadline],
+            ["planned_hours", row.planned_hours],
+            ["actual_hours", row.actual_hours],
+            ["planned_assembly_parts", row.planned_assembly_parts],
+            ["planned_install_parts", row.planned_install_parts],
+            ["assembly_status", row.assembly_status],
+            ["assembly_started_at", row.assembly_started_at],
+            ["assembly_completed_at", row.assembly_completed_at],
+            ["assembly_hours", row.assembly_hours],
+            ["install_status", row.install_status],
+            ["install_started_at", row.install_started_at],
+            ["install_completed_at", row.install_completed_at],
+            ["install_hours", row.install_hours],
+            ["assembly_workers", row.assembly_workers],
+            ["install_workers", row.install_workers],
+            ["paint_shop", row.paint_shop],
+            ["paint_status", row.paint_status],
+            ["metal", row.metal],
+            ["metal_status", row.metal_status],
+            ["veneer", row.veneer],
+            ["plastic_hpl", row.plastic_hpl],
+            ["joinery_shop", row.joinery_shop],
+            ["soft_shop", row.soft_shop],
+            ["artificial_stone", row.artificial_stone],
+            ["compact_plate", row.compact_plate],
+            ["dsp_countertop", row.dsp_countertop],
+            ["sliding_systems", row.sliding_systems],
+            ["glass_mirror", row.glass_mirror],
+            ["glass_status", row.glass_status],
+            ["frame_facades", row.frame_facades],
+            ["ceramic_granite", row.ceramic_granite],
+            ["constructor_status", row.constructor_status],
+            ["production_status", row.production_status],
+            ["order_value", row.order_value],
+            ["vat", row.vat],
+            ["recorded_at", row.recorded_at],
+            ["address", row.address],
+            ["address_note", row.address_note],
+            ["materials", row.materials],
+            ["constructor_name", row.constructor_name],
+            ["manager_name", row.manager_name],
         ];
 
-        values.forEach((value, index) => {
+        columns.forEach(([key, value], index) => {
             const td = document.createElement("td");
             td.dataset.colIndex = String(index);
+            td.dataset.colKey = key;
 
-            if (isSubcontractColumn(index)) {
+            if (SUBCONTRACT_PRESENCE_KEYS.has(key) || SUBCONTRACT_STATUS_KEYS.has(key)) {
                 td.classList.add("is-subcontract");
             }
 
-            if (index === 11 || index === 12) {
+            if (key === "planned_assembly_parts" || key === "planned_install_parts") {
                 td.appendChild(makePlanPercentBadge(value));
-            } else if (index === 13 || index === 18) {
+            } else if (key === "assembly_status" || key === "install_status") {
                 td.appendChild(makeDistributionBadge(value));
-            } else if (index === 43) {
+            } else if (key === "vat") {
                 // ПДВ column — show Так/— badge
                 const span = document.createElement("span");
                 const hasVat = Boolean(value);
                 span.className = `assemblers-status-badge ${hasVat ? "is-completed" : "is-default"}`;
                 span.textContent = hasVat ? "Так" : "—";
                 td.appendChild(span);
-            } else if (STATUS_TEXT_INDEXES.has(index)) {
+            } else if (key === "constructor_status" || key === "production_status") {
                 td.classList.add("assemblers-status-cell");
-                td.appendChild(makeStatusBadge(value));
-            } else if (SUBCONTRACT_PRESENCE_INDEXES.has(index)) {
+                td.appendChild(makeRatioBadge(value));
+            } else if (STATUS_TEXT_KEYS.has(key)) {
+                td.classList.add("assemblers-status-cell");
+                const statusValue = key === "paint_status" ? normalizePaintStatusDisplay(value) : value;
+                td.appendChild(makeStatusBadge(statusValue));
+            } else if (SUBCONTRACT_PRESENCE_KEYS.has(key)) {
                 td.appendChild(makePresenceBadge(value));
-            } else if (HOURS_COLUMNS_INDEXES.has(index)) {
+            } else if (HOURS_COLUMNS_KEYS.has(key)) {
                 td.textContent = formatHoursMinutes(value);
-            } else if (index === 7) {
+            } else if (key === "deadline") {
                 td.textContent = displayValue(value);
                 const deadlineDays = parseNumeric(value);
                 if (deadlineDays != null && deadlineDays < 10) {
@@ -1815,7 +2067,7 @@ const closeSubcontractsModal = () => {
                 td.textContent = value ?? "—";
             }
 
-            if (index === cellIndexes.note) {
+            if (key === "note") {
                 td.classList.add("main-order-note-cell");
                 applyNoteAppearanceToCell(td, row.note_color, row.note_text_color);
             }
@@ -1876,20 +2128,15 @@ const closeSubcontractsModal = () => {
         }
     }, { passive: true });
 
-    const scheduleSearch = () => {
-        if (searchTimer) {
-            window.clearTimeout(searchTimer);
+    const applyMainSearch = async () => {
+        state.filters.orderNumber = orderSearch.value.trim();
+        state.filters.customer = customerSearch.value.trim();
+        try {
+            await loadFilterOptions();
+        } catch (error) {
+            console.warn("Не вдалося оновити опції фільтрів", error);
         }
-        searchTimer = window.setTimeout(async () => {
-            state.filters.orderNumber = orderSearch.value.trim();
-            state.filters.customer = customerSearch.value.trim();
-            try {
-                await loadFilterOptions();
-            } catch (error) {
-                console.warn("Не вдалося оновити опції фільтрів", error);
-            }
-            await resetAndReload();
-        }, 280);
+        await resetAndReload();
     };
 
     tbody.addEventListener("click", (event) => {
@@ -1916,8 +2163,21 @@ const closeSubcontractsModal = () => {
         button.addEventListener("click", closeModal);
     });
 
-    orderSearch.addEventListener("input", scheduleSearch);
-    customerSearch.addEventListener("input", scheduleSearch);
+    searchApplyButton?.addEventListener("click", () => {
+        void applyMainSearch();
+    });
+    orderSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            void applyMainSearch();
+        }
+    });
+    customerSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            void applyMainSearch();
+        }
+    });
     openFiltersButton?.addEventListener("click", () => {
         void openFiltersModal();
     });
@@ -2150,6 +2410,33 @@ const closeSubcontractsModal = () => {
         } finally {
             setModalSaving(false);
         }
+    });
+
+    modalCloseOrderButton?.addEventListener("click", () => {
+        void applyOrderStatusAction({
+            action: "close",
+            loadingMessage: "Закриття замовлення...",
+            successMessage: "Замовлення закрито.",
+            confirmMessage: "Закрити це замовлення?",
+        });
+    });
+
+    modalMarkReclamationButton?.addEventListener("click", () => {
+        void applyOrderStatusAction({
+            action: "mark_reclamation",
+            loadingMessage: "Оновлення статусу на рекламацію...",
+            successMessage: "Статус змінено на 'Рекламація'.",
+            confirmMessage: "Позначити замовлення як рекламацію?",
+        });
+    });
+
+    modalCancelReclamationButton?.addEventListener("click", () => {
+        void applyOrderStatusAction({
+            action: "cancel_reclamation",
+            loadingMessage: "Скасування рекламації...",
+            successMessage: "Рекламацію скасовано.",
+            confirmMessage: "Скасувати рекламацію для цього замовлення?",
+        });
     });
 
     void loadFilterOptions().catch((error) => {

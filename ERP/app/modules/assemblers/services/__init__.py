@@ -6,6 +6,8 @@
 
 # Buffer / замовлення в буфері
 from .buffer import load_buffer_rows
+# Activity journal / журнал дій
+from .activity_log import ensure_activity_log_schema, load_activity_log_rows, record_activity_event
 from .registry import close_buffer_orders, transfer_buffer_orders
 
 # Details / рядки деталей
@@ -46,6 +48,7 @@ from .staff import ALLOWED_SUBDIVISIONS, ensure_staff_schema, load_assembler_sta
 __all__ = [
     "ALLOWED_SUBDIVISIONS",
     "close_buffer_orders",
+    "ensure_activity_log_schema",
     "create_schedule_tasks",
     "enqueue_detail_metrics_recalculation",
     "edit_schedule_tasks",
@@ -55,6 +58,7 @@ __all__ = [
     "load_assembler_staff",
     "load_assembly_day_cost",
     "load_assembly_workday_hours",
+    "load_activity_log_rows",
     "load_buffer_rows",
     "load_detail_rows",
     "load_main_order_card",
@@ -66,6 +70,7 @@ __all__ = [
     "save_assembly_day_cost",
     "save_assembly_workday_hours",
     "save_staff_assignment",
+    "record_activity_event",
     "search_detail_rows_by_order",
     "transfer_buffer_orders",
     "update_main_order_card",

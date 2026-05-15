@@ -1,13 +1,19 @@
 from fastapi import Request
 from fastapi.responses import RedirectResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.modules.assemblers.dependencies import (
-    can_access_assemblers_module,
     can_manage_main_orders,
     is_admin_user,
     require_user,
 )
-from app.modules.assemblers.services import ensure_schema, ensure_settings_schema, ensure_staff_schema
+from app.modules.assemblers.services import (
+    ensure_activity_log_schema,
+    ensure_schema,
+    ensure_settings_schema,
+    ensure_staff_schema,
+    record_activity_event,
+)
 
 
 templates = None
@@ -93,6 +99,14 @@ PAGES = {
         "title": "Масові операції",
         "description": "Управління масовим закриттям та повертанням замовлень з буфера.",
     },
+    "activity_log": {
+        "label": "Журнал дій",
+        "path": "/assemblers/activity-log",
+        "template": "assemblers/activity_log.html",
+        "script": "/js/assemblers/assemblers-activity-log.js",
+        "title": "Журнал дій",
+        "description": "Журнал дій збиральників із фільтрами, пошуком по виконавцю, замовленню та типу події.",
+    },
 }
 
 
@@ -106,6 +120,7 @@ def build_top_nav():
 
 
 def build_sub_nav(active_key: str, user: dict | None):
+    admin_only_pages = {"settings", "bulk_operations", "activity_log"}
     return [
         {
             "label": page["label"],
@@ -114,7 +129,7 @@ def build_sub_nav(active_key: str, user: dict | None):
             "new_tab": bool(page.get("new_tab")),
         }
         for key, page in PAGES.items()
-        if key not in ("settings", "bulk_operations") or is_admin_user(user)
+        if key not in admin_only_pages or is_admin_user(user)
     ]
 
 
@@ -123,12 +138,10 @@ def build_page_context(request: Request, active_key: str):
     if redirect:
         return None, redirect
 
-    if not can_access_assemblers_module(user):
-        return None, RedirectResponse(url="/main", status_code=303)
-
     ensure_schema()
     ensure_staff_schema()
     ensure_settings_schema()
+    ensure_activity_log_schema()
 
     page = PAGES[active_key]
     return {
@@ -153,3 +166,7 @@ def render_page(request: Request, active_key: str):
         page.get("template", "assemblers/main.html"),
         page_context,
     )
+
+
+async def log_page_visit(request: Request, active_key: str, page_context: dict | None = None) -> None:
+    return

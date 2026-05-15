@@ -21,6 +21,8 @@ from .utils import (
     _parse_part_number,
     _calculate_stage_metrics,
     _calculate_planned_hours,
+    _parse_duration_minutes,
+    _format_duration,
 )
 
 
@@ -155,19 +157,30 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     started_at=assembly_started_at,
                     completed_at=assembly_completed_at,
                     fallback_days=int(schedule_info.get("assembly_days_count") or 0),
+                    effective_minutes=int(schedule_info.get("assembly_effective_minutes") or 0),
                 )
                 install_days_count, install_hours = _calculate_stage_metrics(
                     started_at=install_started_at,
                     completed_at=install_completed_at,
                     fallback_days=int(schedule_info.get("install_days_count") or 0),
+                    effective_minutes=int(schedule_info.get("install_effective_minutes") or 0),
                 )
-                planned_hours, total_hours = _calculate_planned_hours(
+                planned_hours, _ = _calculate_planned_hours(
                     item_value=Decimal(record[10] or 0),
                     assembly_worker=assembly_worker or "-",
                     install_worker=install_worker or "-",
                     day_cost=day_cost,
                     workday_hours=workday_hours,
                 )
+                asm_mins = int(schedule_info.get("assembly_effective_minutes") or 0)
+                inst_mins = int(schedule_info.get("install_effective_minutes") or 0)
+                if asm_mins == 0 and assembly_hours:
+                    asm_mins = _parse_duration_minutes(assembly_hours)
+                if inst_mins == 0 and install_hours:
+                    inst_mins = _parse_duration_minutes(install_hours)
+                total_actual_minutes = asm_mins + inst_mins
+                total_hours = _format_duration(total_actual_minutes) if total_actual_minutes > 0 else ""
+
 
                 order_totals[order_number] += _parse_decimal(planned_hours)
                 order_stage_details[order_number].append(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from .constants import TASK_STATUS_COMPLETED, TASK_STATUS_QUEUED, TASK_TYPE_ALIASES
+from .constants import TASK_STATUS_COMPLETED, TASK_STATUS_PAUSED, TASK_STATUS_QUEUED, TASK_TYPE_ALIASES
 
 
 def _safe_text(value) -> str:
@@ -162,6 +162,47 @@ def _format_pause_hours_label(total_seconds) -> str:
     return f"Пауза: {str(f'{hours:.1f}').replace('.', ',')} год"
 
 
+def _format_work_hours_label(total_seconds) -> str:
+    try:
+        seconds = max(0, int(total_seconds or 0))
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    if hours and minutes:
+        return f"{hours} год {minutes} хв"
+    if hours:
+        return f"{hours} год"
+    return f"{minutes} хв"
+
+
+def _calculate_work_seconds(*, started_at, paused_at, completed_at, pause_seconds, status) -> int:
+    if not started_at:
+        return 0
+
+    now_base = datetime.now(tz=started_at.tzinfo) if getattr(started_at, "tzinfo", None) else datetime.now()
+    effective_end = completed_at or now_base
+    raw_seconds = int((effective_end - started_at).total_seconds())
+    if raw_seconds <= 0:
+        return 0
+
+    try:
+        total_pause_seconds = max(0, int(pause_seconds or 0))
+    except (TypeError, ValueError):
+        total_pause_seconds = 0
+
+    if _safe_text(status) == TASK_STATUS_PAUSED and paused_at:
+        paused_now = datetime.now(tz=paused_at.tzinfo) if getattr(paused_at, "tzinfo", None) else datetime.now()
+        live_pause_seconds = int((paused_now - paused_at).total_seconds())
+        if live_pause_seconds > 0:
+            total_pause_seconds += live_pause_seconds
+
+    return max(0, raw_seconds - total_pause_seconds)
+
+
 def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> dict:
     order_number = _safe_text(row[6])
     customer = (customer_fallbacks or {}).get(order_number, "") or _safe_text(row[7])
@@ -173,6 +214,16 @@ def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> 
         "Пауза - завершено"
         if status == TASK_STATUS_COMPLETED and auto_close_note.startswith("Пауза - завершено")
         else status
+    )
+    started_at = row[12]
+    paused_at = row[13]
+    completed_at = row[14]
+    work_seconds = _calculate_work_seconds(
+        started_at=started_at,
+        paused_at=paused_at,
+        completed_at=completed_at,
+        pause_seconds=pause_seconds,
+        status=status,
     )
 
     return {
@@ -189,9 +240,9 @@ def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> 
         "product_name": _safe_text(row[9]),
         "constructor_status": _safe_text(row[10]),
         "description": _safe_text(row[11]),
-        "started_at": _serialize_datetime(row[12]),
-        "paused_at": _serialize_datetime(row[13]),
-        "completed_at": _serialize_datetime(row[14]),
+        "started_at": _serialize_datetime(started_at),
+        "paused_at": _serialize_datetime(paused_at),
+        "completed_at": _serialize_datetime(completed_at),
         "pause_reason": _safe_text(row[15]),
         "started_location_label": _safe_text(row[16]),
         "started_latitude": row[17],
@@ -205,6 +256,8 @@ def _task_row_to_dict(row, customer_fallbacks: dict[str, str] | None = None) -> 
         "auto_close_note": auto_close_note,
         "pause_seconds": pause_seconds,
         "pause_hours_label": _format_pause_hours_label(pause_seconds),
+        "work_seconds": work_seconds,
+        "work_hours_label": _format_work_hours_label(work_seconds),
     }
 
 
@@ -235,6 +288,8 @@ def _find_blocked_selected_parts(detail_rows, *, selected_parts, task_type: str)
         constructor_status = row[6]
         requires_assembly = bool(row[7])
         requires_install = bool(row[8])
+        planned_assembly_due_at = row[9]
+        planned_install_due_at = row[10]
 
         is_target = any(
             _detail_row_matches_selected_product(
@@ -255,11 +310,16 @@ def _find_blocked_selected_parts(detail_rows, *, selected_parts, task_type: str)
             (task_type == "assembly" and not requires_assembly)
             or (task_type == "install" and not requires_install)
         )
+        missing_planning_date = (
+            (task_type == "assembly" and requires_assembly and not planned_assembly_due_at)
+            or (task_type == "install" and requires_install and not planned_install_due_at)
+        )
 
         is_blocked = (
             (not constructor_ready)
             or product_done
             or stage_not_required
+            or missing_planning_date
             or
             (task_type == "assembly" and assembly_done)
             or (task_type == "install" and install_done)
@@ -271,6 +331,11 @@ def _find_blocked_selected_parts(detail_rows, *, selected_parts, task_type: str)
                 title = f"{title}: статус конструктора не завершено"
             elif stage_not_required:
                 title = f"{title}: {'без збірки' if task_type == 'assembly' else 'без монтажу'}"
+            elif missing_planning_date:
+                title = (
+                    f"{title}: не заповнена дата планування "
+                    + ("збірки" if task_type == "assembly" else "монтажу")
+                )
             elif product_done:
                 title = f"{title}: виріб вже завершено"
             elif task_type == "assembly" and assembly_done:

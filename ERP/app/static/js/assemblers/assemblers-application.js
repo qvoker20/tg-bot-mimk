@@ -109,6 +109,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }).format(parsed);
     };
 
+    const formatTaskDateTime = (value) => {
+        if (!value) {
+            return "-";
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return String(value);
+        }
+        return new Intl.DateTimeFormat("uk-UA", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(parsed);
+    };
+
     const getRelativeDayLabel = (value) => {
         const selected = toAppDate(value);
         const today = new Date();
@@ -272,6 +289,34 @@ document.addEventListener("DOMContentLoaded", () => {
             `);
         }
 
+        details.push(`
+            <div class="application-mobile-task-row">
+                <span class="application-mobile-task-label">Початок</span>
+                <span class="application-mobile-task-value">${escapeHtml(formatTaskDateTime(task.started_at))}</span>
+            </div>
+        `);
+
+        details.push(`
+            <div class="application-mobile-task-row">
+                <span class="application-mobile-task-label">Пауза з</span>
+                <span class="application-mobile-task-value">${escapeHtml(formatTaskDateTime(task.paused_at))}</span>
+            </div>
+        `);
+
+        details.push(`
+            <div class="application-mobile-task-row">
+                <span class="application-mobile-task-label">Завершення</span>
+                <span class="application-mobile-task-value">${escapeHtml(formatTaskDateTime(task.completed_at))}</span>
+            </div>
+        `);
+
+        details.push(`
+            <div class="application-mobile-task-row">
+                <span class="application-mobile-task-label">Відпрацьовано</span>
+                <span class="application-mobile-task-value">${escapeHtml(task.work_hours_label || "-")}</span>
+            </div>
+        `);
+
         return details.join("");
     };
 
@@ -289,10 +334,10 @@ document.addEventListener("DOMContentLoaded", () => {
             ].join("");
         }
         if (task.status === "Пауза") {
-            return [
-                '<button type="button" class="application-mobile-action primary" data-task-action="resume">Продовжити</button>',
-                '<button type="button" class="application-mobile-action success" data-task-action="finish">Завершити</button>',
-            ].join("");
+            return '<button type="button" class="application-mobile-action primary" data-task-action="resume">Продовжити</button>';
+        }
+        if (task.status === "Завершено" && task.auto_closed_at) {
+            return '<button type="button" class="application-mobile-action success" data-task-action="finish">Підтвердити завершення</button>';
         }
         return "";
     };
@@ -327,7 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <p class="application-mobile-task-order">№ ${escapeHtml(task.order_number || "без номера")}</p>
                             <p class="application-mobile-task-customer">${escapeHtml(task.customer || "Замовник не вказаний")}</p>
                         </div>
-                        <span class="application-mobile-status-pill ${statusClass}">${escapeHtml(task.status || "У черзі")}</span>
+                        <span class="application-mobile-status-pill ${statusClass}">${escapeHtml(task.status_label || task.status || "У черзі")}</span>
                     </header>
                     <div class="application-mobile-task-grid">
                         ${buildTaskDetails(task)}

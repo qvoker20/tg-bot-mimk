@@ -259,10 +259,29 @@ const togglePinnedColumn = (headerCell) => {
             };
 
             const updateSubcontractClasses = () => {
-                const subcontractIndexes = new Set([24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+                const subcontractKeys = new Set([
+                    "paint_shop",
+                    "paint_status",
+                    "metal",
+                    "metal_status",
+                    "veneer",
+                    "plastic_hpl",
+                    "joinery_shop",
+                    "soft_shop",
+                    "artificial_stone",
+                    "compact_plate",
+                    "dsp_countertop",
+                    "sliding_systems",
+                    "glass_mirror",
+                    "glass_status",
+                    "frame_facades",
+                    "ceramic_granite",
+                ]);
                 table.querySelectorAll("[data-col-index]").forEach((cell) => {
+                    const colKey = cell.dataset.colKey || "";
                     const colIndex = Number(cell.dataset.colIndex);
-                    if (subcontractIndexes.has(colIndex)) {
+                    const isSubcontract = subcontractKeys.has(colKey) || [22, 24, 26, 27, 28, 29, 30, 31, 32, 33, 34, 36, 37].includes(colIndex);
+                    if (isSubcontract) {
                         cell.classList.add("is-subcontract");
                     } else {
                         cell.classList.remove("is-subcontract");

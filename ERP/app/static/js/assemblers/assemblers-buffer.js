@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const meta = document.querySelector("[data-buffer-meta]");
     const orderSearch = document.querySelector("[data-buffer-search-order]");
     const customerSearch = document.querySelector("[data-buffer-search-customer]");
+    const searchApplyButton = document.querySelector("[data-buffer-search-apply]");
     const infoModal = document.querySelector("[data-buffer-info-modal]");
     const infoModalCloseButtons = document.querySelectorAll("[data-buffer-info-modal-close]");
     const infoOrderNumber = document.querySelector("[data-buffer-info-order-number]");
@@ -29,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Модальне вікно деталів — нові поля
     const infoInstallAt = document.querySelector("[data-buffer-info-install-at]");
     const activeFiltersEl = document.querySelector("[data-buffer-active-filters]");
-    const infoProductsList = document.querySelector("[data-buffer-info-products-list]");
+    const infoProductsBody = document.querySelector("[data-buffer-info-products-body]");
     const infoOrderType = document.querySelector("[data-buffer-info-order-type]");
     const infoOrderValue = document.querySelector("[data-buffer-info-order-value]");
     const infoManagerEl = document.querySelector("[data-buffer-info-manager]");
@@ -90,7 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
             statusPercentValue: "",
         },
     };
-    let searchTimer = null;
     let activeController = null;
     let requestVersion = 0;
     let activeContextMenuOrder = null;
@@ -118,7 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (normalized.includes("закрит")) return "is-closed";
         if (normalized.includes("розпод")) return "is-distributed";
         if (normalized.includes("прост")) return "is-idle";
-        if (normalized.includes("не передано")) return "is-not-sent";
+        if (normalized.includes("не передано") || normalized.includes("не запущ")) return "is-not-sent";
         if (normalized === "немає" || normalized === "нема") return "is-missing";
         if (normalized.includes("заверш") || normalized.includes("викон") || normalized.includes("done")) return "is-completed";
         if (normalized.includes("заплан") || normalized.includes("монтаж") || normalized.includes("збірк")) return "is-in-progress";
@@ -133,6 +133,12 @@ document.addEventListener("DOMContentLoaded", () => {
         span.className = `assemblers-status-badge ${statusClassByValue(status)}`;
         span.textContent = status || "—";
         return span;
+    };
+
+    const setStatusBadgeToNode = (node, status) => {
+        if (!node) return;
+        node.textContent = "";
+        node.appendChild(makeStatusBadge(status));
     };
 
     const parseNumeric = (value) => {
@@ -255,10 +261,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const span = document.createElement("span");
         const text = value == null ? "" : String(value).trim();
         if (!text || text === "-" || text === "—") {
+            span.className = "buffer-info-status-badge is-default";
             span.textContent = "—";
             return span;
         }
-        span.className = "assemblers-status-badge is-default";
+        span.className = `buffer-info-status-badge ${statusClassByValue(text)}`;
         span.textContent = text;
         return span;
     };
@@ -315,7 +322,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const tdLabel = document.createElement("td");
             const tdValue = document.createElement("td");
             tdLabel.textContent = label;
-            tdValue.textContent = displayValue(value);
+            if (label.startsWith("Статус")) {
+                tdValue.classList.add("buffer-info-status-cell");
+                tdValue.appendChild(makeBufferStatusBadge(value));
+            } else {
+                tdValue.textContent = displayValue(value);
+            }
             tr.appendChild(tdLabel);
             tr.appendChild(tdValue);
             infoDetailsBody.appendChild(tr);
@@ -323,40 +335,39 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const renderProductList = (row) => {
-        if (!infoProductsList) return;
+        if (!infoProductsBody) return;
 
         const products = Array.isArray(row.products_list) ? row.products_list : [];
-        infoProductsList.innerHTML = "";
+        infoProductsBody.innerHTML = "";
 
         if (!products.length) {
-            const empty = document.createElement("p");
-            empty.className = "placeholder-copy";
-            empty.textContent = "Немає даних про вироби.";
-            infoProductsList.appendChild(empty);
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+            td.colSpan = 3;
+            td.textContent = "Немає даних про вироби.";
+            tr.appendChild(td);
+            infoProductsBody.appendChild(tr);
             return;
         }
 
         products.forEach((product) => {
-            const item = document.createElement("div");
-            item.className = "buffer-product-item";
+            const tr = document.createElement("tr");
 
-            const name = document.createElement("span");
-            name.className = "buffer-product-name";
-            name.textContent = displayValue(product.name);
-            item.appendChild(name);
+            const partCell = document.createElement("td");
+            const partNumber = String(product.part_number ?? "").trim();
+            partCell.textContent = partNumber && partNumber !== "—" ? partNumber : "—";
+            tr.appendChild(partCell);
 
-            const statusWrap = document.createElement("span");
-            statusWrap.className = "buffer-product-status";
-            const badge = document.createElement("span");
-            const statusText = displayValue(product.status);
-            const isDone = statusText === "Завершено";
-            const isInWork = statusText === "В роботі";
-            badge.className = `buffer-info-status-badge ${isDone ? "is-completed" : isInWork ? "is-in-progress" : "is-default"}`;
-            badge.textContent = statusText;
-            statusWrap.appendChild(badge);
-            item.appendChild(statusWrap);
+            const nameCell = document.createElement("td");
+            nameCell.textContent = displayValue(product.name);
+            tr.appendChild(nameCell);
 
-            infoProductsList.appendChild(item);
+            const statusCell = document.createElement("td");
+            statusCell.className = "buffer-info-status-cell";
+            statusCell.appendChild(makeBufferStatusBadge(product.status));
+            tr.appendChild(statusCell);
+
+            infoProductsBody.appendChild(tr);
         });
     };
 
@@ -420,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         infoOrderNumber.textContent = displayValue(row.order_number);
         infoCustomer.textContent = displayValue(row.client);
-        infoStatus.textContent = displayValue(row.status);
+        setStatusBadgeToNode(infoStatus, row.status);
         infoDaysToInstall.textContent = displayValue(row.days_to_install);
         if (infoInstallAt) infoInstallAt.textContent = displayValue(row.install_at);
         if (infoOrderType) infoOrderType.textContent = displayValue(row.order_type);
@@ -541,25 +552,10 @@ document.addEventListener("DOMContentLoaded", () => {
         void loadNextPage();
     };
 
-    const scheduleSearch = () => {
-        if (searchTimer) {
-            window.clearTimeout(searchTimer);
-        }
-        searchTimer = window.setTimeout(() => {
-            state.filters.orderNumber = orderSearch.value.trim();
-            state.filters.customer = customerSearch.value.trim();
-            resetAndReload();
-        }, 280);
-    };
-
-    const handleExclusiveSearchInput = (source) => {
-        if (source === "order" && orderSearch.value.trim()) {
-            customerSearch.value = "";
-        }
-        if (source === "customer" && customerSearch.value.trim()) {
-            orderSearch.value = "";
-        }
-        scheduleSearch();
+    const applySearch = () => {
+        state.filters.orderNumber = orderSearch.value.trim();
+        state.filters.customer = customerSearch.value.trim();
+        resetAndReload();
     };
 
     const openModal = (orderNumbers) => {
@@ -778,8 +774,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.target === filtersModal) closeFiltersModal();
     });
 
-    orderSearch.addEventListener("input", () => handleExclusiveSearchInput("order"));
-    customerSearch.addEventListener("input", () => handleExclusiveSearchInput("customer"));
+    searchApplyButton?.addEventListener("click", applySearch);
+    orderSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applySearch();
+        }
+    });
+    customerSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applySearch();
+        }
+    });
 
     syncViewportHeight();
     window.addEventListener("resize", syncViewportHeight, { passive: true });

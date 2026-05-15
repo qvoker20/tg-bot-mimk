@@ -210,7 +210,9 @@ def fetch_detail_stage_rows_by_order(*, order_number: str) -> list[tuple]:
                     install_completed_at,
                     constructor_status,
                     requires_assembly,
-                    requires_install
+                    requires_install,
+                    planned_assembly_due_at,
+                    planned_install_due_at
                 FROM {DETAILS_TABLE_NAME}
                 WHERE TRIM(COALESCE(order_number, '')) = %s
                 """,
@@ -634,6 +636,74 @@ def mark_detail_rows_completed(
     return 0
 
 
+def revert_task_completion(*, task_id: int) -> int:
+    """Revert a completed task back to 'В роботі' status, clearing completion data."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE {SCHEDULE_TASKS_TABLE}
+                SET
+                    status = %s,
+                    completed_at = NULL,
+                    completed_location_label = '',
+                    completed_latitude = NULL,
+                    completed_longitude = NULL,
+                    completed_accuracy = NULL,
+                    auto_closed_at = NULL,
+                    auto_close_note = '',
+                    updated_at = NOW()
+                WHERE id = %s AND status = %s
+                """,
+                (TASK_STATUS_IN_PROGRESS, task_id, TASK_STATUS_COMPLETED),
+            )
+            return cursor.rowcount
+
+
+def revert_detail_rows_completion(
+    *,
+    detail_ids: list[int],
+    task_type: str,
+) -> int:
+    """Revert completed detail rows back to 'В роботі' or initial state, clearing completion timestamps."""
+    if not detail_ids:
+        return 0
+
+    if task_type == "assembly":
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    UPDATE {DETAILS_TABLE_NAME}
+                    SET
+                        assembly_status = %s,
+                        assembly_completed_at = NULL,
+                        updated_at = NOW()
+                    WHERE id = ANY(%s) AND assembly_status = %s
+                    """,
+                    (TASK_STATUS_IN_PROGRESS, detail_ids, TASK_STATUS_COMPLETED),
+                )
+                return cursor.rowcount
+
+    if task_type == "install":
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    UPDATE {DETAILS_TABLE_NAME}
+                    SET
+                        install_status = %s,
+                        install_completed_at = NULL,
+                        updated_at = NOW()
+                    WHERE id = ANY(%s) AND install_status = %s
+                    """,
+                    (TASK_STATUS_IN_PROGRESS, detail_ids, TASK_STATUS_COMPLETED),
+                )
+                return cursor.rowcount
+
+    return 0
+
+
 __all__ = [
     "fetch_allowed_workers",
     "fetch_detail_rows_for_product_match",
@@ -652,4 +722,6 @@ __all__ = [
     "mark_task_started",
     "delete_schedule_tasks",
     "update_schedule_tasks_parts",
+    "revert_task_completion",
+    "revert_detail_rows_completion",
 ]

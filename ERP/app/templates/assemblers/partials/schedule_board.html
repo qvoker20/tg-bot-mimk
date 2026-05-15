@@ -16,6 +16,7 @@
 
         <div class="schedule-toolbar-actions">
             <button type="button" class="ghost-button{% if not schedule_can_manage %} hidden{% endif %}" data-schedule-open-edit-modal disabled>Видалити задачі</button>
+            <button type="button" class="ghost-button{% if not schedule_can_manage %} hidden{% endif %}" data-schedule-open-revert-modal disabled>Скасувати завершення</button>
             <button type="button" class="ghost-button schedule-admin-delete-button{% if not schedule_can_manage or not is_admin %} hidden{% endif %}" data-schedule-open-force-edit-modal disabled>Admin: видалити будь-які задачі</button>
             <button type="button" class="module-link{% if not schedule_can_manage %} hidden{% endif %}" data-schedule-open-modal disabled>Назначити задачі</button>
         </div>
@@ -152,6 +153,60 @@
         <div class="confirm-actions-row">
             <button type="button" class="ghost-button" data-schedule-edit-modal-close>Скасувати</button>
             <button type="button" class="module-link" data-schedule-edit-confirm>Видалити</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-schedule-revert-modal>
+    <div class="modal-box schedule-task-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-revert-title">
+        <div class="modal-header-row">
+            <div>
+                <p class="eyebrow">Календар задач</p>
+                <h3 id="schedule-revert-title">Скасувати завершення задач</h3>
+            </div>
+            <button type="button" class="ghost-button" data-schedule-revert-modal-close>Закрити</button>
+        </div>
+
+        <div class="schedule-selection-summary">
+            <article class="schedule-selection-card">
+                <span>Збиральники</span>
+                <strong data-schedule-revert-selected-workers>—</strong>
+            </article>
+            <article class="schedule-selection-card">
+                <span>Дати</span>
+                <strong data-schedule-revert-selected-dates>—</strong>
+            </article>
+        </div>
+
+        <div class="schedule-edit-note" data-schedule-revert-meta>
+            <strong>⚠️ Попередження:</strong> Скасування завершення задачі матиме такий ефект:
+            <ul style="margin: 10px 0 0 20px; font-size: 0.9em;">
+                <li>Статус задачі повернеться з "Завершено" на "В роботі"</li>
+                <li>Пов'язані позиції замовлення будуть повернені на попередній стан</li>
+                <li>Дія буде записана в журнал активності</li>
+            </ul>
+            Оберіть конкретні завершені задачі для скасування.
+        </div>
+
+        <div class="schedule-search-table-wrap schedule-edit-table-wrap">
+            <table class="buffer-table schedule-edit-table">
+                <thead>
+                    <tr>
+                        <th>Обрати</th>
+                        <th>Збиральник</th>
+                        <th>Дата</th>
+                        <th>Тип</th>
+                        <th>Замовлення</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody data-schedule-revert-list></tbody>
+            </table>
+        </div>
+
+        <div class="confirm-actions-row">
+            <button type="button" class="ghost-button" data-schedule-revert-modal-close>Скасувати</button>
+            <button type="button" class="module-link" data-schedule-revert-confirm>Скасувати завершення</button>
         </div>
     </div>
 </div>

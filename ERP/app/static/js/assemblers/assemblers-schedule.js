@@ -288,6 +288,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!response.ok || !result.ok) {
                 throw new Error(result.error || "Не вдалося знайти деталі замовлення.");
             }
+
+            if (result.is_closed) {
+                throw new Error("Замовлення закрито.");
+            }
+            if (!result.order_found) {
+                throw new Error("Замовлення не знайдено.");
+            }
             return result;
         }, "Пошук деталей замовлення...");
         return payload.rows || [];
@@ -322,6 +329,27 @@ document.addEventListener("DOMContentLoaded", () => {
         return isCompletedStatus(value);
     }
 
+    function searchStatusTone(value, kind = "default") {
+        const normalizedStatus = String(value || "").trim().toLowerCase();
+        if (!normalizedStatus || normalizedStatus === "—") {
+            return "is-neutral";
+        }
+
+        if (["завершено", "виконано", "готово"].includes(normalizedStatus)) {
+            return "is-success";
+        }
+
+        if (kind === "constructor") {
+            return "is-danger";
+        }
+
+        if (["не завершено", "в роботі", "у роботі", "у черзі", "очікує"].includes(normalizedStatus)) {
+            return "is-warning";
+        }
+
+        return "is-neutral";
+    }
+
     function isPartBlockedForAssign(row) {
         const type = currentTaskType();
         const requiresAssembly = row.requires_assembly !== false;
@@ -347,6 +375,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        let blockedCount = 0;
+
         rowsToRender.forEach((row) => {
             const tr = document.createElement("tr");
             const selectCell = document.createElement("td");
@@ -355,30 +385,48 @@ document.addEventListener("DOMContentLoaded", () => {
             const productCompleted = isCompletedStatus(row.product_status);
             const requiresAssembly = row.requires_assembly !== false;
             const requiresInstall = row.requires_install !== false;
+            const hasAssemblyPlanDate = Boolean(String(row.planned_assembly_due_at || "").trim());
+            const hasInstallPlanDate = Boolean(String(row.planned_install_due_at || "").trim());
             const stageBlocked = isPartBlockedForAssign(row);
-            const blocked = !constructorReady || productCompleted || stageBlocked;
+            const missingPlanningDate =
+                (currentTaskType() === "assembly" && requiresAssembly && !hasAssemblyPlanDate)
+                || (currentTaskType() === "install" && requiresInstall && !hasInstallPlanDate);
+            const blocked = !constructorReady || productCompleted || stageBlocked || missingPlanningDate;
 
             checkbox.disabled = blocked;
+            let blockReason = "";
+            let blockReasonShort = "";
             if (blocked) {
+                blockedCount += 1;
                 tr.classList.add("schedule-search-row-blocked");
-                let blockReason;
                 if (!constructorReady) {
+                    tr.classList.add("schedule-search-row-constructor-pending");
                     blockReason = "Ви не можете призначити даний виріб: конструктор ще не завершив роботу";
                 } else if (currentTaskType() === "assembly" && !requiresAssembly) {
                     blockReason = "Ви не можете призначити даний виріб: виріб не потребує збірки";
                 } else if (currentTaskType() === "install" && !requiresInstall) {
                     blockReason = "Ви не можете призначити даний виріб: виріб не потребує монтажу";
+                } else if (missingPlanningDate) {
+                    tr.classList.add("schedule-search-row-missing-plan");
+                    blockReason = currentTaskType() === "assembly"
+                        ? "Ви не можете призначити даний виріб: не заповнена дата планування збірки"
+                        : "Ви не можете призначити даний виріб: не заповнена дата планування монтажу";
                 } else if (productCompleted) {
+                    tr.classList.add("schedule-search-row-completed");
                     blockReason = "Ви не можете призначити даний виріб: виріб вже повністю завершено";
                 } else {
+                    tr.classList.add("schedule-search-row-completed");
                     blockReason = currentTaskType() === "assembly"
                         ? "Ви не можете призначити даний виріб: збірку вже завершено"
                         : "Ви не можете призначити даний виріб: монтаж вже завершено";
                 }
+                blockReasonShort = blockReason.replace(/^Ви не можете призначити даний виріб:\s*/i, "");
                 tr.dataset.blockReason = blockReason;
                 tr.title = blockReason;
                 checkbox.title = blockReason;
                 tr.classList.add("schedule-search-row-has-tooltip");
+            } else {
+                tr.classList.add("schedule-search-row-ready");
             }
             checkbox.type = "checkbox";
             checkbox.className = "schedule-part-checkbox";
@@ -390,15 +438,31 @@ document.addEventListener("DOMContentLoaded", () => {
             selectCell.appendChild(checkbox);
             tr.appendChild(selectCell);
 
-            [row.part_number, row.product_name, row.constructor_status, row.product_status].forEach((value) => {
+            [row.part_number, row.product_name, row.constructor_status, row.product_status].forEach((value, index) => {
                 const td = document.createElement("td");
-                td.textContent = value || "—";
+                if (index === 2 || index === 3) {
+                    const badge = document.createElement("span");
+                    badge.className = `schedule-search-status-badge ${searchStatusTone(value, index === 2 ? "constructor" : "product")}`;
+                    badge.textContent = value || "—";
+                    badge.title = value || "—";
+                    td.appendChild(badge);
+                } else {
+                    td.textContent = value || "—";
+                }
+                if (blocked && index === 3 && blockReasonShort) {
+                    const reasonNote = document.createElement("div");
+                    reasonNote.className = "schedule-search-block-reason";
+                    reasonNote.textContent = blockReasonShort;
+                    reasonNote.title = blockReason;
+                    td.appendChild(reasonNote);
+                }
                 tr.appendChild(td);
             });
             tableBodyTarget.appendChild(tr);
         });
         wrapTarget.classList.remove("hidden");
-        metaTarget.textContent = `Знайдено ${rowsToRender.length} частин. Оберіть потрібні.`;
+        const availableCount = rowsToRender.length - blockedCount;
+        metaTarget.textContent = `Знайдено ${rowsToRender.length} частин. Доступно для призначення: ${availableCount}. Заблоковано: ${blockedCount}.`;
     }
 
     function getSelectedParts(container) {
@@ -666,7 +730,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const rowsToRender = await fetchOrderDetails(orderNumber);
             renderPartResults(rowsToRender, searchResults, searchResultsWrap, searchMeta);
         } catch (error) {
-            searchMeta.textContent = error.message || "Не вдалося знайти деталі замовлення.";
+            const message = error.message || "Не вдалося знайти деталі замовлення.";
+            searchMeta.textContent = message;
+            showToast(message, "error");
         }
     }
 

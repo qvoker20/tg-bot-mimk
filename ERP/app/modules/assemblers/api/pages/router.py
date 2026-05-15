@@ -58,7 +58,10 @@ def _build_schedule_rows(staff_rows: list[dict], subdivision: str) -> list[dict]
 
 @router.get("/")
 async def assemblers_main_page(request: Request):
-    return context.render_page(request, "main")
+    page_context, redirect = context.build_page_context(request, "main")
+    if redirect:
+        return redirect
+    return context.templates.TemplateResponse(request, "assemblers/main.html", page_context)
 
 
 @router.get("/staff")
@@ -146,17 +149,29 @@ async def assemblers_settings_save(
 
 @router.get("/details")
 async def assemblers_details_page(request: Request):
-    return context.render_page(request, "details")
+    page_context, redirect = context.build_page_context(request, "details")
+    if redirect:
+        return redirect
+    await context.log_page_visit(request, "details", page_context)
+    return context.templates.TemplateResponse(request, "assemblers/details.html", page_context)
 
 
 @router.get("/buffer")
 async def assemblers_buffer_page(request: Request):
-    return context.render_page(request, "buffer")
+    page_context, redirect = context.build_page_context(request, "buffer")
+    if redirect:
+        return redirect
+    await context.log_page_visit(request, "buffer", page_context)
+    return context.templates.TemplateResponse(request, "assemblers/buffer.html", page_context)
 
 
 @router.get("/closed-orders")
 async def assemblers_closed_orders_page(request: Request):
-    return context.render_page(request, "closed_orders")
+    page_context, redirect = context.build_page_context(request, "closed_orders")
+    if redirect:
+        return redirect
+    await context.log_page_visit(request, "closed_orders", page_context)
+    return context.templates.TemplateResponse(request, "assemblers/closed_orders.html", page_context)
 
 
 @router.get("/private-schedule")
@@ -165,6 +180,7 @@ async def assemblers_private_schedule_page(request: Request):
     if redirect:
         return redirect
 
+    await context.log_page_visit(request, "private_schedule", page_context)
     staff_rows = await run_in_threadpool(load_assembler_staff)
     schedule_rows = _build_schedule_rows(staff_rows, "Приват")
     page_context["schedule_rows"] = schedule_rows
@@ -185,6 +201,7 @@ async def assemblers_tender_schedule_page(request: Request):
     if redirect:
         return redirect
 
+    await context.log_page_visit(request, "tender_schedule", page_context)
     staff_rows = await run_in_threadpool(load_assembler_staff)
     schedule_rows = _build_schedule_rows(staff_rows, "Тендер")
     page_context["schedule_rows"] = schedule_rows
@@ -205,6 +222,7 @@ async def assemblers_application_page(request: Request):
     if redirect:
         return redirect
 
+    await context.log_page_visit(request, "application", page_context)
     page_context["application_initial_date"] = date.today().isoformat()
     return context.templates.TemplateResponse(request, "assemblers/application.html", page_context)
 
@@ -215,7 +233,20 @@ async def assemblers_bulk_operations_page(request: Request):
     if redirect:
         return redirect
 
+    await context.log_page_visit(request, "bulk_operations", page_context)
     if not is_admin_user(page_context["user"]):
         return RedirectResponse(url="/assemblers", status_code=303)
 
     return context.templates.TemplateResponse(request, "assemblers/bulk_operations.html", page_context)
+
+
+@router.get("/activity-log")
+async def assemblers_activity_log_page(request: Request):
+    page_context, redirect = context.build_page_context(request, "activity_log")
+    if redirect:
+        return redirect
+
+    if not is_admin_user(page_context["user"]):
+        return RedirectResponse(url="/assemblers", status_code=303)
+
+    return context.templates.TemplateResponse(request, "assemblers/activity_log.html", page_context)

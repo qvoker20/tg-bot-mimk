@@ -94,6 +94,12 @@ color: #475569;
     border-color: #ffd966;
 }
 
+.assemblers-status-badge.is-alert {
+    background: #fee2e2;
+    color: #b91c1c;
+    border-color: #fca5a5;
+}
+
 .assemblers-data-table td.is-deadline-critical {
     color: #b42318;
     font-weight: 700;
@@ -129,6 +135,7 @@ color: #475569;
 .buffer-info-status-badge.is-plan-none  { background: #fde8e8; border-color: #f5c6cb; color: #c0392b; }
 .buffer-info-status-badge.is-not-sent   { background: #fff4e6; border-color: #f8b26a; color: #9a3412; }
 .buffer-info-status-badge.is-missing    { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+.buffer-info-status-badge.is-alert      { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
 .buffer-info-status-badge.is-default    { background: #f8fafc; border-color: #cbd5e1; color: #475569; }
 
 /* Рядки продуктів у модальному вікні */
@@ -164,6 +171,19 @@ color: #475569;
     font-weight: 600;
     color: #1e293b;
     flex: 1;
+}
+
+.buffer-product-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.buffer-product-part-number {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
 }
 
 .buffer-product-status {

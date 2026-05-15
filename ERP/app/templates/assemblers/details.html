@@ -34,20 +34,18 @@
                         <span>Пошук по номеру</span>
                         <input type="search" placeholder="Наприклад, 7125" data-details-search-order autocomplete="off">
                     </label>
-                    <div class="buffer-actions-row">
-                        <button type="button" class="ghost-button buffer-action-button" data-details-toggle-filters>Фільтри</button>
-                    </div>
-                </div>
-
-                <div class="buffer-filters-row hidden" data-details-filters-panel>
                     <label class="buffer-filter-field">
                         <span>Пошук по замовнику</span>
                         <input type="search" placeholder="Назва замовника" data-details-search-customer autocomplete="off">
                     </label>
-                    <label class="buffer-filter-field">
-                        <span>Пошук по виробу</span>
-                        <input type="search" placeholder="Назва виробу" data-details-search-product autocomplete="off">
-                    </label>
+                    <div class="buffer-actions-row">
+                        <button type="button" class="module-link buffer-action-button" data-details-search-apply>Пошук</button>
+                        <button type="button" class="ghost-button buffer-action-button" data-details-open-filters>Фільтри</button>
+                    </div>
+                </div>
+
+                <div class="buffer-toolbar-meta-row">
+                    <div class="buffer-active-filters" data-details-active-filters></div>
                 </div>
 
                 <div class="assemblers-table-wrap" data-assemblers-table-wrap>
@@ -97,11 +95,59 @@
         </section>
     </section>
 </main>
+
+<div class="modal-overlay hidden" data-details-filters-modal>
+    <div class="modal-box modal-compact buffer-filters-modal-box">
+        <div class="modal-header-row">
+            <h3>Фільтри деталей</h3>
+            <button type="button" class="ghost-button" data-details-filters-close>Закрити</button>
+        </div>
+
+        <div class="buffer-filters-modal-body">
+            <fieldset class="buffer-filters-group">
+                <legend>Пошук по виробу</legend>
+                <label>
+                    <span>Назва виробу</span>
+                    <input type="search" placeholder="Назва виробу" data-details-search-product autocomplete="off">
+                </label>
+            </fieldset>
+
+            <fieldset class="buffer-filters-group">
+                <legend>Збірка</legend>
+                <label>
+                    <span>Потребує збірки</span>
+                    <select data-details-filter-requires-assembly>
+                        <option value="">Всі</option>
+                        <option value="yes">Тільки зі збіркою</option>
+                        <option value="no">Тільки без збірки</option>
+                    </select>
+                </label>
+            </fieldset>
+
+            <fieldset class="buffer-filters-group">
+                <legend>Монтаж</legend>
+                <label>
+                    <span>Потребує монтажу</span>
+                    <select data-details-filter-requires-install>
+                        <option value="">Всі</option>
+                        <option value="yes">Тільки з монтажем</option>
+                        <option value="no">Тільки без монтажу</option>
+                    </select>
+                </label>
+            </fieldset>
+        </div>
+
+        <div class="confirm-actions-row">
+            <button type="button" class="ghost-button" data-details-filters-reset>Скинути</button>
+            <button type="button" class="module-link" data-details-filters-apply>Застосувати</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block page_scripts %}
 <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
 {% if page_script %}
-<script src="{{ url_for('static', path=page_script) }}?v=details-filters-1" defer></script>
+<script src="{{ url_for('static', path=page_script) }}?v=details-filters-5" defer></script>
 {% endif %}
 {% endblock %}

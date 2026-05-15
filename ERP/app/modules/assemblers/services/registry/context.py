@@ -142,9 +142,11 @@ def _build_schedule_execution_context(
                     TRIM(COALESCE(status, '')),
                     scheduled_for,
                     started_at,
-                                        completed_at,
-                                        TRIM(COALESCE(part_number, '')),
-                                        TRIM(COALESCE(product_name, ''))
+                    completed_at,
+                    COALESCE(pause_seconds, 0),
+                    TRIM(COALESCE(part_number, '')),
+                    TRIM(COALESCE(product_name, '')),
+                    auto_closed_at
                 FROM {SCHEDULE_TASKS_TABLE}
                 WHERE TRIM(COALESCE(order_number, '')) = ANY(%s)
                   AND TRIM(COALESCE(task_type, '')) = ANY(%s)
@@ -155,13 +157,18 @@ def _build_schedule_execution_context(
             schedule_rows = cursor.fetchall()
 
     context: dict[tuple[str, str, str], dict[str, object]] = {}
-    for order_number, task_type, assembler_name, status, scheduled_for, started_at, completed_at, part_number, product_name in schedule_rows:
+    for order_number, task_type, assembler_name, status, scheduled_for, started_at, completed_at, pause_seconds, part_number, product_name, auto_closed_at in schedule_rows:
         normalized_order = _safe_text(order_number)
         normalized_type = _safe_text(task_type)
         normalized_name = _safe_text(assembler_name)
         normalized_status = _safe_text(status)
+        raw_completed_at = completed_at
         if not normalized_order or normalized_type not in {ASSEMBLY_TASK_TYPE, INSTALL_TASK_TYPE}:
             continue
+        if auto_closed_at is not None:
+            # Auto-cutoff closes the schedule task, but details stage must stay non-completed.
+            normalized_status = TASK_STATUS_QUEUED
+            completed_at = None
 
         started_day = started_at.date() if hasattr(started_at, "date") else scheduled_for
         task_part_numbers = {value.casefold() for value in _split_csv_text(part_number)}
@@ -186,12 +193,14 @@ def _build_schedule_execution_context(
                     "assembly_completed_at": None,
                     "assembly_status": "",
                     "assembly_days": set(),
+                    "assembly_daily_minutes": {},
                     "install_names": [],
                     "install_seen": set(),
                     "install_started_at": None,
                     "install_completed_at": None,
                     "install_status": "",
                     "install_days": set(),
+                    "install_daily_minutes": {},
                 },
             )
 
@@ -201,6 +210,9 @@ def _build_schedule_execution_context(
             completed_key = "assembly_completed_at" if normalized_type == ASSEMBLY_TASK_TYPE else "install_completed_at"
             status_key = "assembly_status" if normalized_type == ASSEMBLY_TASK_TYPE else "install_status"
             days_key = "assembly_days" if normalized_type == ASSEMBLY_TASK_TYPE else "install_days"
+            daily_minutes_key = (
+                "assembly_daily_minutes" if normalized_type == ASSEMBLY_TASK_TYPE else "install_daily_minutes"
+            )
 
             if normalized_name and normalized_name not in detail_context[seen_key]:
                 detail_context[seen_key].add(normalized_name)
@@ -209,7 +221,7 @@ def _build_schedule_execution_context(
             if _stage_status_rank(normalized_status) > _stage_status_rank(detail_context[status_key]):
                 detail_context[status_key] = normalized_status
 
-            if normalized_status == TASK_STATUS_QUEUED:
+            if normalized_status == TASK_STATUS_QUEUED and started_at is None:
                 continue
 
             if started_at and (detail_context[started_key] is None or started_at < detail_context[started_key]):
@@ -221,11 +233,27 @@ def _build_schedule_execution_context(
             if started_day:
                 detail_context[days_key].add(started_day)
 
+            if started_at and raw_completed_at and raw_completed_at >= started_at:
+                total_seconds = int((raw_completed_at - started_at).total_seconds())
+                effective_seconds = max(0, total_seconds - int(pause_seconds or 0))
+                effective_minutes = effective_seconds // 60
+                if effective_minutes > 0 and started_day:
+                    daily_minutes = detail_context[daily_minutes_key]
+                    current_daily_minutes = int(daily_minutes.get(started_day) or 0)
+                    if effective_minutes > current_daily_minutes:
+                        daily_minutes[started_day] = effective_minutes
+
     for detail_context in context.values():
+        assembly_daily_minutes = detail_context.pop("assembly_daily_minutes", {})
+        install_daily_minutes = detail_context.pop("install_daily_minutes", {})
         detail_context["assembly_worker"] = ", ".join(detail_context.pop("assembly_names")) or ""
         detail_context["install_worker"] = ", ".join(detail_context.pop("install_names")) or ""
-        detail_context["assembly_days_count"] = len(detail_context.pop("assembly_days"))
-        detail_context["install_days_count"] = len(detail_context.pop("install_days"))
+        assembly_days = detail_context.pop("assembly_days")
+        install_days = detail_context.pop("install_days")
+        detail_context["assembly_effective_minutes"] = sum(int(value or 0) for value in assembly_daily_minutes.values())
+        detail_context["install_effective_minutes"] = sum(int(value or 0) for value in install_daily_minutes.values())
+        detail_context["assembly_days_count"] = len(assembly_daily_minutes) or len(assembly_days)
+        detail_context["install_days_count"] = len(install_daily_minutes) or len(install_days)
         detail_context.pop("assembly_seen", None)
         detail_context.pop("install_seen", None)
 

@@ -113,9 +113,9 @@ async def load_buffer_rows(
         production_completed_at = pick_last_date(production, "completed_at") if production_is_complete else None
 
         client_name = pick_value(rows, "client")
-        if normalized_order_query and normalized_order_query != order_number.casefold():
+        if normalized_order_query and normalized_order_query not in order_number.casefold():
             continue
-        if normalized_customer_query and normalized_customer_query != client_name.casefold():
+        if normalized_customer_query and normalized_customer_query not in client_name.casefold():
             continue
 
         constructor_status = calc_percent(constructor_done, total_products)
@@ -136,6 +136,7 @@ async def load_buffer_rows(
                 "products_hidden": total_products,
                 "products_list": [
                     {
+                        "part_number": safe_text(row.get("part_number", "")) or "—",
                         "name": safe_text(row.get("product", "")) or "—",
                         "status": (
                             "Завершено"

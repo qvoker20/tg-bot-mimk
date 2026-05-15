@@ -26,6 +26,8 @@ def ensure_schema() -> None:
 
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                # Serialize DDL across processes to avoid deadlocks on ALTER TABLE.
+                cursor.execute("SELECT pg_advisory_xact_lock(%s)", (764321987654321,))
                 cursor.execute(
                     f"""
                     CREATE TABLE IF NOT EXISTS {MAIN_TABLE_NAME} (

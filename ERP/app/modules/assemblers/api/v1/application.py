@@ -49,6 +49,7 @@ async def assemblers_application_task_action_api(request: Request, task_id: int)
             pause_reason=payload.get("pause_reason"),
             location=payload.get("location") or {},
             selected_products=payload.get("selected_products") or [],
+            actor=user,
         )
     except ValueError as error:
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)

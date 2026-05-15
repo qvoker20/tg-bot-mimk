@@ -75,7 +75,7 @@ async def assemblers_buffer_transfer(request: Request, payload: TransferBufferPa
     if forbidden:
         return forbidden
 
-    result = await run_in_threadpool(transfer_buffer_orders, payload.order_numbers)
+    result = await run_in_threadpool(transfer_buffer_orders, payload.order_numbers, user)
     return {"ok": True, **result}
 
 

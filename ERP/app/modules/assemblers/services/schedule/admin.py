@@ -5,17 +5,22 @@ from datetime import date, timedelta
 from app.modules.assemblers.repositories.schedule_repo import (
     delete_schedule_tasks,
     fetch_allowed_workers,
+    fetch_detail_rows_for_product_match,
     fetch_detail_stage_rows_by_order,
     fetch_order_customer_map,
     fetch_schedule_week_rows,
     fetch_tasks_for_edit,
     insert_schedule_tasks,
+    revert_detail_rows_completion,
+    revert_task_completion,
     update_schedule_tasks_parts,
 )
+from app.modules.assemblers.services.activity_log import record_activity_event
 from app.modules.assemblers.services.registry import enqueue_detail_metrics_recalculation
 from app.modules.assemblers.services.staff import ALLOWED_SUBDIVISIONS
 
-from .constants import ALLOWED_EDIT_ACTIONS, ALLOWED_TASK_TYPES, TASK_STATUS_QUEUED
+from .constants import ALLOWED_EDIT_ACTIONS, ALLOWED_TASK_TYPES, TASK_STATUS_QUEUED, TASK_STATUS_COMPLETED, TASK_STATUS_IN_PROGRESS
+from .constants import SCHEDULE_TASKS_TABLE
 from .helpers import (
     _find_blocked_selected_parts,
     _normalize_selected_parts,
@@ -58,7 +63,7 @@ def load_schedule_tasks(subdivision: str, start_date: str) -> dict:
     }
 
 
-def create_schedule_tasks(*, subdivision: str, task_type: str, cells: list[dict], order_number=None, selected_parts=None, description=None) -> dict:
+def create_schedule_tasks(*, subdivision: str, task_type: str, cells: list[dict], order_number=None, selected_parts=None, description=None, actor=None) -> dict:
     """Create schedule tasks from selected grid cells for assembly/install/related workflows."""
     ensure_schedule_schema()
     normalized_subdivision = _safe_text(subdivision)
@@ -165,10 +170,32 @@ def create_schedule_tasks(*, subdivision: str, task_type: str, cells: list[dict]
     if normalized_order_number:
         enqueue_detail_metrics_recalculation([normalized_order_number], source="schedule_create")
 
+    record_activity_event(
+        action_key="schedule.create",
+        action_label="Заплановано задачі",
+        description=(
+            f"Створено {created_count} задач(і) у графіку {normalized_subdivision}"
+            + (f" для замовлення {normalized_order_number}" if normalized_order_number else "")
+        ),
+        actor=actor,
+        entity_type="schedule_batch",
+        entity_id=normalized_order_number or normalized_subdivision,
+        order_number=normalized_order_number,
+        subdivision=normalized_subdivision,
+        source_table=SCHEDULE_TASKS_TABLE,
+        source_op="INSERT",
+        details={
+            "task_type": normalized_task_type,
+            "created_count": created_count,
+            "cells_count": len(normalized_cells),
+            "selected_parts_count": len(selected_parts or []),
+        },
+    )
+
     return {"created_count": created_count}
 
 
-def edit_schedule_tasks(*, subdivision: str, action: str, task_ids=None, order_number=None, selected_parts=None) -> dict:
+def edit_schedule_tasks(*, subdivision: str, action: str, task_ids=None, order_number=None, selected_parts=None, actor=None) -> dict:
     """Edit or delete queued schedule tasks from manager UI."""
     ensure_schedule_schema()
     normalized_subdivision = _safe_text(subdivision)
@@ -190,12 +217,34 @@ def edit_schedule_tasks(*, subdivision: str, action: str, task_ids=None, order_n
         raise ValueError("Не вдалося знайти вибрані задачі")
     if len(tasks) != len(normalized_task_ids):
         raise ValueError("Частину задач не знайдено")
+    
     if normalized_action == "delete" and any(task.get("status") != TASK_STATUS_QUEUED for task in tasks):
         raise ValueError("Редагувати можна лише задачі зі статусом У черзі")
+    
+    if normalized_action == "revert_completion" and any(task.get("status") != TASK_STATUS_COMPLETED for task in tasks):
+        raise ValueError("Скасувати можна лише завершені задачі")
 
     if normalized_action in {"delete", "admin_delete"}:
         affected_count = delete_schedule_tasks(subdivision=normalized_subdivision, task_ids=normalized_task_ids)
+    elif normalized_action == "revert_completion":
+        # Revert completed tasks back to in-progress and revert detail completions
+        affected_count = 0
+        for task in tasks:
+            task_type = _safe_text(task.get("task_type")) or "assembly"
+            order_number_val = _safe_text(task.get("order_number"))
+            
+            # Revert task status
+            task_reverted = revert_task_completion(task_id=task.get("id"))
+            affected_count += task_reverted
+            
+            # Revert detail rows if this was assembly/install task
+            if task_type in {"assembly", "install"} and order_number_val:
+                detail_rows = fetch_detail_stage_rows_by_order(order_number=order_number_val)
+                detail_ids = [row[0] for row in detail_rows]
+                if detail_ids:
+                    revert_detail_rows_completion(detail_ids=detail_ids, task_type=task_type)
     else:
+        # Parts update action
         unique_orders = {task.get("order_number") for task in tasks if _safe_text(task.get("order_number"))}
         if len(unique_orders) != 1:
             raise ValueError("Для заміни частин оберіть задачі одного замовлення")
@@ -223,5 +272,36 @@ def edit_schedule_tasks(*, subdivision: str, action: str, task_ids=None, order_n
         affected_orders.add(normalized_order_number)
     if affected_orders:
         enqueue_detail_metrics_recalculation(sorted(affected_orders), source="schedule_edit")
+
+    if normalized_action == "delete":
+        action_key = "schedule.delete"
+        action_label = "Видалено задачі графіку"
+    elif normalized_action == "admin_delete":
+        action_key = "schedule.admin_delete"
+        action_label = "Адміністративно видалено задачі графіку"
+    else:
+        action_key = "schedule.revert_completion"
+        action_label = "Скасовано завершення задач графіку"
+
+    record_activity_event(
+        action_key=action_key,
+        action_label=action_label,
+        description=(
+            f"{action_label}: {affected_count} задач(і) у {normalized_subdivision}"
+            + (f" для замовлення {normalized_order_number}" if normalized_order_number else "")
+        ),
+        actor=actor,
+        entity_type="schedule_batch",
+        entity_id=normalized_order_number or normalized_subdivision,
+        order_number=normalized_order_number,
+        subdivision=normalized_subdivision,
+        source_table=SCHEDULE_TASKS_TABLE,
+        source_op=normalized_action.upper(),
+        details={
+            "affected_count": affected_count,
+            "task_ids": normalized_task_ids,
+            "selected_parts_count": len(selected_parts or []),
+        },
+    )
 
     return {"affected_count": affected_count}

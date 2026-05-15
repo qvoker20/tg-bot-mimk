@@ -661,7 +661,7 @@ gap: 8px;
 
 /* ── Stage action styled confirm dialog ── */
 .stage-confirm-overlay {
-    z-index: 60;
+    z-index: 2147483647;
     align-items: center;
 }
 

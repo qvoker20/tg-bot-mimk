@@ -20,7 +20,8 @@ async def fetch_designer_rows() -> list[tuple]:
                     column_30, column_31, column_32
                     column_14, column_16, hpl, column_18, column_19,
                     column_20, column_21, c, column_23, column_24,
-                    column_25, column_26, column_29
+                    column_25, column_26, column_29,
+                    column_2
                 FROM {DATA_DESIGNER_TABLE}
                 WHERE NULLIF(TRIM(COALESCE(column_1, '')), '') IS NOT NULL
                 ORDER BY column_1, id

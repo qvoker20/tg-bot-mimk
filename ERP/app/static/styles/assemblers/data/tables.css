@@ -268,6 +268,21 @@
     background: #e0edff;
 }
 
+.assemblers-data-table .is-subcontract,
+.buffer-table .is-subcontract {
+    background: #fffbea;
+}
+
+.assemblers-data-table tbody tr:nth-child(even) .is-subcontract,
+.buffer-table tbody tr:nth-child(even) .is-subcontract {
+    background: #fff5cc;
+}
+
+.assemblers-data-table tbody tr:hover .is-subcontract,
+.buffer-table tbody tr:hover .is-subcontract {
+    background: #ffecaa;
+}
+
 /* content */
 .assemblers-data-table thead .is-sticky-col::after,
 .buffer-table thead .is-sticky-col::after {

@@ -20,6 +20,8 @@ async def assemblers_details_api(
 	order_number: str = "",
 	customer: str = "",
 	product: str = "",
+	requires_assembly: str = "",
+	requires_install: str = "",
 ):
 	_, redirect = require_user(request)
 	if redirect:
@@ -32,6 +34,8 @@ async def assemblers_details_api(
 		order_number=order_number,
 		customer=customer,
 		product=product,
+		requires_assembly=requires_assembly,
+		requires_install=requires_install,
 	)
 	return {"ok": True, **rows}
 
@@ -42,6 +46,6 @@ async def assemblers_details_search_api(request: Request, order_number: str = ""
 	if redirect:
 		return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
-	rows = await run_in_threadpool(search_detail_rows_by_order, order_number)
-	return {"ok": True, "rows": rows}
+	payload = await run_in_threadpool(search_detail_rows_by_order, order_number)
+	return {"ok": True, **payload}
 

@@ -7,7 +7,7 @@ TASK_STATUS_COMPLETED = "Завершено"
 TASK_STATUS_NO_EXECUTION = "Без виконання"
 
 ALLOWED_TASK_TYPES = {"assembly", "install", "related"}
-ALLOWED_EDIT_ACTIONS = {"delete", "admin_delete"}
+ALLOWED_EDIT_ACTIONS = {"delete", "admin_delete", "revert_completion"}
 ALLOWED_APP_TASK_ACTIONS = {"start", "pause", "resume", "finish"}
 
 TASK_TYPE_ALIASES = {

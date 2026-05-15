@@ -60,7 +60,7 @@ def _normalize_execution_status(
         return TASK_STATUS_COMPLETED
     if normalized_status in {TASK_STATUS_IN_PROGRESS, _PAUSED} or started_days > 0:
         return TASK_STATUS_IN_PROGRESS
-    return "—"
+    return TASK_STATUS_QUEUED
 
 
 def _calc_plan_percent(details: list[dict], key: str, *, required_key: str | None = None) -> str:

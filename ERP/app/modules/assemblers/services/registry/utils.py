@@ -100,7 +100,16 @@ def _format_duration(value_in_minutes: int) -> str:
     return f"{minutes} хв"
 
 
-def _calculate_stage_metrics(*, started_at, completed_at, fallback_days: int) -> tuple[int, str]:
+def _calculate_stage_metrics(
+    *,
+    started_at,
+    completed_at,
+    fallback_days: int,
+    effective_minutes: int | None = None,
+) -> tuple[int, str]:
+    if effective_minutes is not None and int(effective_minutes) > 0:
+        return max(int(fallback_days or 0), 1), _format_duration(int(effective_minutes))
+
     normalized_started_at = _normalize_datetime(started_at)
     normalized_completed_at = _normalize_datetime(completed_at)
     if normalized_started_at and normalized_completed_at and normalized_completed_at >= normalized_started_at:

@@ -23,11 +23,15 @@ def load_detail_rows(
     order_number: str = "",
     customer: str = "",
     product: str = "",
+    requires_assembly: str = "",
+    requires_install: str = "",
 ) -> dict:
     ensure_schema()
     normalized_order_number = _safe_text(order_number)
     normalized_customer = _safe_text(customer)
     normalized_product = _safe_text(product)
+    normalized_requires_assembly = _safe_text(requires_assembly).lower()
+    normalized_requires_install = _safe_text(requires_install).lower()
 
     offset = _normalize_offset(offset)
     limit = _normalize_limit(limit)
@@ -43,6 +47,14 @@ def load_detail_rows(
     if normalized_product:
         where_parts.append("TRIM(COALESCE(d.product_name, '')) ILIKE %s")
         where_params.append(f"%{normalized_product}%")
+    if normalized_requires_assembly == "yes":
+        where_parts.append("d.requires_assembly = TRUE")
+    elif normalized_requires_assembly == "no":
+        where_parts.append("d.requires_assembly = FALSE")
+    if normalized_requires_install == "yes":
+        where_parts.append("d.requires_install = TRUE")
+    elif normalized_requires_install == "no":
+        where_parts.append("d.requires_install = FALSE")
     where_parts.append("TRIM(COALESCE(m.status, '')) <> %s")
     where_params.append(CLOSED_STATUS)
     where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
@@ -198,14 +210,43 @@ def load_detail_rows(
     }
 
 
-def search_detail_rows_by_order(order_number: str) -> list[dict]:
+def search_detail_rows_by_order(order_number: str) -> dict:
     ensure_schema()
     normalized_order = _safe_text(order_number)
     if not normalized_order:
-        return []
+        return {
+            "rows": [],
+            "order_found": False,
+            "is_closed": False,
+        }
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT TRIM(COALESCE(status, ''))
+                FROM {MAIN_TABLE_NAME}
+                WHERE TRIM(COALESCE(order_number, '')) = %s
+                LIMIT 1
+                """,
+                (normalized_order,),
+            )
+            order_row = cursor.fetchone()
+            if not order_row:
+                return {
+                    "rows": [],
+                    "order_found": False,
+                    "is_closed": False,
+                }
+
+            order_status = _safe_text(order_row[0])
+            if order_status.casefold() == CLOSED_STATUS.casefold():
+                return {
+                    "rows": [],
+                    "order_found": True,
+                    "is_closed": True,
+                }
+
             cursor.execute(
                 f"""
                 SELECT
@@ -218,7 +259,9 @@ def search_detail_rows_by_order(order_number: str) -> list[dict]:
                     d.install_status,
                     d.install_completed_at,
                     d.requires_assembly,
-                    d.requires_install
+                    d.requires_install,
+                    d.planned_assembly_due_at,
+                    d.planned_install_due_at
                 FROM {DETAILS_TABLE_NAME} d
                 LEFT JOIN {MAIN_TABLE_NAME} m ON m.order_number = d.order_number
                 WHERE TRIM(COALESCE(d.order_number, '')) = %s
@@ -229,26 +272,32 @@ def search_detail_rows_by_order(order_number: str) -> list[dict]:
             )
             rows = cursor.fetchall()
 
-    return [
-        {
-            "part_number": _safe_text(row[0]) or "—",
-            "customer": _safe_text(row[1]) or "—",
-            "product_name": _safe_text(row[2]) or "—",
-            "constructor_status": _safe_text(row[3]) or "—",
-            "assembly_status": _safe_text(row[4]) or "",
-            "assembly_completed_at": row[5],
-            "install_status": _safe_text(row[6]) or "",
-            "install_completed_at": row[7],
-            "requires_assembly": bool(row[8]),
-            "requires_install": bool(row[9]),
-            "product_status": (
-                "Завершено"
-                if (
-                    (not bool(row[8]) or bool(row[5]) or _safe_text(row[4]).casefold() == "завершено")
-                    and (not bool(row[9]) or bool(row[7]) or _safe_text(row[6]).casefold() == "завершено")
-                )
-                else "Не завершено"
-            ),
-        }
-        for row in rows
-    ]
+    return {
+        "rows": [
+            {
+                "part_number": _safe_text(row[0]) or "—",
+                "customer": _safe_text(row[1]) or "—",
+                "product_name": _safe_text(row[2]) or "—",
+                "constructor_status": _safe_text(row[3]) or "—",
+                "assembly_status": _safe_text(row[4]) or "",
+                "assembly_completed_at": row[5],
+                "install_status": _safe_text(row[6]) or "",
+                "install_completed_at": row[7],
+                "requires_assembly": bool(row[8]),
+                "requires_install": bool(row[9]),
+                "planned_assembly_due_at": _format_date(row[10]),
+                "planned_install_due_at": _format_date(row[11]),
+                "product_status": (
+                    "Завершено"
+                    if (
+                        (not bool(row[8]) or bool(row[5]) or _safe_text(row[4]).casefold() == "завершено")
+                        and (not bool(row[9]) or bool(row[7]) or _safe_text(row[6]).casefold() == "завершено")
+                    )
+                    else "Не завершено"
+                ),
+            }
+            for row in rows
+        ],
+        "order_found": True,
+        "is_closed": False,
+    }

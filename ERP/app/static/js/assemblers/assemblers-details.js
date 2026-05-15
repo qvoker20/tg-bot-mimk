@@ -7,11 +7,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const loader = page?.querySelector("[data-details-loader]");
     const orderSearch = page?.querySelector("[data-details-search-order]");
     const customerSearch = page?.querySelector("[data-details-search-customer]");
-    const productSearch = page?.querySelector("[data-details-search-product]");
-    const filterToggle = page?.querySelector("[data-details-toggle-filters]");
-    const filterPanel = page?.querySelector("[data-details-filters-panel]");
+    const productSearch = document.querySelector("[data-details-search-product]");
+    const searchApplyButton = page?.querySelector("[data-details-search-apply]");
+    const openFiltersButton = page?.querySelector("[data-details-open-filters]");
+    const activeFiltersEl = page?.querySelector("[data-details-active-filters]");
+    const filtersModal = document.querySelector("[data-details-filters-modal]");
+    const filtersCloseButtons = document.querySelectorAll("[data-details-filters-close]");
+    const filtersApplyButton = document.querySelector("[data-details-filters-apply]");
+    const filtersResetButton = document.querySelector("[data-details-filters-reset]");
+    const filtersRequiresAssembly = document.querySelector("[data-details-filter-requires-assembly]");
+    const filtersRequiresInstall = document.querySelector("[data-details-filter-requires-install]");
 
-    if (!page || !tableWrap || !table || !tbody || !meta || !loader || !orderSearch || !customerSearch || !productSearch || !filterToggle || !filterPanel) {
+    if (!page || !tableWrap || !table || !tbody || !meta || !loader || !orderSearch || !customerSearch) {
         return;
     }
 
@@ -30,14 +37,14 @@ document.addEventListener("DOMContentLoaded", () => {
         loading: false,
         hasMore: true,
         total: 0,
-        filtersOpen: false,
         filters: {
             orderNumber: "",
             customer: "",
             product: "",
+            requiresAssembly: "",
+            requiresInstall: "",
         },
     };
-    let searchTimer = null;
     let activeController = null;
     let requestVersion = 0;
 
@@ -87,6 +94,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return span;
     };
 
+    const isMissingPlannedDate = (value) => {
+        const text = String(value ?? "").trim();
+        return !text || text === "—" || text === "-";
+    };
+
     const renderRow = (row) => {
         const tr = document.createElement("tr");
         const values = [
@@ -101,7 +113,14 @@ document.addEventListener("DOMContentLoaded", () => {
         values.forEach((value, index) => {
             const td = document.createElement("td");
             td.dataset.colIndex = String(index);
-            if (index === 10) {
+            if (index === 4 || index === 11) {
+                if (isMissingPlannedDate(value)) {
+                    td.textContent = "Потребує планування!";
+                    td.classList.add("is-deadline-critical");
+                } else {
+                    td.textContent = value ?? "—";
+                }
+            } else if (index === 10) {
                 // assembly_status with pause indicator
                 td.classList.add("assemblers-status-cell");
                 td.appendChild(makeStatusBadge(value, row.assembly_paused, row.assembly_pause_reason));
@@ -142,6 +161,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (state.filters.product) {
             params.set("product", state.filters.product);
+        }
+        if (state.filters.requiresAssembly) {
+            params.set("requires_assembly", state.filters.requiresAssembly);
+        }
+        if (state.filters.requiresInstall) {
+            params.set("requires_install", state.filters.requiresInstall);
         }
         return params.toString();
     };
@@ -208,28 +233,75 @@ document.addEventListener("DOMContentLoaded", () => {
         void loadNextPage();
     };
 
-    const scheduleSearch = () => {
-        if (searchTimer) {
-            window.clearTimeout(searchTimer);
+    const applySearch = () => {
+        state.filters.orderNumber = orderSearch.value.trim();
+        state.filters.customer = customerSearch.value.trim();
+        reloadDetails();
+    };
+
+    const updateActiveFilters = () => {
+        if (!activeFiltersEl) return;
+        const chips = [];
+        if (state.filters.requiresAssembly === "yes") chips.push("Зі збіркою");
+        else if (state.filters.requiresAssembly === "no") chips.push("Без збірки");
+        if (state.filters.requiresInstall === "yes") chips.push("З монтажем");
+        else if (state.filters.requiresInstall === "no") chips.push("Без монтажу");
+        if (state.filters.product) chips.push(`Виріб: "${state.filters.product}"`);
+        activeFiltersEl.innerHTML = chips
+            .map(c => `<span class="active-filter-chip">${c}</span>`)
+            .join("");
+    };
+
+    const applyFilters = () => {
+        state.filters.requiresAssembly = filtersRequiresAssembly?.value ?? "";
+        state.filters.requiresInstall = filtersRequiresInstall?.value ?? "";
+        state.filters.product = productSearch?.value.trim() ?? "";
+        filtersModal?.classList.add("hidden");
+        updateActiveFilters();
+        reloadDetails();
+    };
+
+    const resetFilters = () => {
+        if (filtersRequiresAssembly) filtersRequiresAssembly.value = "";
+        if (filtersRequiresInstall) filtersRequiresInstall.value = "";
+        if (productSearch) productSearch.value = "";
+        state.filters.requiresAssembly = "";
+        state.filters.requiresInstall = "";
+        state.filters.product = "";
+        filtersModal?.classList.add("hidden");
+        updateActiveFilters();
+        reloadDetails();
+    };
+
+    const openFiltersModal = () => filtersModal?.classList.remove("hidden");
+    const closeFiltersModal = () => filtersModal?.classList.add("hidden");
+
+    openFiltersButton?.addEventListener("click", openFiltersModal);
+    filtersCloseButtons.forEach(btn => btn.addEventListener("click", closeFiltersModal));
+    filtersModal?.addEventListener("click", (e) => {
+        if (e.target === filtersModal) closeFiltersModal();
+    });
+    filtersApplyButton?.addEventListener("click", applyFilters);
+    filtersResetButton?.addEventListener("click", resetFilters);
+    searchApplyButton?.addEventListener("click", applySearch);
+    orderSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applySearch();
         }
-        searchTimer = window.setTimeout(() => {
-            state.filters.orderNumber = orderSearch.value.trim();
-            state.filters.customer = customerSearch.value.trim();
-            state.filters.product = productSearch.value.trim();
-            reloadDetails();
-        }, 260);
-    };
-
-    const toggleFilters = () => {
-        state.filtersOpen = !state.filtersOpen;
-        filterPanel.classList.toggle("hidden", !state.filtersOpen);
-        filterToggle.textContent = state.filtersOpen ? "Сховати фільтри" : "Фільтри";
-    };
-
-    filterToggle.addEventListener("click", toggleFilters);
-    orderSearch.addEventListener("input", scheduleSearch);
-    customerSearch.addEventListener("input", scheduleSearch);
-    productSearch.addEventListener("input", scheduleSearch);
+    });
+    customerSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applySearch();
+        }
+    });
+    productSearch?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applySearch();
+        }
+    });
 
     tableWrap.addEventListener("scroll", () => {
         const threshold = 160;

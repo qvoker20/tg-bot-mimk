@@ -12,6 +12,7 @@ from .main_orders import (
     load_main_filter_options,
     load_main_order_card,
     load_main_rows,
+    update_main_order_status,
     update_main_order_card,
 )
 from .preferences import load_column_preferences, save_column_preferences
@@ -30,6 +31,7 @@ __all__ = [
     "load_main_filter_options",
     "load_main_order_card",
     "update_main_order_card",
+    "update_main_order_status",
     # details
     "load_detail_rows",
     "search_detail_rows_by_order",

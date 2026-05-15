@@ -1,6 +1,7 @@
 ﻿import threading
 
 from app.modules.assemblers.db.connection import get_db_connection
+from app.modules.assemblers.services.activity_log import ensure_activity_log_schema
 from app.modules.assemblers.services.registry import ensure_schema
 
 from .constants import (
@@ -25,6 +26,7 @@ def ensure_schedule_schema() -> None:
         return
 
     ensure_schema()
+    ensure_activity_log_schema()
 
     with _SCHEDULE_SCHEMA_LOCK:
         if _SCHEDULE_SCHEMA_READY:
@@ -32,6 +34,8 @@ def ensure_schedule_schema() -> None:
 
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                # Serialize schedule DDL across processes to avoid lock inversions.
+                cursor.execute("SELECT pg_advisory_xact_lock(%s)", (764321987654322,))
                 cursor.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {SCHEDULE_TASKS_TABLE} (
@@ -202,6 +206,127 @@ def ensure_schedule_schema() -> None:
                     f"CREATE INDEX IF NOT EXISTS idx_{SCHEDULE_TASKS_TABLE}_date_status ON {SCHEDULE_TASKS_TABLE}(scheduled_for, status)"
                 )
                 cursor.execute(
+                    f"""
+                    CREATE OR REPLACE FUNCTION assemblers_schedule_after_write_activity_log()
+                    RETURNS TRIGGER AS $$
+                    DECLARE
+                        audit_enabled TEXT := COALESCE(NULLIF(current_setting('assemblers.activity_log_enabled', true), ''), '0');
+                        actor_kind TEXT := COALESCE(NULLIF(current_setting('assemblers.activity_actor_kind', true), ''), 'system');
+                        actor_name TEXT := COALESCE(NULLIF(current_setting('assemblers.activity_actor_name', true), ''), 'Система');
+                        actor_role TEXT := COALESCE(NULLIF(current_setting('assemblers.activity_actor_role', true), ''), 'system');
+                        row_order TEXT := '';
+                        row_part TEXT := '';
+                        row_subdivision TEXT := '';
+                        row_task_type TEXT := '';
+                        row_status TEXT := '';
+                        row_entity_id TEXT := '';
+                        row_scheduled_for DATE;
+                        action_key TEXT;
+                        action_label TEXT;
+                        action_description TEXT;
+                        action_details JSONB;
+                        is_auto_close BOOLEAN := FALSE;
+                    BEGIN
+                        IF audit_enabled <> '1' THEN
+                            RETURN COALESCE(NEW, OLD);
+                        END IF;
+
+                        IF TG_OP = 'DELETE' THEN
+                            row_order := COALESCE(NULLIF(TRIM(COALESCE(OLD.order_number, '')), ''), '');
+                            row_part := COALESCE(NULLIF(TRIM(COALESCE(OLD.part_number, '')), ''), '');
+                            row_subdivision := COALESCE(NULLIF(TRIM(COALESCE(OLD.subdivision, '')), ''), '');
+                            row_task_type := COALESCE(NULLIF(TRIM(COALESCE(OLD.task_type, '')), ''), '');
+                            row_status := COALESCE(NULLIF(TRIM(COALESCE(OLD.status, '')), ''), '');
+                            row_entity_id := COALESCE(OLD.id::TEXT, '');
+                            row_scheduled_for := OLD.scheduled_for;
+                        ELSE
+                            row_order := COALESCE(NULLIF(TRIM(COALESCE(NEW.order_number, '')), ''), '');
+                            row_part := COALESCE(NULLIF(TRIM(COALESCE(NEW.part_number, '')), ''), '');
+                            row_subdivision := COALESCE(NULLIF(TRIM(COALESCE(NEW.subdivision, '')), ''), '');
+                            row_task_type := COALESCE(NULLIF(TRIM(COALESCE(NEW.task_type, '')), ''), '');
+                            row_status := COALESCE(NULLIF(TRIM(COALESCE(NEW.status, '')), ''), '');
+                            row_entity_id := COALESCE(NEW.id::TEXT, '');
+                            row_scheduled_for := NEW.scheduled_for;
+
+                            IF TG_OP = 'UPDATE' AND NEW.auto_closed_at IS NOT NULL THEN
+                                is_auto_close := TRUE;
+                            END IF;
+                        END IF;
+
+                        action_key := CASE TG_OP
+                            WHEN 'INSERT' THEN 'schedule.system.insert'
+                            WHEN 'DELETE' THEN 'schedule.system.delete'
+                            WHEN 'UPDATE' AND is_auto_close THEN 'schedule.system.auto_close'
+                            ELSE 'schedule.system.update'
+                        END;
+
+                        action_label := CASE TG_OP
+                            WHEN 'INSERT' THEN 'Створено запис графіку'
+                            WHEN 'DELETE' THEN 'Видалено запис графіку'
+                            WHEN 'UPDATE' AND is_auto_close THEN 'Автоматично завершено графік'
+                            ELSE 'Оновлено запис графіку'
+                        END;
+
+                        action_description := CASE TG_OP
+                            WHEN 'DELETE' THEN format('Видалено задачу графіку: %s %s', row_order, row_part)
+                            WHEN 'INSERT' THEN format('Додано задачу графіку: %s %s', row_order, row_part)
+                            WHEN 'UPDATE' AND is_auto_close THEN format('Автозавершення після 18:00: %s %s', row_order, row_part)
+                            ELSE format('Оновлено задачу графіку: %s %s', row_order, row_part)
+                        END;
+
+                        action_details := jsonb_build_object(
+                            'task_type', row_task_type,
+                            'status', row_status,
+                            'scheduled_for', COALESCE(row_scheduled_for::TEXT, '')
+                        );
+
+                        INSERT INTO assemblers_activity_journal (
+                            actor_kind,
+                            actor_name,
+                            actor_role,
+                            action_key,
+                            action_label,
+                            entity_type,
+                            entity_id,
+                            order_number,
+                            subdivision,
+                            source_table,
+                            source_op,
+                            description,
+                            details
+                        ) VALUES (
+                            actor_kind,
+                            actor_name,
+                            actor_role,
+                            action_key,
+                            action_label,
+                            'schedule_task',
+                            row_entity_id,
+                            row_order,
+                            row_subdivision,
+                            TG_TABLE_NAME,
+                            TG_OP,
+                            action_description,
+                            COALESCE(action_details, '{{}}'::jsonb)
+                        );
+
+                        RETURN COALESCE(NEW, OLD);
+                    END;
+                    $$ LANGUAGE plpgsql;
+                    """
+                )
+                cursor.execute(
+                    f"DROP TRIGGER IF EXISTS trg_{SCHEDULE_TASKS_TABLE}_after_write_activity_log ON {SCHEDULE_TASKS_TABLE}"
+                )
+                cursor.execute(
+                    f"""
+                    CREATE TRIGGER trg_{SCHEDULE_TASKS_TABLE}_after_write_activity_log
+                    AFTER INSERT OR UPDATE OR DELETE ON {SCHEDULE_TASKS_TABLE}
+                    FOR EACH ROW
+                    EXECUTE FUNCTION assemblers_schedule_after_write_activity_log();
+                    """
+                )
+                cursor.execute(
                 f"""
                 CREATE OR REPLACE FUNCTION assemblers_schedule_apply_daily_cutoff(
                     target_day DATE,
@@ -223,6 +348,11 @@ def ensure_schedule_schema() -> None:
                 BEGIN
                     normalized_day := COALESCE(target_day, (normalized_execution AT TIME ZONE 'Europe/Kyiv')::DATE);
                     cutoff_at := (normalized_day::TIMESTAMP + TIME '18:00') AT TIME ZONE 'Europe/Kyiv';
+
+                    PERFORM set_config('assemblers.activity_log_enabled', '1', true);
+                    PERFORM set_config('assemblers.activity_actor_kind', 'system', true);
+                    PERFORM set_config('assemblers.activity_actor_name', 'Система', true);
+                    PERFORM set_config('assemblers.activity_actor_role', 'system', true);
 
                     IF normalized_execution < cutoff_at THEN
                         RETURN QUERY SELECT normalized_day, 0, 0, FALSE;

@@ -177,6 +177,7 @@
                         <input type="search" placeholder="Назва замовника" data-main-search-customer autocomplete="off">
                     </label>
                     <div class="buffer-actions-row main-filters-actions-row">
+                        <button type="button" class="module-link buffer-action-button" data-main-search-apply>Пошук</button>
                         <button type="button" class="ghost-button buffer-action-button" data-main-open-filters>Фільтри</button>
                     </div>
                 </div>
@@ -199,7 +200,6 @@
                                 <th>Дедлайн</th>
                                 <th>Годин на виконання</th>
                                 <th>Факт годин виконання</th>
-                                <th>Часу залишилось</th>
                                 <th>План кінця збірки в частинах</th>
                                 <th>План кінця монтажу в частинах</th>
                                 <th>Статус збірка</th>
@@ -212,28 +212,26 @@
                                 <th>Годин на монтаж</th>
                                 <th>Збиральники збірка</th>
                                 <th>Монтаж збиральники</th>
-                                <th class="is-subcontract is-subcontract-first" data-subcontract>Малярний цех</th>
-                                <th class="is-subcontract" data-subcontract>Статус малярка</th>
-                                <th class="is-subcontract" data-subcontract>Метал</th>
-                                <th class="is-subcontract" data-subcontract>Статус метал</th>
-                                <th class="is-subcontract" data-subcontract>Шпон</th>
-                                <th class="is-subcontract" data-subcontract>Пластик HPL</th>
-                                <th class="is-subcontract" data-subcontract>Столярний цех</th>
-                                <th class="is-subcontract" data-subcontract>М'який цех</th>
-                                <th class="is-subcontract" data-subcontract>Штучний камінь</th>
-                                <th class="is-subcontract" data-subcontract>Компакт-плита</th>
-                                <th class="is-subcontract" data-subcontract>Cтільниця ДСП</th>
-                                <th class="is-subcontract" data-subcontract>Розсувні системи</th>
-                                <th class="is-subcontract" data-subcontract>Скло/дзеркало</th>
-                                <th class="is-subcontract" data-subcontract>Статус скло/дзеркало</th>
-                                <th class="is-subcontract" data-subcontract>Рамкові фасади</th>
-                                <th class="is-subcontract is-subcontract-last" data-subcontract>Керамограніт</th>
+                                <th data-col-key="paint_shop">Малярний цех</th>
+                                <th data-col-key="paint_status">Статус малярка</th>
+                                <th data-col-key="metal">Метал</th>
+                                <th data-col-key="metal_status">Статус метал</th>
+                                <th data-col-key="veneer">Шпон</th>
+                                <th data-col-key="plastic_hpl">Пластик HPL</th>
+                                <th data-col-key="joinery_shop">Столярний цех</th>
+                                <th data-col-key="soft_shop">М'який цех</th>
+                                <th data-col-key="artificial_stone">Штучний камінь</th>
+                                <th data-col-key="compact_plate">Компакт-плита</th>
+                                <th data-col-key="dsp_countertop">Cтільниця ДСП</th>
+                                <th data-col-key="sliding_systems">Розсувні системи</th>
+                                <th data-col-key="glass_mirror">Скло/дзеркало</th>
+                                <th data-col-key="glass_status">Статус скло/дзеркало</th>
+                                <th data-col-key="frame_facades">Рамкові фасади</th>
+                                <th data-col-key="ceramic_granite">Керамограніт</th>
                                 <th>Статус конструк.</th>
                                 <th>Статус виробни.</th>
                                 <th>Вартість замовлення</th>
                                 <th>ПДВ</th>
-                                <th>Кількість частин</th>
-                                <th>Кількість запусків</th>
                                 <th>Дата запису</th>
                                 <th>Адреса</th>
                                 <th>Примітки до адреси</th>
@@ -336,6 +334,10 @@
                 <span class="main-order-summary-label">Тип замовлення</span>
                 <strong class="main-order-summary-value" data-main-modal-order-type>—</strong>
             </article>
+        </div>
+
+        <div class="main-order-status-warning hidden" data-main-reclamation-warning role="status" aria-live="polite">
+            Статус "Рекламація": зміни вносити заборонено.
         </div>
 
         <section class="main-order-details-card">
@@ -470,7 +472,11 @@
             </div>
 
             <div class="confirm-actions-row">
-                <button type="button" class="ghost-button" data-main-modal-close>Скасувати</button>
+                <div class="confirm-actions-left">
+                    <button type="button" class="ghost-button status-action-button" data-main-modal-close-order>Закрити</button>
+                    <button type="button" class="ghost-button status-action-button" data-main-modal-mark-reclamation>Рекламація</button>
+                    <button type="button" class="ghost-button status-action-button" data-main-modal-cancel-reclamation>Відмінити рекламацію</button>
+                </div>
                 <button type="submit" class="module-link" data-main-modal-submit{% if not can_manage_main_orders %} hidden{% endif %}>Зберегти</button>
             </div>
         </form>
@@ -752,6 +758,6 @@
 {% block page_scripts %}
 <script src="{{ url_for('static', path='/js/assemblers/assemblers-table-tools.js') }}" defer></script>
 {% if page_script %}
-<script src="{{ url_for('static', path=page_script) }}?v=main-filters-11" defer></script>
+<script src="{{ url_for('static', path=page_script) }}?v=main-filters-18" defer></script>
 {% endif %}
 {% endblock %}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from app.modules.assemblers.db.connection import get_db_connection
+from app.modules.assemblers.services.activity_log import record_activity_event
 
 from .constants import (
     ACTIVE_STATUS,
@@ -11,6 +12,7 @@ from .constants import (
     DATA_PRODUCTION_TABLE,
     DETAILS_TABLE_NAME,
     MAIN_TABLE_NAME,
+    RECLAMATION_STATUS,
 )
 from .recalc import enqueue_detail_metrics_recalculation
 from .schema import ensure_schema
@@ -41,15 +43,16 @@ def backfill_active_distribution_status() -> int:
                     updated_at = NOW()
                 WHERE TRIM(COALESCE(status, '')) <> %s
                   AND TRIM(COALESCE(status, '')) <> %s
+                  AND TRIM(COALESCE(status, '')) <> %s
                 """,
-                (ACTIVE_STATUS, CLOSED_STATUS, ACTIVE_STATUS),
+                (ACTIVE_STATUS, CLOSED_STATUS, RECLAMATION_STATUS, ACTIVE_STATUS),
             )
             updated_rows = cursor.rowcount
         conn.commit()
     return updated_rows
 
 
-def transfer_buffer_orders(order_numbers: list[str]) -> dict:
+def transfer_buffer_orders(order_numbers: list[str], actor: dict | None = None) -> dict:
     ensure_schema()
     normalized_orders = [_safe_text(value) for value in order_numbers if _safe_text(value)]
     if not normalized_orders:
@@ -145,7 +148,7 @@ def transfer_buffer_orders(order_numbers: list[str]) -> dict:
                         customer = EXCLUDED.customer,
                         order_type = EXCLUDED.order_type,
                         status = CASE
-                            WHEN TRIM(COALESCE({MAIN_TABLE_NAME}.status, '')) = %s THEN {MAIN_TABLE_NAME}.status
+                            WHEN TRIM(COALESCE({MAIN_TABLE_NAME}.status, '')) IN %s THEN {MAIN_TABLE_NAME}.status
                             ELSE EXCLUDED.status
                         END,
                         signed_at = EXCLUDED.signed_at,
@@ -165,7 +168,7 @@ def transfer_buffer_orders(order_numbers: list[str]) -> dict:
                         _safe_text(first_row.get("manager_name")),
                         _safe_text(first_row.get("constructor_name")),
                         contract_due_at,
-                        CLOSED_STATUS,
+                        (CLOSED_STATUS, RECLAMATION_STATUS),
                     ),
                 )
                 inserted_orders += 1
@@ -222,6 +225,24 @@ def transfer_buffer_orders(order_numbers: list[str]) -> dict:
 
     enqueue_detail_metrics_recalculation(normalized_orders, source="transfer_buffer_orders")
 
+    record_activity_event(
+        action_key="buffer.transfer",
+        action_label="Перенесено з буфера",
+        description=f"Перенесено {inserted_orders} замовлень і {inserted_details} деталей з буфера в головну",
+        actor=actor,
+        entity_type="main_order_batch",
+        entity_id=", ".join(normalized_orders[:10]),
+        order_number=", ".join(normalized_orders[:10]),
+        subdivision="",
+        source_table=MAIN_TABLE_NAME,
+        source_op="INSERT",
+        details={
+            "inserted_orders": inserted_orders,
+            "inserted_details": inserted_details,
+            "orders": normalized_orders[:25],
+        },
+    )
+
     return {"inserted_orders": inserted_orders, "inserted_details": inserted_details}
 
 
@@ -256,9 +277,9 @@ def close_buffer_orders(
                 SELECT order_number
                 FROM {MAIN_TABLE_NAME}
                 WHERE order_number = ANY(%s)
-                  AND TRIM(COALESCE(status, '')) = %s
+                  AND TRIM(COALESCE(status, '')) IN %s
                 """,
-                (normalized_orders, CLOSED_STATUS),
+                (normalized_orders, (CLOSED_STATUS, RECLAMATION_STATUS)),
             )
             already_closed = {_safe_text(row[0]) for row in cursor.fetchall() if _safe_text(row[0])}
 
@@ -284,7 +305,7 @@ def close_buffer_orders(
             "closed_orders": 0,
         }
 
-    transfer_result = transfer_buffer_orders(orders_to_close)
+    transfer_result = transfer_buffer_orders(orders_to_close, actor=user)
     closer_name = _safe_text((user or {}).get("name")) or "Корисувач"
     closer_role = _safe_text((user or {}).get("role")) or "-"
     closer_telegram_id = (user or {}).get("telegram_id")
@@ -301,7 +322,7 @@ def close_buffer_orders(
                     closed_by_telegram_id = %s,
                     updated_at = NOW()
                 WHERE order_number = ANY(%s)
-                  AND TRIM(COALESCE(status, '')) <> %s
+                  AND TRIM(COALESCE(status, '')) NOT IN %s
                 """,
                 (
                     CLOSED_STATUS,
@@ -309,13 +330,31 @@ def close_buffer_orders(
                     closer_role,
                     closer_telegram_id,
                     orders_to_close,
-                    CLOSED_STATUS,
+                    (CLOSED_STATUS, RECLAMATION_STATUS),
                 ),
             )
             closed_orders = cursor.rowcount
         conn.commit()
 
     enqueue_detail_metrics_recalculation(orders_to_close, source="close_buffer_orders")
+
+    record_activity_event(
+        action_key="buffer.close",
+        action_label="Закрито замовлення",
+        description=f"Закрито {closed_orders} замовлень з буфера",
+        actor=user,
+        entity_type="main_order_batch",
+        entity_id=", ".join(orders_to_close[:10]),
+        order_number=", ".join(orders_to_close[:10]),
+        subdivision="",
+        source_table=MAIN_TABLE_NAME,
+        source_op="UPDATE",
+        details={
+            "requested_orders": len(normalized_orders),
+            "closed_orders": closed_orders,
+            "orders_to_close": orders_to_close[:25],
+        },
+    )
 
     return {
         "requested_orders": len(normalized_orders),
@@ -344,13 +383,30 @@ def reopen_closed_orders(order_numbers: list[str], user: dict | None) -> dict:
                     closed_by_telegram_id = NULL,
                     updated_at = NOW()
                 WHERE order_number = ANY(%s)
-                  AND TRIM(COALESCE(status, '')) = %s
+                  AND TRIM(COALESCE(status, '')) IN %s
                 """,
-                (ACTIVE_STATUS, normalized_orders, CLOSED_STATUS),
+                (ACTIVE_STATUS, normalized_orders, (CLOSED_STATUS, RECLAMATION_STATUS)),
             )
             reopened_orders = cursor.rowcount
         conn.commit()
 
     enqueue_detail_metrics_recalculation(normalized_orders, source="reopen_closed_orders")
+
+    record_activity_event(
+        action_key="buffer.reopen",
+        action_label="Повернено замовлення в активні",
+        description=f"Повернено {reopened_orders} замовлень з закритих в активні",
+        actor=user,
+        entity_type="main_order_batch",
+        entity_id=", ".join(normalized_orders[:10]),
+        order_number=", ".join(normalized_orders[:10]),
+        subdivision="",
+        source_table=MAIN_TABLE_NAME,
+        source_op="UPDATE",
+        details={
+            "reopened_orders": reopened_orders,
+            "orders": normalized_orders[:25],
+        },
+    )
 
     return {"reopened_orders": reopened_orders}
