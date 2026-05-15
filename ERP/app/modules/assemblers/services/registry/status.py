@@ -9,6 +9,7 @@ from .constants import (
     INSTALL_TASK_TYPE,
     TASK_STATUS_COMPLETED,
     TASK_STATUS_IN_PROGRESS,
+    TASK_STATUS_NO_EXECUTION,
     TASK_STATUS_PAUSED,
     TASK_STATUS_QUEUED,
 )
@@ -196,77 +197,106 @@ def _derive_order_status(
         if all_assembly_completed and all_install_completed:
             return TASK_STATUS_COMPLETED
 
-    if any(
-        _safe_text(task.get("status")).casefold() == TASK_STATUS_PAUSED.casefold()
-        for task in schedule_tasks
-    ):
-        return TASK_STATUS_PAUSED
-
     today = date.today()
-    has_future_assembly_tasks = False
-    has_future_install_tasks = False
     has_today_assembly = False
     has_today_install = False
+    nearest_future_date = None
+    nearest_future_type = ""
+
+    active_task_statuses = {
+        TASK_STATUS_QUEUED.casefold(),
+        TASK_STATUS_IN_PROGRESS.casefold(),
+    }
+    closed_task_statuses = {
+        TASK_STATUS_COMPLETED.casefold(),
+        TASK_STATUS_PAUSED.casefold(),
+        TASK_STATUS_NO_EXECUTION.casefold(),
+    }
+
+    has_schedule_history = False
 
     for task in schedule_tasks:
         task_type = _safe_text(task.get("task_type")).casefold()
         if task_type not in {ASSEMBLY_TASK_TYPE, INSTALL_TASK_TYPE}:
             continue
+        has_schedule_history = True
 
         scheduled_for = task.get("scheduled_for")
         task_status = _safe_text(task.get("status")).casefold()
         if not isinstance(scheduled_for, date) or scheduled_for < today:
             continue
 
-        # Only consider active tasks (not completed)
-        is_active = task_status != TASK_STATUS_COMPLETED.casefold()
-        if not is_active:
+        is_closed_status = task_status in closed_task_statuses
+        is_active_status = task_status in active_task_statuses or (task_status and not is_closed_status)
+
+        if not is_active_status:
             continue
 
-        is_today = scheduled_for == today
-        is_future = scheduled_for > today
-        is_queued = task_status == "у черзі"
-
-        if task_type == ASSEMBLY_TASK_TYPE:
-            if is_today:
-                has_today_assembly = True
-            elif is_future and is_queued:
-                has_future_assembly_tasks = True
-        elif task_type == INSTALL_TASK_TYPE:
-            if is_today:
+        if scheduled_for == today:
+            if task_type == INSTALL_TASK_TYPE:
                 has_today_install = True
-            elif is_future and is_queued:
-                has_future_install_tasks = True
+            elif task_type == ASSEMBLY_TASK_TYPE:
+                has_today_assembly = True
+            continue
 
-    # Also check planned dates in details if no schedule tasks found
-    if not has_future_assembly_tasks and not has_today_assembly and details:
+        if nearest_future_date is None or scheduled_for < nearest_future_date:
+            nearest_future_date = scheduled_for
+            nearest_future_type = task_type
+            continue
+
+        # On the same nearest day, монтаж has priority over збірка.
+        if (
+            nearest_future_date is not None
+            and scheduled_for == nearest_future_date
+            and nearest_future_type != INSTALL_TASK_TYPE
+            and task_type == INSTALL_TASK_TYPE
+        ):
+            nearest_future_type = INSTALL_TASK_TYPE
+
+    # Fallback to planned detail dates only when there are no active schedule tasks for today/future.
+    if not has_today_assembly and not has_today_install and nearest_future_date is None and details:
         for detail in details:
             if detail.get("requires_assembly"):
                 planned_assembly = detail.get("planned_assembly_due_at")
-                if isinstance(planned_assembly, date):
+                if isinstance(planned_assembly, date) and planned_assembly >= today:
                     if planned_assembly == today:
                         has_today_assembly = True
-                    elif planned_assembly > today:
-                        has_future_assembly_tasks = True
+                    elif nearest_future_date is None or planned_assembly < nearest_future_date:
+                        nearest_future_date = planned_assembly
+                        nearest_future_type = ASSEMBLY_TASK_TYPE
 
-    if not has_future_install_tasks and not has_today_install and details:
-        for detail in details:
             if detail.get("requires_install"):
                 planned_install = detail.get("planned_install_due_at")
-                if isinstance(planned_install, date):
+                if isinstance(planned_install, date) and planned_install >= today:
                     if planned_install == today:
                         has_today_install = True
-                    elif planned_install > today:
-                        has_future_install_tasks = True
+                    elif nearest_future_date is None or planned_install < nearest_future_date:
+                        nearest_future_date = planned_install
+                        nearest_future_type = INSTALL_TASK_TYPE
+                    elif (
+                        nearest_future_date is not None
+                        and planned_install == nearest_future_date
+                        and nearest_future_type != INSTALL_TASK_TYPE
+                    ):
+                        nearest_future_type = INSTALL_TASK_TYPE
 
     if has_today_install:
         return "Монтаж"
     if has_today_assembly:
         return "Збірка"
-    if has_future_install_tasks:
+    if nearest_future_type == INSTALL_TASK_TYPE:
         return "Заплановано монтаж"
-    if has_future_assembly_tasks:
+    if nearest_future_type == ASSEMBLY_TASK_TYPE:
         return "Запланована збірка"
-    if not has_assignment:
+
+    has_detail_history = any(
+        _normalize_datetime(detail.get("assembly_started_at"))
+        or _normalize_datetime(detail.get("assembly_completed_at"))
+        or _normalize_datetime(detail.get("install_started_at"))
+        or _normalize_datetime(detail.get("install_completed_at"))
+        for detail in details
+    )
+
+    if not has_assignment and not has_schedule_history and not has_detail_history:
         return ACTIVE_STATUS
     return "Простой"

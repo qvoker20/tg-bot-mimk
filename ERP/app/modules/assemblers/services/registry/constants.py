@@ -17,6 +17,7 @@ TASK_STATUS_QUEUED = "У черзі"
 TASK_STATUS_IN_PROGRESS = "В роботі"
 TASK_STATUS_PAUSED = "Пауза"
 TASK_STATUS_COMPLETED = "Завершено"
+TASK_STATUS_NO_EXECUTION = "Без виконання"
 
 DESIGNER_SHOP_COLUMNS: dict[str, str] = {
     "paint_shop": "column_14",
