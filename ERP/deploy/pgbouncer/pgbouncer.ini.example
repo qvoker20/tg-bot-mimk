@@ -1,0 +1,12 @@
+[databases]
+# Pooler connection to the real PostgreSQL
+your_db_name = host=127.0.0.1 port=5432 dbname=your_db_name
+
+[pgbouncer]
+listen_port = 6432
+listen_addr = 127.0.0.1
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 20

@@ -27,7 +27,6 @@ try:
     from .modules.assemblers.db.async_connection import dispose_async_engines
     from .modules.assemblers.services.activity_log import record_activity_event
     from .modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
-    from .modules.assemblers.services.schedule.worker import run_schedule_daily_cutoff_worker
     from .modules.router import router as modules_router
     from .modules.router import set_templates
     from .security import apply_security_middleware
@@ -50,7 +49,6 @@ except ImportError:
     from app.modules.assemblers.db.async_connection import dispose_async_engines
     from app.modules.assemblers.services.activity_log import record_activity_event
     from app.modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
-    from app.modules.assemblers.services.schedule.worker import run_schedule_daily_cutoff_worker
     from app.modules.router import router as modules_router
     from app.modules.router import set_templates
     from app.security import apply_security_middleware
@@ -67,16 +65,12 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         run_detail_metrics_recalc_worker(stop_event),
         name="detail-metrics-recalc-worker",
     )
-    schedule_cutoff_worker_task = asyncio.create_task(
-        run_schedule_daily_cutoff_worker(stop_event),
-        name="schedule-daily-cutoff-worker",
-    )
 
     yield  # server is running
 
     # --- shutdown ---
     stop_event.set()
-    for worker_task in (recalc_worker_task, schedule_cutoff_worker_task):
+    for worker_task in (recalc_worker_task,):
         try:
             await worker_task
         except Exception:

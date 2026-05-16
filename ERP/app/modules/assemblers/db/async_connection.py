@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import PG_CONN
 
@@ -14,6 +15,7 @@ _BUFFER_DB_ENV_BY_ALIAS = {
 }
 
 _ENGINE_CACHE: dict[str, AsyncEngine] = {}
+USE_PGBOUNCER = (os.getenv("USE_PGBOUNCER", "0") == "1")
 
 
 def _build_default_async_db_url() -> str | None:
@@ -55,12 +57,17 @@ def get_async_engine(alias: str = "main") -> AsyncEngine:
     if not resolved_url:
         raise RuntimeError("Async database URL is not configured for buffer sources.")
 
-    engine = create_async_engine(
-        resolved_url,
-        pool_pre_ping=True,
-        pool_recycle=1800,
-        future=True,
-    )
+    engine_kwargs = {
+        "future": True,
+    }
+    if USE_PGBOUNCER:
+        # PgBouncer is the pool manager; disable SQLAlchemy internal pooling.
+        engine_kwargs["poolclass"] = NullPool
+    else:
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_recycle"] = 1800
+
+    engine = create_async_engine(resolved_url, **engine_kwargs)
     _ENGINE_CACHE[normalized_alias] = engine
     return engine
 

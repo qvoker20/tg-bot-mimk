@@ -1,0 +1,16 @@
+[Unit]
+Description=FastAPI Production Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/full/path/to/project/ERP
+Environment="PATH=/full/path/to/project/.venv/bin"
+EnvironmentFile=/full/path/to/project/.env
+# Workers formula: (CPU cores * 2) + 1
+ExecStart=/full/path/to/project/.venv/bin/gunicorn app.main:app -w 5 -k uvicorn.workers.UvicornWorker --bind 127.0.0.1:8000 --max-requests 1000 --max-requests-jitter 50
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
