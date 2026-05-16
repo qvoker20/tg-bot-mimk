@@ -1,0 +1,34 @@
+groups:
+  - name: erp_api_alerts
+    rules:
+      - alert: ApiTargetDown
+        expr: up{job="erp_api_health"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ERP API target is down"
+
+      - alert: NodeExporterDown
+        expr: up{job="node_exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node exporter is unavailable"
+
+      - alert: PostgresExporterDown
+        expr: up{job="postgres_exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres exporter is unavailable"
+
+      - alert: PgBouncerExporterDown
+        expr: up{job="pgbouncer_exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PgBouncer exporter is unavailable"

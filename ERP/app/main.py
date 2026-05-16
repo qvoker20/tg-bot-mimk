@@ -8,6 +8,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -24,6 +25,7 @@ try:
         TEMPLATES_DIR,
     )
     from .db import close_connection_pool, initialize_connection_pool
+    from .db import get_db_connection, return_db_connection
     from .modules.assemblers.db.async_connection import dispose_async_engines
     from .modules.assemblers.services.activity_log import record_activity_event
     from .modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
@@ -46,6 +48,7 @@ except ImportError:
         TEMPLATES_DIR,
     )
     from app.db import close_connection_pool, initialize_connection_pool
+    from app.db import get_db_connection, return_db_connection
     from app.modules.assemblers.db.async_connection import dispose_async_engines
     from app.modules.assemblers.services.activity_log import record_activity_event
     from app.modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
@@ -99,6 +102,30 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 set_templates(templates)
+
+
+def _probe_db_connection() -> bool:
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            row = cursor.fetchone()
+            return bool(row and row[0] == 1)
+    finally:
+        return_db_connection(conn)
+
+
+@app.get("/healthz")
+async def healthz():
+    db_ok = await run_in_threadpool(_probe_db_connection)
+    payload = {
+        "ok": bool(db_ok),
+        "service": "erp-api",
+        "db": "ok" if db_ok else "down",
+    }
+    if not db_ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.middleware("http")

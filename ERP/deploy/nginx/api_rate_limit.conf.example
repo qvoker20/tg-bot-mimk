@@ -1,0 +1,23 @@
+# Define in http {} block
+limit_req_zone $binary_remote_addr zone=api_limit_per_ip:10m rate=20r/s;
+limit_conn_zone $binary_remote_addr zone=api_conn_per_ip:10m;
+
+server {
+    listen 80;
+    server_name your.domain;
+
+    client_header_buffer_size 16k;
+    large_client_header_buffers 4 32k;
+    keepalive_timeout 65;
+
+    location / {
+        limit_req zone=api_limit_per_ip burst=40 nodelay;
+        limit_conn api_conn_per_ip 60;
+
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

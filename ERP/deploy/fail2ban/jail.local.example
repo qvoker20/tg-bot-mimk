@@ -1,0 +1,16 @@
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 10
+
+[nginx-http-auth]
+enabled = true
+
+[nginx-erp-4xx]
+enabled = true
+port = http,https
+filter = nginx-erp-4xx
+logpath = /var/log/nginx/access.log
+maxretry = 50
+findtime = 5m
+bantime = 30m

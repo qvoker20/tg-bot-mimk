@@ -11,11 +11,27 @@
 - `ERP/app/modules/assemblers/db/async_connection.py`
   - Додано режим `USE_PGBOUNCER=1` для вимкнення внутрішнього SQLAlchemy pooling (`NullPool`).
 - `ERP/requirements.txt`
-  - Додано `gunicorn`.
+  - Додано `gunicorn`, `redis`, `rq`.
+- `ERP/app/main.py`
+  - Додано `/healthz` з DB probe (`503`, якщо БД недоступна).
+- `ERP/worker_rq.py`, `ERP/app/tasks/*`
+  - Додано базовий каркас для винесення heavy jobs у RQ/Redis.
 - `ERP/deploy/systemd/api_app.service.example`
   - Додано приклад systemd-сервісу.
 - `ERP/deploy/pgbouncer/pgbouncer.ini.example`
   - Додано приклад конфігу PgBouncer.
+- `ERP/deploy/nginx/api_rate_limit.conf.example`
+  - Додано приклад nginx rate-limit/connection-limit.
+- `ERP/deploy/fail2ban/*`
+  - Додано jail + filter для блокування хвиль 4xx/429.
+- `ERP/deploy/firewall/ufw_setup.sh`
+  - Додано базовий скрипт UFW.
+- `ERP/deploy/logrotate/erp-api.conf`
+  - Додано logrotate для cron/gunicorn/nginx.
+- `ERP/deploy/backup/postgres_backup.sh`, `ERP/deploy/backup/postgres_restore.sh`
+  - Додано backup/restore скрипти PostgreSQL.
+- `ERP/deploy/monitoring/prometheus.yml`, `ERP/deploy/monitoring/alert_rules.yml`
+  - Додано стартовий конфіг Prometheus + алерти.
 
 ---
 
@@ -140,6 +156,94 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+### 2.7. Увімкнути rate limit на Nginx
+
+```bash
+sudo cp /full/path/to/project/ERP/deploy/nginx/api_rate_limit.conf.example /etc/nginx/sites-available/your_site
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 2.8. Увімкнути Fail2ban
+
+```bash
+sudo apt install -y fail2ban
+sudo cp /full/path/to/project/ERP/deploy/fail2ban/jail.local.example /etc/fail2ban/jail.local
+sudo mkdir -p /etc/fail2ban/filter.d
+sudo cp /full/path/to/project/ERP/deploy/fail2ban/filter.d/nginx-erp-4xx.conf /etc/fail2ban/filter.d/nginx-erp-4xx.conf
+sudo systemctl restart fail2ban
+sudo systemctl enable fail2ban
+sudo fail2ban-client status
+```
+
+### 2.9. Увімкнути firewall (UFW)
+
+```bash
+sudo bash /full/path/to/project/ERP/deploy/firewall/ufw_setup.sh
+```
+
+### 2.10. Увімкнути logrotate
+
+```bash
+sudo cp /full/path/to/project/ERP/deploy/logrotate/erp-api.conf /etc/logrotate.d/erp-api
+sudo logrotate -d /etc/logrotate.d/erp-api
+```
+
+### 2.11. Налаштувати backup PostgreSQL
+
+Тест ручного backup:
+
+```bash
+chmod +x /full/path/to/project/ERP/deploy/backup/postgres_backup.sh
+DB_NAME=your_db DB_USER=your_user DB_HOST=127.0.0.1 DB_PORT=5432 /full/path/to/project/ERP/deploy/backup/postgres_backup.sh
+```
+
+Щоденний backup (02:30):
+
+```cron
+30 2 * * * DB_NAME=your_db DB_USER=your_user DB_HOST=127.0.0.1 DB_PORT=5432 /full/path/to/project/ERP/deploy/backup/postgres_backup.sh >> /var/log/postgres_backup.log 2>&1
+```
+
+### 2.12. Увімкнути worker для heavy jobs (RQ)
+
+Додати Redis:
+
+```bash
+sudo apt install -y redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+```
+
+Приклад systemd для RQ worker (`/etc/systemd/system/erp-rq-worker.service`):
+
+```ini
+[Unit]
+Description=ERP RQ Worker
+After=network.target redis-server.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/full/path/to/project/ERP
+Environment="PATH=/full/path/to/project/.venv/bin"
+EnvironmentFile=/full/path/to/project/.env
+ExecStart=/full/path/to/project/.venv/bin/python /full/path/to/project/ERP/worker_rq.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Запуск:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable erp-rq-worker
+sudo systemctl start erp-rq-worker
+sudo systemctl status erp-rq-worker
+```
+
 ---
 
 ## 3. Що ще додати для стабільного масштабування
@@ -192,6 +296,12 @@ nginx -t
 
 # 5) Cron скрипт відпрацьовує вручну
 /full/path/to/project/.venv/bin/python /full/path/to/project/ERP/run_cutoff.py
+
+# 6) Healthcheck readiness (повинен повертати 200)
+curl -i http://127.0.0.1:8000/healthz
+
+# 7) RQ worker живий
+systemctl is-active erp-rq-worker
 ```
 
 Якщо всі 5 пунктів успішні, базова production-конфігурація готова.
