@@ -32,6 +32,8 @@
   - Додано backup/restore скрипти PostgreSQL.
 - `ERP/deploy/monitoring/prometheus.yml`, `ERP/deploy/monitoring/alert_rules.yml`
   - Додано стартовий конфіг Prometheus + алерти.
+- `ERP/deploy/monitoring/blackbox.yml`
+  - Додано модуль blackbox probe для перевірки `/healthz`.
 
 ---
 
@@ -243,6 +245,19 @@ sudo systemctl enable erp-rq-worker
 sudo systemctl start erp-rq-worker
 sudo systemctl status erp-rq-worker
 ```
+
+### 2.13. Увімкнути Prometheus + blackbox probe
+
+Встановити blackbox exporter (можна через docker/systemd), потім:
+
+```bash
+# Приклад: скопіювати конфіги
+cp /full/path/to/project/ERP/deploy/monitoring/prometheus.yml /etc/prometheus/prometheus.yml
+cp /full/path/to/project/ERP/deploy/monitoring/alert_rules.yml /etc/prometheus/alert_rules.yml
+cp /full/path/to/project/ERP/deploy/monitoring/blackbox.yml /etc/blackbox_exporter/config.yml
+```
+
+Перевірити, що blackbox exporter слухає `127.0.0.1:9115`.
 
 ---
 

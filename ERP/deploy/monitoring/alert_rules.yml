@@ -2,7 +2,7 @@ groups:
   - name: erp_api_alerts
     rules:
       - alert: ApiTargetDown
-        expr: up{job="erp_api_health"} == 0
+        expr: probe_success{job="blackbox_erp_api"} == 0
         for: 1m
         labels:
           severity: critical
