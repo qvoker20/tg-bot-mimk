@@ -74,10 +74,6 @@ body.has-global-loader {
     justify-items: center;
     gap: 14px;
     padding: 24px 28px;
-    border: 1px solid rgba(217, 225, 234, 0.92);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
     text-align: center;
 }
 
@@ -251,8 +247,7 @@ button {
 }
 
 button:hover {
-  background: #000;
-  color: white;
+  background: #cdcdcd;
 }
 
 .ghost-button {

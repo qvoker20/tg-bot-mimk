@@ -23,6 +23,7 @@ try:
         STATIC_DIR,
         TEMPLATES_DIR,
     )
+    from .db import close_connection_pool, initialize_connection_pool
     from .modules.assemblers.db.async_connection import dispose_async_engines
     from .modules.assemblers.services.activity_log import record_activity_event
     from .modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
@@ -45,6 +46,7 @@ except ImportError:
         STATIC_DIR,
         TEMPLATES_DIR,
     )
+    from app.db import close_connection_pool, initialize_connection_pool
     from app.modules.assemblers.db.async_connection import dispose_async_engines
     from app.modules.assemblers.services.activity_log import record_activity_event
     from app.modules.assemblers.services.registry.worker import run_detail_metrics_recalc_worker
@@ -57,6 +59,9 @@ except ImportError:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
     """Start background workers on startup; stop them cleanly on shutdown."""
+    # Initialize database connection pool on startup (production safety)
+    initialize_connection_pool(minconn=5, maxconn=20)
+
     stop_event = asyncio.Event()
     recalc_worker_task = asyncio.create_task(
         run_detail_metrics_recalc_worker(stop_event),
@@ -77,6 +82,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         except Exception:
             pass
     await dispose_async_engines()
+    close_connection_pool()  # Clean up synchronous DB pool
 
 
 app = FastAPI(title="MIMK ERP", lifespan=lifespan)

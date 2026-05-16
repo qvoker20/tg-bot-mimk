@@ -268,15 +268,6 @@
     background: #e0edff;
 }
 
-.assemblers-data-table .is-subcontract,
-.buffer-table .is-subcontract {
-    background: #fffbea;
-}
-
-.assemblers-data-table tbody tr:nth-child(even) .is-subcontract,
-.buffer-table tbody tr:nth-child(even) .is-subcontract {
-    background: #fff5cc;
-}
 
 .assemblers-data-table tbody tr:hover .is-subcontract,
 .buffer-table tbody tr:hover .is-subcontract {
@@ -376,6 +367,8 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 }
 
 /* Група "цехи/матеріали": індекси 24..39 */
+.assemblers-data-table [data-col-index="22"],
+.assemblers-data-table [data-col-index="23"],
 .assemblers-data-table [data-col-index="24"],
 .assemblers-data-table [data-col-index="25"],
 .assemblers-data-table [data-col-index="26"],
@@ -396,6 +389,8 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 }
 
 /* Більш контрастний хедер саме для цієї групи */
+.assemblers-data-table thead [data-col-index="22"],
+.assemblers-data-table thead [data-col-index="23"],
 .assemblers-data-table thead [data-col-index="24"],
 .assemblers-data-table thead [data-col-index="25"],
 .assemblers-data-table thead [data-col-index="26"],
@@ -414,12 +409,4 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 .assemblers-data-table thead [data-col-index="39"] {
   background: #ffe8bf;
   color: #7a4b00;
-}
-
-/* Візуальні межі групи */
-.assemblers-data-table [data-col-index="24"] {
-  box-shadow: inset 2px 0 0 #f5b041;
-}
-.assemblers-data-table [data-col-index="39"] {
-  box-shadow: inset -2px 0 0 #f5b041;
 }
