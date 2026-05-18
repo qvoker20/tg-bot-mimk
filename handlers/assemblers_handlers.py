@@ -29,17 +29,25 @@ def get_pg_connection():
 
 
 async def show_assemblers_menu(update: Update, context: CallbackContext):
+    text = (
+        "<b>Меню для збиральників</b>\n\n"
+        "Оберіть потрібний розділ:\n"
+        "• <b>Мій профіль</b> — переглянути свій код для входу\n"
+        "• <b>Додаток збиральника ERP</b> — відкрити робочий додаток після входу\n\n"
+        "Порада: якщо ви вже увійшли, просто натисніть кнопку нижче та відкрийте свій додаток."
+    )
     keyboard = [
         [InlineKeyboardButton("Мій профіль", callback_data="asm_my_profile")],
+        [InlineKeyboardButton("Додаток збиральника ERP", url="https://erp.mim-k.website/assemblers/app")],
         [InlineKeyboardButton("Назад", callback_data="asm_back")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.message:
-        sent_message = await update.message.reply_text("Меню для збиральників:", reply_markup=reply_markup)
+        sent_message = await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         context.user_data["assemblers_message_id"] = sent_message.message_id
     else:
-        await update.callback_query.edit_message_text("Меню для збиральників:", reply_markup=reply_markup)
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         if update.callback_query and update.callback_query.message:
             context.user_data["assemblers_message_id"] = update.callback_query.message.message_id
 
