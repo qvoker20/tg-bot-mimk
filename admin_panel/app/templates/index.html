@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Користувачі{% endblock %}
 
+{% block head %}
+<style>
+  .users-name-col {
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
+  }
+
+  .users-name-col .clip-text {
+    max-width: 280px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card shadow-sm">
   <div class="card-body">
@@ -37,14 +51,14 @@
       </div>
     </form>
 
-    <div class="table-wrap border">
+    <div class="table-wrap border" id="usersTableWrap">
       <table class="table table-hover align-middle">
         <thead>
           <tr>
             <th style="width: 180px;">
               <i class="bi bi-telegram me-1"></i>Telegram ID
             </th>
-            <th>
+            <th class="users-name-col">
               <i class="bi bi-person me-1"></i>Імʼя
             </th>
             <th style="width: 220px;">
@@ -64,7 +78,7 @@
               data-phone="{{ u[3]|e }}"
               {% if u[0] == admin_telegram_id %}data-self="1"{% endif %}>
             <td class="font-monospace">{{ u[0] }}</td>
-            <td>{{ u[1] }}</td>
+            <td class="users-name-col"><span class="clip-text" title="{{ u[1]|e }}">{{ u[1] }}</span></td>
             <td><span class="badge bg-primary">{{ u[2] }}</span></td>
             <td>{{ u[3] }}</td>
           </tr>
@@ -72,6 +86,7 @@
         </tbody>
       </table>
     </div>
+    <div id="usersScrollLoader" class="text-center py-3 text-muted d-none">Завантаження...</div>
 
   </div>
 </div>
@@ -169,6 +184,10 @@
 
 {% block scripts %}
 <script>
+  const usersTableWrap = document.getElementById('usersTableWrap');
+  const usersScrollLoader = document.getElementById('usersScrollLoader');
+  const usersTbody = document.getElementById('usersTbody');
+
   const userModalEl = document.getElementById('userModal');
   const userModal = new bootstrap.Modal(userModalEl);
 
@@ -178,7 +197,86 @@
   const mRole = document.getElementById('mRole');
   const mPhone = document.getElementById('mPhone');
 
-  document.getElementById('usersTbody').addEventListener('click', (e) => {
+  const searchNameValue = document.querySelector('input[name="search_name"]')?.value || '';
+  const searchRoleValue = document.querySelector('select[name="search_role"]')?.value || '';
+  const searchIdValue = document.querySelector('input[name="search_id"]')?.value || '';
+
+  let usersOffset = usersTbody.querySelectorAll('tr[data-id]').length;
+  let usersLoading = false;
+  let usersHasMore = {{ users_has_more|tojson }};
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function buildUserRow(item) {
+    const isSelf = item.is_self ? 'data-self="1"' : '';
+    return `
+      <tr class="row-click"
+          data-id="${escapeHtml(item.telegram_id)}"
+          data-name="${escapeHtml(item.name)}"
+          data-role="${escapeHtml(item.role)}"
+          data-phone="${escapeHtml(item.phone)}"
+          ${isSelf}>
+        <td class="font-monospace">${escapeHtml(item.telegram_id)}</td>
+        <td class="users-name-col"><span class="clip-text" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span></td>
+        <td><span class="badge bg-primary">${escapeHtml(item.role)}</span></td>
+        <td>${escapeHtml(item.phone)}</td>
+      </tr>
+    `;
+  }
+
+  async function loadMoreUsers() {
+    if (usersLoading || !usersHasMore) return;
+    usersLoading = true;
+    usersScrollLoader.classList.remove('d-none');
+
+    try {
+      const params = new URLSearchParams({
+        offset: String(usersOffset),
+        search_name: searchNameValue,
+        search_role: searchRoleValue,
+        search_id: searchIdValue,
+      });
+
+      const res = await fetch(`/users/chunk?${params.toString()}`);
+      if (!res.ok) throw new Error('failed');
+
+      const data = await res.json();
+      const items = data.items || [];
+      items.forEach((item) => usersTbody.insertAdjacentHTML('beforeend', buildUserRow(item)));
+      usersOffset += items.length;
+      usersHasMore = Boolean(data.has_more);
+    } catch (_) {
+      usersHasMore = false;
+    } finally {
+      usersLoading = false;
+      usersScrollLoader.classList.add('d-none');
+      setTimeout(maybeLoadMoreUsers, 0);
+    }
+  }
+
+  function isUsersNearBottomWindow() {
+    return window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
+  }
+
+  function isUsersNearBottomContainer() {
+    if (!usersTableWrap) return false;
+    return usersTableWrap.scrollTop + usersTableWrap.clientHeight >= usersTableWrap.scrollHeight - 120;
+  }
+
+  function maybeLoadMoreUsers() {
+    if (!usersHasMore || usersLoading) return;
+    if (isUsersNearBottomWindow() || isUsersNearBottomContainer()) {
+      loadMoreUsers();
+    }
+  }
+
+  usersTbody.addEventListener('click', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
     if (tr.dataset.self === "1") {
@@ -206,5 +304,12 @@
 
     userModal.show();
   });
+
+  window.addEventListener('scroll', maybeLoadMoreUsers, { passive: true });
+  window.addEventListener('resize', maybeLoadMoreUsers);
+  if (usersTableWrap) {
+    usersTableWrap.addEventListener('scroll', maybeLoadMoreUsers, { passive: true });
+  }
+  setTimeout(maybeLoadMoreUsers, 0);
 </script>
 {% endblock %}

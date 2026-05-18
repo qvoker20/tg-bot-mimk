@@ -42,6 +42,8 @@ PASS_STATUS_LABELS = {
     "cancelled": "скасовано",
 }
 
+CHUNK_LIMIT = 20
+
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -532,7 +534,8 @@ def index():
         query += " AND username = %s"
         params.append(search_role)
 
-    query += " ORDER BY name NULLS LAST"
+    query += " ORDER BY name NULLS LAST LIMIT %s OFFSET %s"
+    params.extend([CHUNK_LIMIT, 0])
 
     cur.execute(query, params)
     users = cur.fetchall()
@@ -545,12 +548,73 @@ def index():
     return render_template(
         "index.html",
         users=users,
+        users_has_more=len(users) == CHUNK_LIMIT,
         search_name=search_name,
         search_id=search_id,
         search_role=search_role,
         roles=roles,
         admin_telegram_id=admin_telegram_id
     )
+
+
+@app.route("/users/chunk")
+def users_chunk():
+    if not is_logged_in() or not is_super_admin():
+        return jsonify({"items": [], "has_more": False}), 403
+
+    search_name = request.args.get("search_name", "").strip()
+    search_id = request.args.get("search_id", "").strip()
+    search_role = request.args.get("search_role", "").strip()
+    offset_raw = request.args.get("offset", "0").strip()
+    try:
+        offset = max(0, int(offset_raw))
+    except Exception:
+        offset = 0
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        query = """
+            SELECT telegram_id, name, username, phone_number
+            FROM database_app_userdatatelegram
+            WHERE 1=1
+        """
+        params: list[str | int] = []
+
+        if search_name:
+            query += " AND name ILIKE %s"
+            params.append(f"%{search_name}%")
+
+        if search_id:
+            query += " AND CAST(telegram_id AS TEXT) ILIKE %s"
+            params.append(f"%{search_id}%")
+
+        if search_role:
+            query += " AND username = %s"
+            params.append(search_role)
+
+        query += " ORDER BY name NULLS LAST LIMIT %s OFFSET %s"
+        params.extend([CHUNK_LIMIT, offset])
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    admin_telegram_id = session.get("admin_telegram_id")
+    items = [
+        {
+            "telegram_id": row[0],
+            "name": row[1] or "",
+            "role": row[2] or "",
+            "phone": row[3] or "",
+            "is_self": bool(admin_telegram_id is not None and int(row[0]) == int(admin_telegram_id)),
+        }
+        for row in rows
+    ]
+
+    return jsonify({"items": items, "has_more": len(items) == CHUNK_LIMIT})
 
 
 @app.route("/user_action", methods=["POST"])
@@ -646,7 +710,8 @@ def registration_requests():
         FROM registration_requests
         WHERE status = 'pending'
         ORDER BY date_submitted
-    """)
+        LIMIT %s OFFSET %s
+    """, (CHUNK_LIMIT, 0))
 
     requests_list = cur.fetchall()
     cur.close()
@@ -665,8 +730,55 @@ def registration_requests():
     return render_template(
         "registration_requests.html",
         requests_list=requests_list,
-        roles=roles
+        roles=roles,
+        count=get_pending_requests_count(),
+        requests_has_more=len(requests_list) == CHUNK_LIMIT,
     )
+
+
+@app.route("/registration_requests/chunk")
+def registration_requests_chunk():
+    if not is_logged_in() or not is_super_admin():
+        return jsonify({"items": [], "has_more": False}), 403
+
+    offset_raw = request.args.get("offset", "0").strip()
+    try:
+        offset = max(0, int(offset_raw))
+    except Exception:
+        offset = 0
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT id, telegram_id, first_name, last_name,
+                   position, phone_number, date_submitted
+            FROM registration_requests
+            WHERE status = 'pending'
+            ORDER BY date_submitted
+            LIMIT %s OFFSET %s
+            """,
+            (CHUNK_LIMIT, offset),
+        )
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    items = [
+        {
+            "id": row[0],
+            "telegram_id": row[1],
+            "first_name": row[2] or "",
+            "last_name": row[3] or "",
+            "position": row[4] or "",
+            "phone_number": row[5] or "",
+        }
+        for row in rows
+    ]
+
+    return jsonify({"items": items, "has_more": len(items) == CHUNK_LIMIT})
 
 @app.route("/process_registration", methods=["POST"])
 def process_registration():

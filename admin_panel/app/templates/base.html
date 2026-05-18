@@ -140,6 +140,11 @@
       font-size: .95rem;
     }
 
+    .table-wrap .table{
+      table-layout: fixed;
+      width: 100%;
+    }
+
     .table thead th{
       position: sticky;
       top: 0;
@@ -244,6 +249,10 @@
     @media (max-width: 575.98px){
       .table{
         font-size: .88rem;
+      }
+
+      .table-wrap .table{
+        table-layout: auto;
       }
 
       .table th,
