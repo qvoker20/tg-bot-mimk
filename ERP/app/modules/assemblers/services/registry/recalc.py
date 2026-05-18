@@ -11,6 +11,9 @@ from .constants import (
     DETAIL_RECALC_QUEUE_TABLE,
     DETAILS_TABLE_NAME,
     MAIN_TABLE_NAME,
+    TASK_STATUS_COMPLETED,
+    TASK_STATUS_IN_PROGRESS,
+    TASK_STATUS_QUEUED,
 )
 from .context import _build_schedule_execution_context, _build_metal_status, _part_matches_spec
 from .schema import ensure_schema
@@ -48,9 +51,11 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     assembly_worker,
                     assembly_started_at,
                     assembly_completed_at,
+                    assembly_status,
                     install_worker,
                     install_started_at,
                     install_completed_at,
+                    install_status,
                     item_value,
                     requires_assembly,
                     requires_install
@@ -129,39 +134,66 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
 
                 assembly_worker = _safe_text(schedule_info.get("assembly_worker"))
                 assembly_started_at = schedule_info.get("assembly_started_at")
-                assembly_completed_at = schedule_info.get("assembly_completed_at")
+                schedule_assembly_completed_at = schedule_info.get("assembly_completed_at")
                 assembly_status = _safe_text(schedule_info.get("assembly_status"))
                 install_worker = _safe_text(schedule_info.get("install_worker"))
                 install_started_at = schedule_info.get("install_started_at")
-                install_completed_at = schedule_info.get("install_completed_at")
+                schedule_install_completed_at = schedule_info.get("install_completed_at")
                 install_status = _safe_text(schedule_info.get("install_status"))
-                requires_assembly = bool(record[11])
-                requires_install = bool(record[12])
+                requires_assembly = bool(record[13])
+                requires_install = bool(record[14])
 
                 persisted_assembly_completed_at = record[6]
-                persisted_install_completed_at = record[9]
-                final_assembly_completed_at = assembly_completed_at or persisted_assembly_completed_at
-                final_install_completed_at = install_completed_at or persisted_install_completed_at
+                persisted_assembly_status = _safe_text(record[7])
+                persisted_install_completed_at = record[10]
+                persisted_install_status = _safe_text(record[11])
+
+                # Completed status is valid only with explicit detail completion timestamp.
+                if (
+                    persisted_assembly_completed_at is None
+                    and persisted_assembly_status.casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    persisted_assembly_status = ""
+                if (
+                    persisted_install_completed_at is None
+                    and persisted_install_status.casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    persisted_install_status = ""
+
+                if (
+                    schedule_assembly_completed_at is None
+                    and assembly_status.casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    assembly_status = TASK_STATUS_IN_PROGRESS if assembly_started_at else TASK_STATUS_QUEUED
+                if (
+                    schedule_install_completed_at is None
+                    and install_status.casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    install_status = TASK_STATUS_IN_PROGRESS if install_started_at else TASK_STATUS_QUEUED
+
+                # Only explicit detail completion should mark the detail as completed.
+                final_assembly_completed_at = persisted_assembly_completed_at
+                final_install_completed_at = persisted_install_completed_at
                 final_assembly_status = (
-                    assembly_status
-                    if assembly_completed_at is not None
-                    else assembly_status
+                    persisted_assembly_status
+                    if final_assembly_completed_at is not None
+                    else (assembly_status or persisted_assembly_status)
                 )
                 final_install_status = (
-                    install_status
-                    if install_completed_at is not None
-                    else install_status
+                    persisted_install_status
+                    if final_install_completed_at is not None
+                    else (install_status or persisted_install_status)
                 )
 
                 assembly_days_count, assembly_hours = _calculate_stage_metrics(
                     started_at=assembly_started_at,
-                    completed_at=assembly_completed_at,
+                    completed_at=final_assembly_completed_at,
                     fallback_days=int(schedule_info.get("assembly_days_count") or 0),
                     effective_minutes=int(schedule_info.get("assembly_effective_minutes") or 0),
                 )
                 install_days_count, install_hours = _calculate_stage_metrics(
                     started_at=install_started_at,
-                    completed_at=install_completed_at,
+                    completed_at=final_install_completed_at,
                     fallback_days=int(schedule_info.get("install_days_count") or 0),
                     effective_minutes=int(schedule_info.get("install_effective_minutes") or 0),
                 )
@@ -207,18 +239,14 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     (
                         assembly_worker,
                         assembly_started_at,
-                        assembly_completed_at,       # COALESCE — preserve manual early completion
-                        assembly_completed_at,       # CASE WHEN not null
-                        assembly_status,             # THEN schedule status
-                        assembly_status,             # ELSE schedule status
+                        final_assembly_completed_at,
+                        final_assembly_status,
                         assembly_days_count,
                         assembly_hours,
                         install_worker,
                         install_started_at,
-                        install_completed_at,        # COALESCE — preserve manual early completion
-                        install_completed_at,        # CASE WHEN not null
-                        install_status,              # THEN schedule status
-                        install_status,              # ELSE schedule status
+                        final_install_completed_at,
+                        final_install_status,
                         install_days_count,
                         install_hours,
                         planned_hours,
@@ -235,19 +263,13 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     assembly_worker = %s,
                     assembly_started_at = %s,
                     assembly_completed_at = COALESCE(%s, assembly_completed_at),
-                    assembly_status = CASE
-                        WHEN %s IS NOT NULL THEN %s
-                        ELSE %s
-                    END,
+                    assembly_status = %s,
                     assembly_days_count = %s,
                     assembly_hours = %s,
                     install_worker = %s,
                     install_started_at = %s,
                     install_completed_at = COALESCE(%s, install_completed_at),
-                    install_status = CASE
-                        WHEN %s IS NOT NULL THEN %s
-                        ELSE %s
-                    END,
+                    install_status = %s,
                     install_days_count = %s,
                     install_hours = %s,
                     planned_hours = %s,
