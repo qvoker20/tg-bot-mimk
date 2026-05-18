@@ -1084,6 +1084,7 @@ def update_main_order_card(
                 }
 
                 detail_updates = []
+                requested_stage_actions: dict[int, dict[str, bool]] = {}
                 for item in details:
                     if not isinstance(item, dict):
                         continue
@@ -1098,6 +1099,24 @@ def update_main_order_card(
                     complete_assembly_now = bool(item.get("complete_assembly_now"))
                     reset_install_completed = bool(item.get("reset_install_completed"))
                     complete_install_now = bool(item.get("complete_install_now"))
+                    if complete_assembly_now and reset_assembly_completed:
+                        raise ValueError("Некоректна дія для збірки: одночасно завершити і скасувати неможливо.")
+                    if complete_install_now and reset_install_completed:
+                        raise ValueError("Некоректна дія для монтажу: одночасно завершити і скасувати неможливо.")
+
+                    if (
+                        complete_assembly_now
+                        or reset_assembly_completed
+                        or complete_install_now
+                        or reset_install_completed
+                    ):
+                        requested_stage_actions[normalized_detail_id] = {
+                            "complete_assembly_now": complete_assembly_now,
+                            "reset_assembly_completed": reset_assembly_completed,
+                            "complete_install_now": complete_install_now,
+                            "reset_install_completed": reset_install_completed,
+                        }
+
                     requires_assembly = bool(item.get("requires_assembly", True))
                     requires_install = bool(item.get("requires_install", True))
                     planned_assembly_due_at = _pud(_safe_text(item.get("planned_assembly_due_at")))
@@ -1105,6 +1124,8 @@ def update_main_order_card(
 
                     current_detail = detail_state_by_id.get(normalized_detail_id)
                     if not current_detail:
+                        if normalized_detail_id in requested_stage_actions:
+                            raise ValueError("Вибраний виріб не знайдено або вже неактуальний. Оновіть сторінку.")
                         continue
 
                     if not requires_assembly and not requires_install:
@@ -1230,6 +1251,53 @@ def update_main_order_card(
                         """,
                         detail_updates,
                     )
+
+                if requested_stage_actions:
+                    action_detail_ids = list(requested_stage_actions.keys())
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            id,
+                            TRIM(COALESCE(assembly_status, '')),
+                            assembly_completed_at,
+                            TRIM(COALESCE(install_status, '')),
+                            install_completed_at
+                        FROM {DETAILS_TABLE_NAME}
+                        WHERE id = ANY(%s)
+                          AND TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(%s, ''))
+                        """,
+                        (action_detail_ids, normalized_order),
+                    )
+                    persisted_details = {
+                        int(row[0]): {
+                            "assembly_status": _safe_text(row[1]),
+                            "assembly_completed_at": row[2],
+                            "install_status": _safe_text(row[3]),
+                            "install_completed_at": row[4],
+                        }
+                        for row in cursor.fetchall()
+                    }
+
+                    for detail_id, action_state in requested_stage_actions.items():
+                        persisted = persisted_details.get(detail_id)
+                        if not persisted:
+                            raise ValueError("Сервер не підтвердив оновлення виробу. Оновіть сторінку і спробуйте ще раз.")
+
+                        assembly_completed_now = bool(persisted.get("assembly_completed_at")) or (
+                            _safe_text(persisted.get("assembly_status")).casefold() == TASK_STATUS_COMPLETED.casefold()
+                        )
+                        install_completed_now = bool(persisted.get("install_completed_at")) or (
+                            _safe_text(persisted.get("install_status")).casefold() == TASK_STATUS_COMPLETED.casefold()
+                        )
+
+                        if action_state.get("complete_assembly_now") and not assembly_completed_now:
+                            raise ValueError("Сервер не підтвердив завершення збірки. Оновіть сторінку і спробуйте ще раз.")
+                        if action_state.get("reset_assembly_completed") and assembly_completed_now:
+                            raise ValueError("Сервер не підтвердив скасування завершення збірки. Оновіть сторінку і спробуйте ще раз.")
+                        if action_state.get("complete_install_now") and not install_completed_now:
+                            raise ValueError("Сервер не підтвердив завершення монтажу. Оновіть сторінку і спробуйте ще раз.")
+                        if action_state.get("reset_install_completed") and install_completed_now:
+                            raise ValueError("Сервер не підтвердив скасування завершення монтажу. Оновіть сторінку і спробуйте ще раз.")
 
         detail_action_notes = []
         if isinstance(details, list):

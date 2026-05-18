@@ -152,7 +152,10 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
             or (current_status == TASK_STATUS_COMPLETED and auto_closed_at)
         ):
             raise ValueError("Завершити можна лише активну задачу")
-        if normalized_task_type in {"assembly", "install"} and normalized_selected_products:
+        if normalized_task_type in {"assembly", "install"} and not normalized_selected_products:
+            raise ValueError("Оберіть хоча б один виріб перед завершенням задачі")
+
+        if normalized_task_type in {"assembly", "install"}:
             detail_rows = fetch_detail_rows_for_product_match(order_number=task.get("order_number", ""))
             matched_detail_ids = []
             seen_detail_ids: set[int] = set()
@@ -163,12 +166,19 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
                 if any(_detail_row_matches_selected_product(detail_row, product) for product in normalized_selected_products):
                     seen_detail_ids.add(detail_id)
                     matched_detail_ids.append(detail_id)
-            mark_detail_rows_completed(
+
+            if not matched_detail_ids:
+                raise ValueError("Не вдалося знайти вибрані вироби в замовленні. Оновіть список задач і спробуйте ще раз.")
+
+            details_updated = mark_detail_rows_completed(
                 detail_ids=matched_detail_ids,
                 task_type=normalized_task_type,
                 assembler_name=task.get("assembler_name", ""),
                 started_at=row[12],
             )
+
+            if details_updated <= 0:
+                raise ValueError("Сервер не підтвердив завершення вибраних виробів. Спробуйте ще раз.")
         mark_task_completed(task_id=normalized_task_id, location=normalized_location)
         message = "Задачу завершено."
         record_activity_event(

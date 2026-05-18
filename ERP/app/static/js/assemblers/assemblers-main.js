@@ -492,6 +492,18 @@ document.addEventListener("DOMContentLoaded", () => {
         return payload;
     };
 
+    const requireUpdatedDetailFromPayload = (payload, detailId, actionLabel) => {
+        if (detailId == null) {
+            throw new Error(`Не визначено виріб для дії: ${actionLabel}.`);
+        }
+        const updatedDetail = (payload.order?.details || [])
+            .find((item) => Number(item?.detail_id) === Number(detailId));
+        if (!updatedDetail) {
+            throw new Error(`Сервер не повернув оновлений виріб після дії: ${actionLabel}. Оновіть сторінку і спробуйте ще раз.`);
+        }
+        return updatedDetail;
+    };
+
     const updateDateInputState = (input) => {
         if (!input) return;
         const hasValue = String(input.value || "").trim().length > 0;
@@ -2315,20 +2327,15 @@ const closeSubcontractsModal = () => {
         }
         try {
             const payload = await persistMainOrderChanges({ loadingMessage: "Оновлення статусу збірки...", closeAfterSave: false });
-            if (activeDetailId != null) {
-                const updatedDetail = (payload.order?.details || [])
-                    .find((item) => Number(item?.detail_id) === Number(activeDetailId));
-                if (updatedDetail) {
-                    const completedConfirmed = isStageCompleted(
-                        updatedDetail.assembly_status,
-                        updatedDetail.assembly_completed_at,
-                    );
-                    if (!completedConfirmed) {
-                        throw new Error("Сервер не підтвердив завершення збірки. Оновіть сторінку і спробуйте ще раз.");
-                    }
-                    openDetailStageModal(updatedDetail);
-                }
+            const updatedDetail = requireUpdatedDetailFromPayload(payload, activeDetailId, "завершення збірки");
+            const completedConfirmed = isStageCompleted(
+                updatedDetail.assembly_status,
+                updatedDetail.assembly_completed_at,
+            );
+            if (!completedConfirmed) {
+                throw new Error("Сервер не підтвердив завершення збірки. Оновіть сторінку і спробуйте ще раз.");
             }
+            openDetailStageModal(updatedDetail);
             showToast("Статус збірки оновлено.");
         } catch (error) {
             showToast(error.message || "Не вдалося оновити статус збірки.", "error");
@@ -2342,20 +2349,15 @@ const closeSubcontractsModal = () => {
         }
         try {
             const payload = await persistMainOrderChanges({ loadingMessage: "Скасування завершення збірки...", closeAfterSave: false });
-            if (activeDetailId != null) {
-                const updatedDetail = (payload.order?.details || [])
-                    .find((item) => Number(item?.detail_id) === Number(activeDetailId));
-                if (updatedDetail) {
-                    const resetConfirmed = !isStageCompleted(
-                        updatedDetail.assembly_status,
-                        updatedDetail.assembly_completed_at,
-                    );
-                    if (!resetConfirmed) {
-                        throw new Error("Сервер не підтвердив скасування завершення збірки. Оновіть сторінку і спробуйте ще раз.");
-                    }
-                    openDetailStageModal(updatedDetail);
-                }
+            const updatedDetail = requireUpdatedDetailFromPayload(payload, activeDetailId, "скасування завершення збірки");
+            const resetConfirmed = !isStageCompleted(
+                updatedDetail.assembly_status,
+                updatedDetail.assembly_completed_at,
+            );
+            if (!resetConfirmed) {
+                throw new Error("Сервер не підтвердив скасування завершення збірки. Оновіть сторінку і спробуйте ще раз.");
             }
+            openDetailStageModal(updatedDetail);
             showToast("Завершення збірки скасовано.");
         } catch (error) {
             showToast(error.message || "Не вдалося скасувати завершення збірки.", "error");
@@ -2369,20 +2371,15 @@ const closeSubcontractsModal = () => {
         }
         try {
             const payload = await persistMainOrderChanges({ loadingMessage: "Оновлення статусу монтажу...", closeAfterSave: false });
-            if (activeDetailId != null) {
-                const updatedDetail = (payload.order?.details || [])
-                    .find((item) => Number(item?.detail_id) === Number(activeDetailId));
-                if (updatedDetail) {
-                    const completedConfirmed = isStageCompleted(
-                        updatedDetail.install_status,
-                        updatedDetail.install_completed_at,
-                    );
-                    if (!completedConfirmed) {
-                        throw new Error("Сервер не підтвердив завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
-                    }
-                    openDetailStageModal(updatedDetail);
-                }
+            const updatedDetail = requireUpdatedDetailFromPayload(payload, activeDetailId, "завершення монтажу");
+            const completedConfirmed = isStageCompleted(
+                updatedDetail.install_status,
+                updatedDetail.install_completed_at,
+            );
+            if (!completedConfirmed) {
+                throw new Error("Сервер не підтвердив завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
             }
+            openDetailStageModal(updatedDetail);
             showToast("Статус монтажу оновлено.");
         } catch (error) {
             showToast(error.message || "Не вдалося оновити статус монтажу.", "error");
@@ -2396,20 +2393,15 @@ const closeSubcontractsModal = () => {
         }
         try {
             const payload = await persistMainOrderChanges({ loadingMessage: "Скасування завершення монтажу...", closeAfterSave: false });
-            if (activeDetailId != null) {
-                const updatedDetail = (payload.order?.details || [])
-                    .find((item) => Number(item?.detail_id) === Number(activeDetailId));
-                if (updatedDetail) {
-                    const resetConfirmed = !isStageCompleted(
-                        updatedDetail.install_status,
-                        updatedDetail.install_completed_at,
-                    );
-                    if (!resetConfirmed) {
-                        throw new Error("Сервер не підтвердив скасування завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
-                    }
-                    openDetailStageModal(updatedDetail);
-                }
+            const updatedDetail = requireUpdatedDetailFromPayload(payload, activeDetailId, "скасування завершення монтажу");
+            const resetConfirmed = !isStageCompleted(
+                updatedDetail.install_status,
+                updatedDetail.install_completed_at,
+            );
+            if (!resetConfirmed) {
+                throw new Error("Сервер не підтвердив скасування завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
             }
+            openDetailStageModal(updatedDetail);
             showToast("Завершення монтажу скасовано.");
         } catch (error) {
             showToast(error.message || "Не вдалося скасувати завершення монтажу.", "error");

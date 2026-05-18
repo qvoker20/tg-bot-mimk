@@ -754,6 +754,12 @@ document.addEventListener("DOMContentLoaded", () => {
         finishError.textContent = "";
         finishError.classList.add("hidden");
 
+        if (requiresFinishSelection(task) && !selectedProducts.length) {
+            finishError.textContent = "Оберіть хоча б один виріб перед завершенням задачі.";
+            finishError.classList.remove("hidden");
+            return;
+        }
+
         try {
             await submitTaskAction(task.id, "finish", { selected_products: selectedProducts });
             closeFinishModal();

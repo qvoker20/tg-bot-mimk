@@ -185,6 +185,18 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     else (install_status or persisted_install_status)
                 )
 
+                # Explicit detail completion timestamp is the only source of truth for completed stage.
+                if (
+                    final_assembly_completed_at is None
+                    and _safe_text(final_assembly_status).casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    final_assembly_status = TASK_STATUS_IN_PROGRESS if assembly_started_at else TASK_STATUS_QUEUED
+                if (
+                    final_install_completed_at is None
+                    and _safe_text(final_install_status).casefold() == TASK_STATUS_COMPLETED.casefold()
+                ):
+                    final_install_status = TASK_STATUS_IN_PROGRESS if install_started_at else TASK_STATUS_QUEUED
+
                 assembly_days_count, assembly_hours = _calculate_stage_metrics(
                     started_at=assembly_started_at,
                     completed_at=final_assembly_completed_at,
