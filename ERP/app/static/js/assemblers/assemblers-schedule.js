@@ -797,6 +797,9 @@ document.addEventListener("DOMContentLoaded", () => {
             closeModal();
             await loadWeekTasks();
             updateActionButtons();
+            if (Number(payload.created_count || 0) <= 0) {
+                throw new Error("Сервер не підтвердив створення задач. Оновіть сторінку та спробуйте ще раз.");
+            }
             meta.textContent = payload.message || "Задачі записано в базу.";
             showToast(payload.message || "Задачі записано в базу.");
         } catch (error) {

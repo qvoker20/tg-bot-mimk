@@ -1065,7 +1065,7 @@ def update_main_order_card(
                         planned_assembly_due_at,
                         planned_install_due_at
                     FROM {DETAILS_TABLE_NAME}
-                    WHERE order_number = %s
+                    WHERE TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(%s, ''))
                     """,
                     (normalized_order,),
                 )
@@ -1226,7 +1226,7 @@ def update_main_order_card(
                             END,
                             updated_at = NOW()
                         WHERE id = %s
-                          AND order_number = %s
+                          AND TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(%s, ''))
                         """,
                         detail_updates,
                     )

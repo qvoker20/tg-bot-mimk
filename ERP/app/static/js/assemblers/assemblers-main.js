@@ -2319,6 +2319,13 @@ const closeSubcontractsModal = () => {
                 const updatedDetail = (payload.order?.details || [])
                     .find((item) => Number(item?.detail_id) === Number(activeDetailId));
                 if (updatedDetail) {
+                    const completedConfirmed = isStageCompleted(
+                        updatedDetail.assembly_status,
+                        updatedDetail.assembly_completed_at,
+                    );
+                    if (!completedConfirmed) {
+                        throw new Error("Сервер не підтвердив завершення збірки. Оновіть сторінку і спробуйте ще раз.");
+                    }
                     openDetailStageModal(updatedDetail);
                 }
             }
@@ -2339,6 +2346,13 @@ const closeSubcontractsModal = () => {
                 const updatedDetail = (payload.order?.details || [])
                     .find((item) => Number(item?.detail_id) === Number(activeDetailId));
                 if (updatedDetail) {
+                    const resetConfirmed = !isStageCompleted(
+                        updatedDetail.assembly_status,
+                        updatedDetail.assembly_completed_at,
+                    );
+                    if (!resetConfirmed) {
+                        throw new Error("Сервер не підтвердив скасування завершення збірки. Оновіть сторінку і спробуйте ще раз.");
+                    }
                     openDetailStageModal(updatedDetail);
                 }
             }
@@ -2359,6 +2373,13 @@ const closeSubcontractsModal = () => {
                 const updatedDetail = (payload.order?.details || [])
                     .find((item) => Number(item?.detail_id) === Number(activeDetailId));
                 if (updatedDetail) {
+                    const completedConfirmed = isStageCompleted(
+                        updatedDetail.install_status,
+                        updatedDetail.install_completed_at,
+                    );
+                    if (!completedConfirmed) {
+                        throw new Error("Сервер не підтвердив завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
+                    }
                     openDetailStageModal(updatedDetail);
                 }
             }
@@ -2379,6 +2400,13 @@ const closeSubcontractsModal = () => {
                 const updatedDetail = (payload.order?.details || [])
                     .find((item) => Number(item?.detail_id) === Number(activeDetailId));
                 if (updatedDetail) {
+                    const resetConfirmed = !isStageCompleted(
+                        updatedDetail.install_status,
+                        updatedDetail.install_completed_at,
+                    );
+                    if (!resetConfirmed) {
+                        throw new Error("Сервер не підтвердив скасування завершення монтажу. Оновіть сторінку і спробуйте ще раз.");
+                    }
                     openDetailStageModal(updatedDetail);
                 }
             }

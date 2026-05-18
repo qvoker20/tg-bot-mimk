@@ -247,7 +247,9 @@ def insert_schedule_tasks(insert_values: list[tuple]) -> int:
                 """,
                 insert_values,
             )
-            return cursor.rowcount
+            affected = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else len(insert_values)
+        conn.commit()
+        return affected
 
 
 def fetch_tasks_for_edit(*, subdivision: str, task_ids: list[int]) -> list[dict]:
@@ -309,7 +311,9 @@ def delete_schedule_tasks(*, subdivision: str, task_ids: list[int]) -> int:
                 f"DELETE FROM {SCHEDULE_TASKS_TABLE} WHERE subdivision = %s AND id = ANY(%s)",
                 (subdivision, task_ids),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def update_schedule_tasks_parts(
@@ -350,7 +354,9 @@ def update_schedule_tasks_parts(
                     task_ids,
                 ),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def fetch_task_for_user(*, task_id: int, source_user_id: int) -> tuple | None:
@@ -469,7 +475,9 @@ def mark_task_started(*, task_id: int, location: dict) -> int:
                     task_id,
                 ),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def mark_task_paused(*, task_id: int, pause_reason: str) -> int:
@@ -488,7 +496,9 @@ def mark_task_paused(*, task_id: int, pause_reason: str) -> int:
                 """,
                 (TASK_STATUS_PAUSED, pause_reason, task_id),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def mark_task_resumed(*, task_id: int) -> int:
@@ -510,7 +520,9 @@ def mark_task_resumed(*, task_id: int) -> int:
                 """,
                 (TASK_STATUS_IN_PROGRESS, task_id),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def mark_task_completed(*, task_id: int, location: dict) -> int:
@@ -546,7 +558,9 @@ def mark_task_completed(*, task_id: int, location: dict) -> int:
                     task_id,
                 ),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def fetch_detail_rows_for_product_match(*, order_number: str) -> list[tuple]:
@@ -605,7 +619,9 @@ def mark_detail_rows_completed(
                         detail_ids,
                     ),
                 )
-                return cursor.rowcount
+                affected = cursor.rowcount
+            conn.commit()
+            return affected
 
     if task_type == "install":
         with get_db_connection() as conn:
@@ -631,7 +647,9 @@ def mark_detail_rows_completed(
                         detail_ids,
                     ),
                 )
-                return cursor.rowcount
+                affected = cursor.rowcount
+            conn.commit()
+            return affected
 
     return 0
 
@@ -657,7 +675,9 @@ def revert_task_completion(*, task_id: int) -> int:
                 """,
                 (TASK_STATUS_IN_PROGRESS, task_id, TASK_STATUS_COMPLETED),
             )
-            return cursor.rowcount
+            affected = cursor.rowcount
+        conn.commit()
+        return affected
 
 
 def revert_detail_rows_completion(
@@ -683,7 +703,9 @@ def revert_detail_rows_completion(
                     """,
                     (TASK_STATUS_IN_PROGRESS, detail_ids, TASK_STATUS_COMPLETED),
                 )
-                return cursor.rowcount
+                affected = cursor.rowcount
+            conn.commit()
+            return affected
 
     if task_type == "install":
         with get_db_connection() as conn:
@@ -699,7 +721,9 @@ def revert_detail_rows_completion(
                     """,
                     (TASK_STATUS_IN_PROGRESS, detail_ids, TASK_STATUS_COMPLETED),
                 )
-                return cursor.rowcount
+                affected = cursor.rowcount
+            conn.commit()
+            return affected
 
     return 0
 

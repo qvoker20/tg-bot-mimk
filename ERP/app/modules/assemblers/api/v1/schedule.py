@@ -67,7 +67,12 @@ async def assemblers_schedule_tasks_create_api(request: Request):
     except ValueError as error:
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
 
-    return {"ok": True, **result, "message": "Задачі записано в базу."}
+    created_count = int(result.get("created_count") or 0)
+    return {
+        "ok": True,
+        **result,
+        "message": f"Задачі записано в базу: {created_count}.",
+    }
 
 
 @router.post("/api/schedule/tasks/edit")
