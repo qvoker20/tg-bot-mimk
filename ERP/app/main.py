@@ -105,14 +105,14 @@ set_templates(templates)
 
 
 def _probe_db_connection() -> bool:
-    conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            row = cursor.fetchone()
-            return bool(row and row[0] == 1)
-    finally:
-        return_db_connection(conn)
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                row = cursor.fetchone()
+                return bool(row and row[0] == 1)
+    except Exception:
+        return False
 
 
 @app.get("/healthz")
