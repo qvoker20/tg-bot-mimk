@@ -212,6 +212,7 @@ async def show_my_profile(update: Update, context: CallbackContext):
             "https://script.google.com/a/macros/mim-k.com/s/"
             "AKfycbxprWl65BmYlPtDjyD14YURiIb43VBgHH0IYwKF_38DENgKv60kHA0Bk1AuC4vo6c7Beg/exec"
         )
+        assembler_app_url = "https://erp.mim-k.website/assemblers/app"
 
         esc_name = html.escape(name or "Невідомий користувач")
         esc_code = html.escape(code)
@@ -220,12 +221,13 @@ async def show_my_profile(update: Update, context: CallbackContext):
             f"<b>Профіль</b>\n\n"
             f"Ім'я: <b>{esc_name}</b>\n"
             f"Код для входу: <code>{esc_code}</code>\n\n"
-            f"Натисніть кнопку «Мій профіль», щоб відкрити сторінку.\n\n"
+            f"Натисніть кнопку «Мій профіль» або «Додаток збиральника ERP», щоб відкрити сторінку.\n\n"
             f"<b>Примітка:</b> щоб перейти у користування, відкривайте посилання через Google-профіль!"
         )
 
         keyboard = [
-            [InlineKeyboardButton("Мій профіль", url=profile_url)]
+            [InlineKeyboardButton("Мій профіль", url=profile_url)],
+            [InlineKeyboardButton("Додаток збиральника ERP", url=assembler_app_url)],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
