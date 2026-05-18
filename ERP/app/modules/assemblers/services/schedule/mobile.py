@@ -152,10 +152,7 @@ def update_user_task_status(*, source_user_id: int, task_id: int, action: str, p
             or (current_status == TASK_STATUS_COMPLETED and auto_closed_at)
         ):
             raise ValueError("Завершити можна лише активну задачу")
-        if normalized_task_type in {"assembly", "install"} and not normalized_selected_products:
-            raise ValueError("Оберіть хоча б один виріб перед завершенням задачі")
-
-        if normalized_task_type in {"assembly", "install"}:
+        if normalized_task_type in {"assembly", "install"} and normalized_selected_products:
             detail_rows = fetch_detail_rows_for_product_match(order_number=task.get("order_number", ""))
             matched_detail_ids = []
             seen_detail_ids: set[int] = set()
