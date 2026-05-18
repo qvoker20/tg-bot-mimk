@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.modules.assemblers.db.connection import get_db_connection, return_db_connection
+from app.modules.assemblers.db.connection import get_db_connection
 from app.modules.assemblers.db.tables import ACTIVITY_JOURNAL_TABLE
 
 from .schema import ensure_activity_log_schema
@@ -59,8 +59,7 @@ def record_activity_event(
     ensure_activity_log_schema()
     normalized_actor = _normalize_actor(actor)
 
-    conn = get_db_connection()
-    try:
+    with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 f"""
@@ -103,8 +102,6 @@ def record_activity_event(
             )
             new_id = cursor.fetchone()[0]
             conn.commit()
-    finally:
-        return_db_connection(conn)
 
     return int(new_id)
 
@@ -169,8 +166,7 @@ def load_activity_log_rows(
 
     where_sql = " AND ".join(clauses)
 
-    conn = get_db_connection()
-    try:
+    with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 f"SELECT COUNT(*) FROM {ACTIVITY_JOURNAL_TABLE} WHERE {where_sql}",
@@ -225,7 +221,5 @@ def load_activity_log_rows(
                 }
                 for row in cursor.fetchall()
             ]
-    finally:
-        return_db_connection(conn)
 
     return {"rows": rows, "total": total, "has_more": offset + len(rows) < total}
