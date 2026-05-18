@@ -166,6 +166,8 @@ def create_schedule_tasks(*, subdivision: str, task_type: str, cells: list[dict]
             )
 
     created_count = insert_schedule_tasks(insert_values)
+    if created_count <= 0:
+        raise ValueError("Сервер не підтвердив створення задач. Спробуйте ще раз.")
 
     if normalized_order_number:
         enqueue_detail_metrics_recalculation([normalized_order_number], source="schedule_create")
