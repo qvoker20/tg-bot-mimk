@@ -3,10 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from app.modules.assemblers.db.connection import get_db_connection
+
 from . import ensure_schema, process_detail_metrics_recalc_queue
 
 
 logger = logging.getLogger(__name__)
+
+_DETAIL_RECALC_WORKER_LOCK_KEY = 764321987650001
 
 
 async def _ensure_schema_with_retry(stop_event: asyncio.Event, max_attempts: int = 5) -> None:
@@ -32,6 +36,24 @@ async def _ensure_schema_with_retry(stop_event: asyncio.Event, max_attempts: int
                 pass
 
 
+def _process_queue_with_lock(batch_size: int) -> dict:
+    """Run one queue pass under a cross-process advisory lock.
+
+    Multiple gunicorn workers start this background loop. Without a shared lock,
+    they can process the same recalculation flow concurrently and deadlock.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", (_DETAIL_RECALC_WORKER_LOCK_KEY,))
+            acquired = bool(cursor.fetchone()[0])
+            if not acquired:
+                return {"queued_orders": 0, "updated_rows": 0}
+            try:
+                return process_detail_metrics_recalc_queue(batch_size)
+            finally:
+                cursor.execute("SELECT pg_advisory_unlock(%s)", (_DETAIL_RECALC_WORKER_LOCK_KEY,))
+
+
 async def run_detail_metrics_recalc_worker(
     stop_event: asyncio.Event,
     *,
@@ -43,7 +65,7 @@ async def run_detail_metrics_recalc_worker(
     while not stop_event.is_set():
         try:
             result = await asyncio.to_thread(
-                process_detail_metrics_recalc_queue,
+                _process_queue_with_lock,
                 batch_size,
             )
         except Exception:
