@@ -1,0 +1,365 @@
+.sales-dashboard {
+   display: grid;
+   gap: 14px;
+}
+
+.sales-board-head {
+   margin-bottom: 12px;
+   display: flex;
+   justify-content: space-between;
+   gap: 12px;
+   align-items: flex-start;
+}
+
+.sales-board-head h3 {
+   margin: 0;
+   color: #1f2937;
+   font-size: 1.1rem;
+}
+
+.sales-board-copy {
+   margin: 8px 0 0;
+   color: #64748b;
+   max-width: 70ch;
+}
+
+.sales-board-scroll {
+   border: 1px solid #dbe3ee;
+   background: #f8fafc;
+   border-radius: 16px;
+   padding: 12px;
+   max-height: 74vh;
+   overflow: auto;
+}
+
+.sales-lane {
+   border-radius: 14px;
+   border: 1px solid #dbe3ee;
+   background: #ffffff;
+   padding: 14px;
+   min-height: 200px;
+   min-width: 280px;
+}
+
+.sales-lane-head {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   margin-bottom: 12px;
+   color: #0f172a;
+}
+
+.sales-lane-count {
+   min-width: 32px;
+   text-align: center;
+   border-radius: 999px;
+   padding: 4px 10px;
+   background: #e2e8f0;
+   color: #334155;
+   font-size: .8rem;
+}
+
+.sales-lane-grid {
+   display: grid;
+   gap: 12px;
+   grid-template-columns: repeat(6, minmax(280px, 1fr));
+   min-width: 1760px;
+}
+
+.sales-card-list {
+   display: grid;
+   gap: 10px;
+}
+
+.sales-card {
+   border-radius: 12px;
+   padding: 12px;
+   border: 1px solid #e2e8f0;
+   background: #ffffff;
+   color: #0f172a;
+   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.sales-card-head {
+   display: flex;
+   gap: 12px;
+   align-items: flex-start;
+   justify-content: space-between;
+   margin-bottom: 12px;
+}
+
+.sales-card-title {
+   margin: 0;
+   font-weight: 700;
+   color: #0f172a;
+}
+
+.sales-card-subtitle {
+   margin: 4px 0 0;
+   color: #64748b;
+   font-size: .92rem;
+}
+
+.sales-card-status {
+   white-space: nowrap;
+   border-radius: 999px;
+   padding: 4px 10px;
+   background: #e0f2fe;
+   color: #0369a1;
+   font-size: .78rem;
+   font-weight: 700;
+}
+
+.sales-card-meta {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 8px 10px;
+   margin: 0;
+}
+
+.sales-card-meta div {
+   border-radius: 10px;
+   background: #f8fafc;
+   padding: 8px 10px;
+}
+
+.sales-card-meta dt {
+   color: #64748b;
+   font-size: .74rem;
+   margin-bottom: 3px;
+   text-transform: uppercase;
+   letter-spacing: .04em;
+}
+
+.sales-card-meta dd {
+   margin: 0;
+   color: #0f172a;
+   font-weight: 600;
+}
+
+.sales-card-flags {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 8px;
+   margin-top: 12px;
+}
+
+.sales-flag {
+   border-radius: 999px;
+   padding: 6px 10px;
+   background: #e2e8f0;
+   color: #334155;
+   font-size: .8rem;
+}
+
+.sales-flag.is-true {
+   background: #dcfce7;
+   color: #166534;
+}
+
+.sales-flag.is-false {
+   background: #fee2e2;
+   color: #991b1b;
+}
+
+.sales-modal {
+   position: fixed;
+   inset: 0;
+   z-index: 80;
+   display: grid;
+   place-items: center;
+}
+
+.sales-modal.hidden {
+   display: none;
+}
+
+.sales-modal-backdrop {
+   position: absolute;
+   inset: 0;
+   background: rgba(15, 23, 42, 0.35);
+}
+
+.sales-modal-card {
+   position: relative;
+   width: min(940px, calc(100vw - 24px));
+   max-height: calc(100vh - 24px);
+   overflow: auto;
+   border-radius: 16px;
+   background: #ffffff;
+   border: 1px solid #dbe3ee;
+   box-shadow: 0 24px 46px rgba(15, 23, 42, 0.24);
+   padding: 16px;
+}
+
+.sales-modal-small {
+   width: min(620px, calc(100vw - 24px));
+}
+
+.sales-modal-head {
+   display: flex;
+   align-items: flex-start;
+   justify-content: space-between;
+   gap: 8px;
+   margin-bottom: 10px;
+}
+
+.sales-modal-head h3 {
+   margin: 4px 0 0;
+}
+
+.sales-stepper {
+   display: flex;
+   gap: 8px;
+   margin-bottom: 12px;
+   flex-wrap: wrap;
+}
+
+.sales-step {
+   border-radius: 999px;
+   border: 1px solid #dbe3ee;
+   padding: 4px 10px;
+   font-size: .82rem;
+   color: #64748b;
+}
+
+.sales-step.is-active {
+   border-color: #93c5fd;
+   background: #eff6ff;
+   color: #1d4ed8;
+}
+
+.sales-step-panel.hidden {
+   display: none;
+}
+
+.sales-form-grid {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 10px;
+}
+
+.sales-field {
+   display: grid;
+   gap: 6px;
+}
+
+.sales-field span {
+   color: #334155;
+   font-size: .9rem;
+}
+
+.sales-field input,
+.sales-field select {
+   border: 1px solid #cbd5e1;
+   border-radius: 10px;
+   padding: 9px 11px;
+   font: inherit;
+   color: #0f172a;
+   background: #ffffff;
+}
+
+.sales-actions-row {
+   display: flex;
+   gap: 10px;
+   justify-content: flex-end;
+   margin-top: 14px;
+}
+
+.sales-products-head {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   gap: 8px;
+}
+
+.sales-products-wrap {
+   margin-top: 10px;
+   border: 1px solid #dbe3ee;
+   border-radius: 12px;
+   overflow: auto;
+   max-height: 46vh;
+}
+
+.sales-products-table {
+   width: 100%;
+   min-width: 860px;
+   border-collapse: collapse;
+}
+
+.sales-products-table th,
+.sales-products-table td {
+   border-bottom: 1px solid #e2e8f0;
+   padding: 8px;
+   text-align: left;
+   vertical-align: middle;
+   color: #0f172a;
+}
+
+.sales-products-table thead th {
+   position: sticky;
+   top: 0;
+   background: #f8fafc;
+   z-index: 1;
+}
+
+.sales-products-table input[type="text"],
+.sales-products-table input[type="number"] {
+   width: 100%;
+   border: 1px solid #cbd5e1;
+   border-radius: 8px;
+   padding: 7px 8px;
+   font: inherit;
+}
+
+.sales-checkbox-grid {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 8px;
+}
+
+.sales-checkbox {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   background: #f8fafc;
+   border: 1px solid #e2e8f0;
+   border-radius: 10px;
+   padding: 8px;
+}
+
+.sales-empty {
+   color: #64748b;
+   font-size: .92rem;
+   text-align: center;
+   padding: 14px 8px;
+}
+
+@media (max-width: 991.98px) {
+   .sales-form-grid {
+      grid-template-columns: 1fr;
+   }
+
+   .sales-card-meta {
+      grid-template-columns: 1fr;
+   }
+
+   .sales-checkbox-grid {
+      grid-template-columns: 1fr;
+   }
+}
+
+@media (max-width: 575.98px) {
+   .sales-board-head {
+      flex-direction: column;
+      align-items: stretch;
+   }
+
+   .sales-lane {
+      padding: 12px;
+   }
+
+   .sales-card-head {
+      flex-direction: column;
+   }
+}

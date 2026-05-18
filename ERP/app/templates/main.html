@@ -33,16 +33,29 @@
             </div>
         </a>
 
+        {% if can_access_sales_module %}
+        <a href="/sales" class="module-card module-card-link" aria-label="Відкрити модуль Відділ продажу">
+            <div class="module-card-body">
+                <p class="module-label">Відділ</p>
+                <h3>Відділ продажу</h3>
+                <p>Стартовий каркас модуля: головна, дашборд, перевірки, налаштування і прорахунок.</p>
+            </div>
+            <div class="module-card-meta">
+                <span class="module-status-badge">Модуль доступний</span>
+            </div>
+        </a>
+        {% else %}
         <article class="module-card">
             <div class="module-card-body">
                 <p class="module-label">Відділ</p>
                 <h3>Відділ продажу</h3>
-                <p>Функціонал відділу продажу буде додано в наступних оновленнях.</p>
+                <p>Стартовий каркас модуля: головна, дашборд, перевірки, налаштування і прорахунок.</p>
             </div>
             <div class="module-card-meta">
                 <span class="module-status-badge is-dev">У розробці</span>
             </div>
         </article>
+        {% endif %}
 
         <article class="module-card">
             <div class="module-card-body">

@@ -95,6 +95,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (searchParams.get("saved") === "1") {
         window.ActionToast?.show?.("Налаштування збиральника збережено.", "success");
     }
+    if (searchParams.get("reset") === "1") {
+        window.ActionToast?.show?.("Значення для збиральника скинуто.", "success");
+    }
     if (searchParams.get("error")) {
         window.ActionToast?.show?.(decodeURIComponent(searchParams.get("error") || "Помилка збереження."), "error");
     }
@@ -201,9 +204,14 @@ document.addEventListener("DOMContentLoaded", () => {
     modalSubdivision.addEventListener("change", renderBrigadeMembers);
     modalBrigade.addEventListener("input", renderBrigadeMembers);
 
-    modalForm.addEventListener("submit", () => {
+    modalForm.addEventListener("submit", (event) => {
+        const submitter = event.submitter;
+        if (submitter?.dataset?.staffReset !== undefined) {
+            modalSubmit.textContent = "Зберегти";
+        }
         setSubmittingState(true);
-        window.ActionToast?.show?.("Зберігаємо зміни...", "success");
+        const isReset = submitter?.dataset?.staffReset !== undefined;
+        window.ActionToast?.show?.(isReset ? "Скидаємо значення..." : "Зберігаємо зміни...", "success");
         window.ERPLoading?.show?.();
     });
 

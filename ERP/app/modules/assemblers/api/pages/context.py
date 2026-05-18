@@ -4,6 +4,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.modules.assemblers.dependencies import (
     can_manage_main_orders,
+    can_manage_assemblers_staff,
     is_admin_user,
     require_user,
 )
@@ -147,6 +148,7 @@ def build_page_context(request: Request, active_key: str):
     return {
         "user": user,
         "is_admin": is_admin_user(user),
+        "can_manage_staff": can_manage_assemblers_staff(user),
         "can_manage_main_orders": can_manage_main_orders(user),
         "top_nav": build_top_nav(),
         "sub_nav": build_sub_nav(active_key, user),

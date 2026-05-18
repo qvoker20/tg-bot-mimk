@@ -1,13 +1,15 @@
 from datetime import date, timedelta
+from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
-from app.modules.assemblers.dependencies import can_manage_schedule_subdivision, is_admin_user
+from app.modules.assemblers.dependencies import can_manage_assemblers_staff, can_manage_schedule_subdivision, is_admin_user
 from app.modules.assemblers.services import (
     ALLOWED_SUBDIVISIONS,
+    clear_staff_assignment,
     enqueue_detail_metrics_recalculation,
     load_assembler_staff,
     load_assembly_day_cost,
@@ -72,9 +74,11 @@ async def assemblers_staff_page(request: Request):
 
     page_context["staff_rows"] = await run_in_threadpool(load_assembler_staff)
     page_context["subdivision_options"] = ALLOWED_SUBDIVISIONS
+    page_context["can_manage_staff"] = can_manage_assemblers_staff(page_context["user"])
     page_context["alert_kind"] = "error" if request.query_params.get("error", "") else "info"
     page_context["alert_text"] = (
         request.query_params.get("error", "")
+        or ("Значення для збиральника скинуто." if request.query_params.get("reset") == "1" else "")
         or ("Налаштування користувача збережено." if request.query_params.get("saved") == "1" else "")
     )
     return context.templates.TemplateResponse(request, "assemblers/staff.html", page_context)
@@ -84,17 +88,25 @@ async def assemblers_staff_page(request: Request):
 async def assemblers_staff_save(
     request: Request,
     source_user_id: int = Form(...),
-    subdivision: str = Form(...),
-    brigade_number: int = Form(...),
+    subdivision: Optional[str] = Form(None),
+    brigade_number: Optional[int] = Form(None),
+    action: str = Form("save"),
 ):
     page_context, redirect = context.build_page_context(request, "staff")
     if redirect:
         return redirect
 
-    if not is_admin_user(page_context["user"]):
-        return RedirectResponse(url="/assemblers/staff?error=Лише+admin+може+змінювати+налаштування", status_code=303)
+    if not can_manage_assemblers_staff(page_context["user"]):
+        return RedirectResponse(url="/assemblers/staff?error=Недостатньо+прав+для+зміни+налаштувань", status_code=303)
 
     try:
+        if action == "reset":
+            await run_in_threadpool(clear_staff_assignment, source_user_id)
+            return RedirectResponse(url="/assemblers/staff?reset=1", status_code=303)
+
+        if not subdivision or brigade_number is None:
+            return RedirectResponse(url="/assemblers/staff?error=Заповніть+підрозділ+і+бригаду", status_code=303)
+
         await run_in_threadpool(save_staff_assignment, source_user_id, subdivision, brigade_number)
     except ValueError as error:
         encoded = quote(str(error))

@@ -24,6 +24,22 @@ ASSEMBLERS_MODULE_ROLES = {
     "керівник збиральників тендер",
 }
 
+ASSEMBLERS_STAFF_MANAGE_ROLES = {
+    "admin",
+    "керівник збиральників",
+    "керівник збиральників приват",
+    "керівник збиральників тендер",
+}
+
+SALES_MODULE_ROLES = {
+    "admin",
+    "sales",
+    "sales manager",
+    "відділ продажу",
+    "менеджер продажу",
+    "керівник продажу",
+}
+
 
 def get_current_user(request: Request):
     session_user = request.session.get("user")
@@ -79,6 +95,22 @@ def can_access_assemblers_module(user: dict | None) -> bool:
 
     normalized_role = str(user.get("role") or "").strip().casefold()
     return normalized_role in ASSEMBLERS_MODULE_ROLES
+
+
+def can_access_sales_module(user: dict | None) -> bool:
+    if not isinstance(user, dict):
+        return False
+
+    normalized_role = str(user.get("role") or "").strip().casefold()
+    return normalized_role in SALES_MODULE_ROLES
+
+
+def can_manage_assemblers_staff(user: dict | None) -> bool:
+    if not isinstance(user, dict):
+        return False
+
+    normalized_role = str(user.get("role") or "").strip().casefold()
+    return normalized_role in ASSEMBLERS_STAFF_MANAGE_ROLES
 
 
 def require_user(request: Request):

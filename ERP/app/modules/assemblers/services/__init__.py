@@ -43,11 +43,12 @@ from .settings import (
 )
 
 # Staff / кадрові прив'язки збиральників
-from .staff import ALLOWED_SUBDIVISIONS, ensure_staff_schema, load_assembler_staff, save_staff_assignment
+from .staff import ALLOWED_SUBDIVISIONS, clear_staff_assignment, ensure_staff_schema, load_assembler_staff, save_staff_assignment
 
 __all__ = [
     "ALLOWED_SUBDIVISIONS",
     "close_buffer_orders",
+    "clear_staff_assignment",
     "ensure_activity_log_schema",
     "create_schedule_tasks",
     "enqueue_detail_metrics_recalculation",

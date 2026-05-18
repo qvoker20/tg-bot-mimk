@@ -129,3 +129,14 @@ def save_staff_assignment(source_user_id: int, subdivision: str, brigade_number:
                 (int(source_user_id), int(telegram_id) if telegram_id is not None else None, normalized_subdivision, int(brigade_number)),
             )
         conn.commit()
+
+
+def clear_staff_assignment(source_user_id: int) -> None:
+    ensure_staff_schema()
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"DELETE FROM {ASSEMBLERS_STAFF_TABLE} WHERE source_user_id = %s",
+                (int(source_user_id),),
+            )
+        conn.commit()

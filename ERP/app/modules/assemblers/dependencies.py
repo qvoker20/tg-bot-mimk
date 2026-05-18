@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 
 from app.dependencies import (
     can_access_assemblers_module,
+    can_manage_assemblers_staff,
     can_manage_main_orders,
     can_manage_schedule_subdivision,
     can_transfer_buffer_orders,
@@ -20,6 +21,7 @@ def require_user(request: Request):
 
 __all__ = [
     "can_access_assemblers_module",
+    "can_manage_assemblers_staff",
     "can_manage_main_orders",
     "can_manage_schedule_subdivision",
     "can_transfer_buffer_orders",

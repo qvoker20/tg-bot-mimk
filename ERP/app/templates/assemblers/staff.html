@@ -62,7 +62,7 @@
                         </thead>
                         <tbody data-staff-body>
                             {% for row in staff_rows %}
-                            <tr class="staff-row{% if is_admin %} is-clickable{% endif %}"
+                            <tr class="staff-row{% if can_manage_staff %} is-clickable{% endif %}"
                                 data-staff-row
                                 data-source-user-id="{{ row.source_user_id }}"
                                 data-telegram-id="{{ row.telegram_id }}"
@@ -92,7 +92,7 @@
     </section>
 </main>
 
-{% if is_admin %}
+{% if can_manage_staff %}
 <div class="modal-overlay hidden" data-staff-modal>
     <div class="modal-box modal-compact staff-settings-modal">
         <div class="modal-header-row">
@@ -120,6 +120,7 @@
                 <p data-staff-brigade-members>Оберіть підрозділ і номер бригади.</p>
             </div>
             <div class="confirm-actions-row">
+                <button type="submit" class="ghost-button" name="action" value="reset" data-staff-reset onclick="return confirm('Скинути значення підрозділу та бригади для цього збиральника?');">Скинути значення</button>
                 <button type="submit" class="module-link" data-staff-submit>Зберегти</button>
             </div>
         </form>
