@@ -1,6 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Заявки на пропуск{% endblock %}
 
+{% block head %}
+<style>
+  .pass-table-wrap {
+    position: relative;
+  }
+
+  .pass-col-persons {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+  }
+
+  .pass-col-persons .clip-text {
+    max-width: 200px;
+  }
+
+  .pass-table-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(1px);
+    z-index: 8;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .pass-table-overlay.is-visible {
+    opacity: 1;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card shadow-sm">
   <div class="card-body">
@@ -39,13 +75,19 @@
       </div>
     </form>
 
-    <div id="passTableWrap" class="table-wrap border">
+    <div id="passTableWrap" class="table-wrap border pass-table-wrap">
+      <div id="passTableOverlay" class="pass-table-overlay is-visible" aria-live="polite" aria-busy="true">
+        <div class="text-center">
+          <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+          <div class="small text-muted mt-2">Завантаження таблиці...</div>
+        </div>
+      </div>
       <table class="table table-hover align-middle table-sm table-uniform" style="width: 100%;">
         <thead>
           <tr>
             <th style="width: 90px;">ID</th>
             <th style="width: 110px;">Тип</th>
-            <th>Особи</th>
+            <th class="pass-col-persons">Особи</th>
             <th style="width: 180px;">Дата візиту</th>
             <th style="width: 110px;">Авто</th>
             <th style="width: 170px;">Хто створив</th>
@@ -91,7 +133,7 @@
                   <span class="badge bg-secondary">Для особи</span>
                 {% endif %}
               </td>
-              <td><span class="clip-text" title="{{ r.visitors_text }}">{{ r.visitors_text }}</span></td>
+              <td class="pass-col-persons"><span class="clip-text" title="{{ r.visitors_text }}">{{ r.visitors_text }}</span></td>
               <td><span class="clip-text" title="{{ r.date_text }}">{{ r.date_text }}</span></td>
               <td>{{ r.vehicle_plate }}</td>
               <td>
@@ -260,6 +302,7 @@
 <script>
   const tbody = document.getElementById('passRequestsBody');
   const tableWrap = document.getElementById('passTableWrap');
+  const tableOverlay = document.getElementById('passTableOverlay');
   const scrollLoader = document.getElementById('scrollLoader');
   const modalActionForm = document.getElementById('modalActionForm');
   const modalCancelReason = document.getElementById('modalCancelReason');
@@ -273,8 +316,27 @@
   let lastAction = '';
   let offset = tbody.querySelectorAll('tr[data-request-id]').length;
   let loading = false;
+  let tableLoadingCounter = 0;
   let hasMore = offset >= 20;
   const STATUS_LABELS = {{ status_labels|tojson }};
+
+  function setTableOverlayVisible(isVisible) {
+    if (!tableOverlay) return;
+    tableOverlay.classList.toggle('is-visible', isVisible);
+    tableOverlay.setAttribute('aria-busy', isVisible ? 'true' : 'false');
+  }
+
+  function beginTableLoading() {
+    tableLoadingCounter += 1;
+    setTableOverlayVisible(true);
+  }
+
+  function endTableLoading() {
+    tableLoadingCounter = Math.max(0, tableLoadingCounter - 1);
+    if (tableLoadingCounter === 0) {
+      setTableOverlayVisible(false);
+    }
+  }
 
   function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -331,7 +393,7 @@
           data-bs-target="#requestModal">
         <td class="font-monospace">${escapeHtml(item.first_request_id)}</td>
         <td>${typeBadge(item)}</td>
-        <td><span class="clip-text" title="${escapeHtml(item.visitors_text || '—')}">${escapeHtml(item.visitors_text || '—')}</span></td>
+        <td class="pass-col-persons"><span class="clip-text" title="${escapeHtml(item.visitors_text || '—')}">${escapeHtml(item.visitors_text || '—')}</span></td>
         <td><span class="clip-text" title="${escapeHtml(item.date_text || '—')}">${escapeHtml(item.date_text || '—')}</span></td>
         <td>${escapeHtml(item.vehicle_plate || '—')}</td>
         <td><span class="clip-text" title="${escapeHtml(item.requester_name || '—')}">${escapeHtml(item.requester_name || '—')}</span>${requesterLink}</td>
@@ -347,6 +409,7 @@
   async function loadMore() {
     if (loading || !hasMore) return;
     loading = true;
+    beginTableLoading();
     scrollLoader.classList.remove('d-none');
 
     try {
@@ -375,6 +438,7 @@
     } finally {
       loading = false;
       scrollLoader.classList.add('d-none');
+      endTableLoading();
       setTimeout(maybeLoadMore, 0);
     }
   }
@@ -540,6 +604,11 @@
   if (tableWrap) {
     tableWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
   }
-  setTimeout(maybeLoadMore, 0);
+
+  beginTableLoading();
+  setTimeout(() => {
+    maybeLoadMore();
+    endTableLoading();
+  }, 220);
 </script>
 {% endblock %}

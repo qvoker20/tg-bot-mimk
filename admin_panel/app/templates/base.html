@@ -357,6 +357,26 @@
       }
     });
 
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if(!link) return;
+      if(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+      const href = (link.getAttribute('href') || '').trim();
+      if(!href || href.startsWith('#')) return;
+      if(link.target === '_blank' || link.hasAttribute('download')) return;
+
+      try {
+        const to = new URL(link.href, window.location.href);
+        const from = new URL(window.location.href);
+        if(to.origin !== from.origin) return;
+      } catch (_) {
+        return;
+      }
+
+      showLoader();
+    });
+
     window.addEventListener('pageshow', () => hideLoader());
   </script>
 
