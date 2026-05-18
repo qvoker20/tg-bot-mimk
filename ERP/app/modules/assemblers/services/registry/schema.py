@@ -269,16 +269,15 @@ def ensure_schema() -> None:
                     f"""
                     DO $$
                     BEGIN
-                        IF NOT EXISTS (
+                        -- Disable old synchronous recalculation trigger: it causes deadlocks
+                        -- under concurrent detail updates. Queue-based recalculation stays active.
+                        IF EXISTS (
                             SELECT 1
                             FROM pg_trigger
                             WHERE tgname = 'trg_{DETAILS_TABLE_NAME}_after_write_recalc_main'
                               AND tgrelid = '{DETAILS_TABLE_NAME}'::regclass
                         ) THEN
-                            CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_recalc_main
-                            AFTER INSERT OR UPDATE OR DELETE ON {DETAILS_TABLE_NAME}
-                            FOR EACH ROW
-                            EXECUTE FUNCTION assemblers_details_after_write_recalc_main_order();
+                            DROP TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_recalc_main ON {DETAILS_TABLE_NAME};
                         END IF;
                     END $$;
                     """
