@@ -198,7 +198,7 @@ def recalculate_detail_metrics(order_numbers: list[str] | None = None) -> int:
                     effective_minutes=int(schedule_info.get("install_effective_minutes") or 0),
                 )
                 planned_hours, _ = _calculate_planned_hours(
-                    item_value=Decimal(record[10] or 0),
+                    item_value=Decimal(record[12] or 0),
                     assembly_worker=assembly_worker or "-",
                     install_worker=install_worker or "-",
                     day_cost=day_cost,

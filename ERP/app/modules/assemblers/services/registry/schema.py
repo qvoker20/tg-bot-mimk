@@ -204,14 +204,21 @@ def ensure_schema() -> None:
                     """
                 )
                 cursor.execute(
-                    f"DROP TRIGGER IF EXISTS trg_{DETAILS_TABLE_NAME}_before_write ON {DETAILS_TABLE_NAME}"
-                )
-                cursor.execute(
                     f"""
-                    CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_before_write
-                    BEFORE INSERT OR UPDATE ON {DETAILS_TABLE_NAME}
-                    FOR EACH ROW
-                    EXECUTE FUNCTION assemblers_details_before_write();
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_trigger
+                            WHERE tgname = 'trg_{DETAILS_TABLE_NAME}_before_write'
+                              AND tgrelid = '{DETAILS_TABLE_NAME}'::regclass
+                        ) THEN
+                            CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_before_write
+                            BEFORE INSERT OR UPDATE ON {DETAILS_TABLE_NAME}
+                            FOR EACH ROW
+                            EXECUTE FUNCTION assemblers_details_before_write();
+                        END IF;
+                    END $$;
                     """
                 )
 
@@ -259,14 +266,21 @@ def ensure_schema() -> None:
                     """
                 )
                 cursor.execute(
-                    f"DROP TRIGGER IF EXISTS trg_{DETAILS_TABLE_NAME}_after_write_recalc_main ON {DETAILS_TABLE_NAME}"
-                )
-                cursor.execute(
                     f"""
-                    CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_recalc_main
-                    AFTER INSERT OR UPDATE OR DELETE ON {DETAILS_TABLE_NAME}
-                    FOR EACH ROW
-                    EXECUTE FUNCTION assemblers_details_after_write_recalc_main_order();
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_trigger
+                            WHERE tgname = 'trg_{DETAILS_TABLE_NAME}_after_write_recalc_main'
+                              AND tgrelid = '{DETAILS_TABLE_NAME}'::regclass
+                        ) THEN
+                            CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_recalc_main
+                            AFTER INSERT OR UPDATE OR DELETE ON {DETAILS_TABLE_NAME}
+                            FOR EACH ROW
+                            EXECUTE FUNCTION assemblers_details_after_write_recalc_main_order();
+                        END IF;
+                    END $$;
                     """
                 )
 
@@ -326,14 +340,21 @@ def ensure_schema() -> None:
                     """
                 )
                 cursor.execute(
-                    f"DROP TRIGGER IF EXISTS trg_{DETAILS_TABLE_NAME}_after_write_enqueue_recalc ON {DETAILS_TABLE_NAME}"
-                )
-                cursor.execute(
                     f"""
-                    CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_enqueue_recalc
-                    AFTER INSERT OR UPDATE OR DELETE ON {DETAILS_TABLE_NAME}
-                    FOR EACH ROW
-                    EXECUTE FUNCTION assemblers_details_after_write_enqueue_recalc();
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_trigger
+                            WHERE tgname = 'trg_{DETAILS_TABLE_NAME}_after_write_enqueue_recalc'
+                              AND tgrelid = '{DETAILS_TABLE_NAME}'::regclass
+                        ) THEN
+                            CREATE TRIGGER trg_{DETAILS_TABLE_NAME}_after_write_enqueue_recalc
+                            AFTER INSERT OR UPDATE OR DELETE ON {DETAILS_TABLE_NAME}
+                            FOR EACH ROW
+                            EXECUTE FUNCTION assemblers_details_after_write_enqueue_recalc();
+                        END IF;
+                    END $$;
                     """
                 )
 
@@ -403,14 +424,21 @@ def ensure_schema() -> None:
                         """
                     )
                     cursor.execute(
-                        f"DROP TRIGGER IF EXISTS trg_{DATA_DESIGNER_TABLE}_after_write_sync_main ON {DATA_DESIGNER_TABLE}"
-                    )
-                    cursor.execute(
                         f"""
-                        CREATE TRIGGER trg_{DATA_DESIGNER_TABLE}_after_write_sync_main
-                        AFTER INSERT OR UPDATE OR DELETE ON {DATA_DESIGNER_TABLE}
-                        FOR EACH ROW
-                        EXECUTE FUNCTION assemblers_sync_main_order_from_designer();
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_trigger
+                                WHERE tgname = 'trg_{DATA_DESIGNER_TABLE}_after_write_sync_main'
+                                  AND tgrelid = '{DATA_DESIGNER_TABLE}'::regclass
+                            ) THEN
+                                CREATE TRIGGER trg_{DATA_DESIGNER_TABLE}_after_write_sync_main
+                                AFTER INSERT OR UPDATE OR DELETE ON {DATA_DESIGNER_TABLE}
+                                FOR EACH ROW
+                                EXECUTE FUNCTION assemblers_sync_main_order_from_designer();
+                            END IF;
+                        END $$;
                         """
                     )
             conn.commit()
