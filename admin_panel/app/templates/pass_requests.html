@@ -329,12 +329,18 @@
   function beginTableLoading() {
     tableLoadingCounter += 1;
     setTableOverlayVisible(true);
+    if (typeof window.showLoader === 'function') {
+      window.showLoader();
+    }
   }
 
   function endTableLoading() {
     tableLoadingCounter = Math.max(0, tableLoadingCounter - 1);
     if (tableLoadingCounter === 0) {
       setTableOverlayVisible(false);
+      if (typeof window.hideLoader === 'function') {
+        window.hideLoader();
+      }
     }
   }
 
@@ -439,7 +445,6 @@
       loading = false;
       scrollLoader.classList.add('d-none');
       endTableLoading();
-      setTimeout(maybeLoadMore, 0);
     }
   }
 
@@ -605,10 +610,9 @@
     tableWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
   }
 
-  beginTableLoading();
+  // Hide initial table overlay after first server-rendered chunk is visible.
   setTimeout(() => {
-    maybeLoadMore();
-    endTableLoading();
+    setTableOverlayVisible(false);
   }, 220);
 </script>
 {% endblock %}
