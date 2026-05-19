@@ -43,6 +43,7 @@ PASS_STATUS_LABELS = {
 }
 
 CHUNK_LIMIT = 20
+PASS_CHUNK_LIMIT = 30
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -1042,7 +1043,7 @@ def pass_requests():
 
     try:
         rows = _fetch_pass_request_groups(
-            limit=20,
+            limit=PASS_CHUNK_LIMIT,
             offset=0,
             search_vehicle=search_vehicle,
             search_person=search_person,
@@ -1060,6 +1061,7 @@ def pass_requests():
         search_person=search_person,
         status_filter=status_filter,
         status_labels=PASS_STATUS_LABELS,
+        pass_requests_has_more=len(rows) == PASS_CHUNK_LIMIT,
     )
 
 
@@ -1081,13 +1083,13 @@ def pass_requests_chunk():
         offset = 0
 
     items = _fetch_pass_request_groups(
-        limit=20,
+        limit=PASS_CHUNK_LIMIT,
         offset=offset,
         search_vehicle=search_vehicle,
         search_person=search_person,
         status_filter=status_filter,
     )
-    return jsonify({"items": items, "has_more": len(items) == 20})
+    return jsonify({"items": items, "has_more": len(items) == PASS_CHUNK_LIMIT})
 
 
 def _resolve_group_id(cur, request_id: int) -> str | None:

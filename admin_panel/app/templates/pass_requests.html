@@ -5,6 +5,8 @@
 <style>
   .pass-table-wrap {
     position: relative;
+    overflow: auto;
+    scrollbar-gutter: stable both-edges;
   }
 
   .pass-col-persons {
@@ -164,7 +166,10 @@
         </tbody>
       </table>
     </div>
-    <div id="scrollLoader" class="text-center py-3 text-muted d-none">Завантаження...</div>
+    <div class="d-flex align-items-center justify-content-center gap-2 py-3">
+      <div id="scrollLoader" class="text-muted d-none">Завантаження...</div>
+      <button id="loadMoreBtn" type="button" class="btn btn-outline-primary btn-sm {% if not pass_requests_has_more %}d-none{% endif %}">Завантажити ще</button>
+    </div>
   </div>
 </div>
 
@@ -304,6 +309,7 @@
   const tableWrap = document.getElementById('passTableWrap');
   const tableOverlay = document.getElementById('passTableOverlay');
   const scrollLoader = document.getElementById('scrollLoader');
+  const loadMoreBtn = document.getElementById('loadMoreBtn');
   const modalActionForm = document.getElementById('modalActionForm');
   const modalCancelReason = document.getElementById('modalCancelReason');
   const modalCancelAlert = document.getElementById('modalCancelAlert');
@@ -317,7 +323,7 @@
   let offset = tbody.querySelectorAll('tr[data-request-id]').length;
   let loading = false;
   let tableLoadingCounter = 0;
-  let hasMore = offset >= 20;
+  let hasMore = {{ pass_requests_has_more|tojson }};
   const STATUS_LABELS = {{ status_labels|tojson }};
 
   function setTableOverlayVisible(isVisible) {
@@ -415,6 +421,7 @@
   async function loadMore() {
     if (loading || !hasMore) return;
     loading = true;
+    if (loadMoreBtn) loadMoreBtn.disabled = true;
     beginTableLoading();
     scrollLoader.classList.remove('d-none');
 
@@ -439,28 +446,19 @@
 
       offset += items.length;
       hasMore = Boolean(data.has_more);
+      if (loadMoreBtn) {
+        loadMoreBtn.classList.toggle('d-none', !hasMore);
+      }
     } catch (e) {
       hasMore = false;
+      if (loadMoreBtn) {
+        loadMoreBtn.classList.add('d-none');
+      }
     } finally {
       loading = false;
+      if (loadMoreBtn) loadMoreBtn.disabled = false;
       scrollLoader.classList.add('d-none');
       endTableLoading();
-    }
-  }
-
-  function isNearBottomWindow() {
-    return window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
-  }
-
-  function isNearBottomContainer() {
-    if (!tableWrap) return false;
-    return tableWrap.scrollTop + tableWrap.clientHeight >= tableWrap.scrollHeight - 120;
-  }
-
-  function maybeLoadMore() {
-    if (!hasMore || loading) return;
-    if (isNearBottomWindow() || isNearBottomContainer()) {
-      loadMore();
     }
   }
 
@@ -604,10 +602,9 @@
     document.getElementById('cloneDateToInput').required = isRange;
   });
 
-  window.addEventListener('scroll', maybeLoadMore, { passive: true });
-  window.addEventListener('resize', maybeLoadMore);
-  if (tableWrap) {
-    tableWrap.addEventListener('scroll', maybeLoadMore, { passive: true });
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', loadMore);
+    loadMoreBtn.classList.toggle('d-none', !hasMore);
   }
 
   // Hide initial table overlay after first server-rendered chunk is visible.

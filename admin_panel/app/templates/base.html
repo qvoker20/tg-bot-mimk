@@ -22,6 +22,8 @@
       color: #1f2937;
       padding-top: calc(var(--nav-h) + 20px);
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow-y: scroll;
+      scrollbar-gutter: stable;
     }
 
     .page-container{
@@ -130,6 +132,7 @@
     .table-wrap{
       max-height: calc(100vh - 300px);
       overflow: auto;
+      scrollbar-gutter: stable both-edges;
       border-radius: var(--radius-md);
       border: 1px solid #e7ecf3;
       background: #fff;
