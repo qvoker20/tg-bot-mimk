@@ -694,9 +694,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 || (isCloseAction ? "Замовлення успішно закрито." : "Замовлення успішно передано на головну.");
             meta.textContent = resultMessage;
             showToast(resultMessage, "success");
-            if (tbody.children.length < state.limit && state.hasMore) {
-                void loadNextPage();
-            }
+
+            // Always refresh table from API after transfer/close to avoid stale UI.
+            state.selectedOnlyMode = false;
+            resetAndReload();
         } catch (error) {
             meta.textContent = error.message || (state.pendingAction === "close" ? "Помилка закриття замовлень." : "Помилка передачі замовлень.");
             showToast(meta.textContent, "error");
