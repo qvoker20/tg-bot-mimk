@@ -47,6 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const bulkInstallDateInput = document.querySelector("[data-main-bulk-install-date]");
     const bulkApplyButton = document.querySelector("[data-main-bulk-apply]");
     const bulkClearButton = document.querySelector("[data-main-bulk-clear]");
+    const bulkApplySelectedButton = document.querySelector("[data-main-bulk-apply-selected]");
+    const bulkClearSelectedButton = document.querySelector("[data-main-bulk-clear-selected]");
+    const detailsCheckAll = document.querySelector("[data-main-details-check-all]");
     const modalTitle = document.querySelector("[data-main-modal-title]");
     const modalOrderNumber = document.querySelector("[data-main-modal-order-number]");
     const modalCustomer = document.querySelector("[data-main-modal-customer]");
@@ -1538,10 +1541,12 @@ const closeSubcontractsModal = () => {
         state.detailActionState.clear();
         state.activeDetailId = null;
 
+        if (detailsCheckAll) detailsCheckAll.checked = false;
+
         if (!details?.length) {
             const row = document.createElement("tr");
             const cell = document.createElement("td");
-            cell.colSpan = 9;
+            cell.colSpan = 11;
             cell.textContent = "По замовленню ще немає деталізації.";
             row.appendChild(cell);
             modalDetailsBody.appendChild(row);
@@ -1599,7 +1604,29 @@ const closeSubcontractsModal = () => {
                 return cell;
             };
 
-            [detail.part_number, detail.product_name, detail.item_value].forEach((value, index) => {
+            // Checkbox cell (1st)
+            const checkCell = document.createElement("td");
+            checkCell.className = "col-check";
+            const rowCheckbox = document.createElement("input");
+            rowCheckbox.type = "checkbox";
+            rowCheckbox.className = "main-order-detail-row-check";
+            rowCheckbox.title = "Вибрати для застосування дат";
+            if (detailProductCompletedBySystem) rowCheckbox.disabled = true;
+            checkCell.appendChild(rowCheckbox);
+            row.appendChild(checkCell);
+
+            // КБ status badge cell (2nd)
+            const kbCell = document.createElement("td");
+            const kbBadge = document.createElement("span");
+            kbBadge.className = detailProductCompletedBySystem ? "detail-kb-badge is-done" : "detail-kb-badge is-progress";
+            kbBadge.textContent = detailProductCompletedBySystem ? "Завершено" : "В роботі";
+            kbCell.appendChild(kbBadge);
+            row.appendChild(kbCell);
+
+            // Block row visually
+            if (detailProductCompletedBySystem) row.classList.add("is-kb-completed");
+
+            [detail.part_number, detail.product_name, detail.item_value].forEach((value) => {
                 const cell = document.createElement("td");
                 cell.textContent = displayValue(value);
                 row.appendChild(cell);
@@ -2198,43 +2225,90 @@ const closeSubcontractsModal = () => {
         button.addEventListener("click", closeModal);
     });
 
-    // Bulk date apply handlers
-    if (bulkApplyButton) {
-        bulkApplyButton.addEventListener("click", () => {
-            const assemblyVal = bulkAssemblyDateInput?.value || "";
-            const installVal = bulkInstallDateInput?.value || "";
-            if (!assemblyVal && !installVal) {
-                showToast("Вкажіть хоча б одну дату для застосування.", "error");
-                return;
-            }
-            let count = 0;
+    // Bulk date apply helpers
+    const applyBulkDates = (rows) => {
+        const assemblyVal = bulkAssemblyDateInput?.value || "";
+        const installVal = bulkInstallDateInput?.value || "";
+        if (!assemblyVal && !installVal) {
+            showToast("Вкажіть хоча б одну дату для застосування.", "error");
+            return;
+        }
+        let count = 0;
+        rows.forEach((row) => {
             if (assemblyVal) {
-                modalDetailsBody.querySelectorAll("input[data-detail-field='planned_assembly_due_at']").forEach((inp) => {
-                    if (!inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
-                        inp.value = assemblyVal;
-                        inp.dispatchEvent(new Event("input", { bubbles: true }));
-                        inp.dispatchEvent(new Event("change", { bubbles: true }));
-                        count++;
-                    }
-                });
+                const inp = row.querySelector("input[data-detail-field='planned_assembly_due_at']");
+                if (inp && !inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
+                    inp.value = assemblyVal;
+                    inp.dispatchEvent(new Event("input", { bubbles: true }));
+                    inp.dispatchEvent(new Event("change", { bubbles: true }));
+                    count++;
+                }
             }
             if (installVal) {
-                modalDetailsBody.querySelectorAll("input[data-detail-field='planned_install_due_at']").forEach((inp) => {
-                    if (!inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
-                        inp.value = installVal;
-                        inp.dispatchEvent(new Event("input", { bubbles: true }));
-                        inp.dispatchEvent(new Event("change", { bubbles: true }));
-                        count++;
-                    }
-                });
+                const inp = row.querySelector("input[data-detail-field='planned_install_due_at']");
+                if (inp && !inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
+                    inp.value = installVal;
+                    inp.dispatchEvent(new Event("input", { bubbles: true }));
+                    inp.dispatchEvent(new Event("change", { bubbles: true }));
+                    count++;
+                }
             }
-            if (count > 0) showToast(`Дату застосовано до ${count} поля(-ів).`, "success");
+        });
+        if (count > 0) showToast(`Дату застосовано до ${count} поля(-ів).`, "success");
+        else showToast("Немає доступних рядків для застосування.", "error");
+    };
+
+    const clearBulkDates = (rows) => {
+        rows.forEach((row) => {
+            ["planned_assembly_due_at", "planned_install_due_at"].forEach((field) => {
+                const inp = row.querySelector(`input[data-detail-field='${field}']`);
+                if (inp && !inp.disabled) {
+                    inp.value = "";
+                    inp.dispatchEvent(new Event("input", { bubbles: true }));
+                    inp.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+            });
+        });
+        if (bulkAssemblyDateInput) bulkAssemblyDateInput.value = "";
+        if (bulkInstallDateInput) bulkInstallDateInput.value = "";
+    };
+
+    // "Apply to all" button
+    if (bulkApplyButton) {
+        bulkApplyButton.addEventListener("click", () => {
+            const rows = Array.from(modalDetailsBody.querySelectorAll("tr:not(.is-kb-completed)"));
+            applyBulkDates(rows);
         });
     }
     if (bulkClearButton) {
         bulkClearButton.addEventListener("click", () => {
             if (bulkAssemblyDateInput) bulkAssemblyDateInput.value = "";
             if (bulkInstallDateInput) bulkInstallDateInput.value = "";
+        });
+    }
+
+    // "Apply to selected" button
+    if (bulkApplySelectedButton) {
+        bulkApplySelectedButton.addEventListener("click", () => {
+            const rows = Array.from(modalDetailsBody.querySelectorAll("tr")).filter((r) => r.querySelector(".main-order-detail-row-check:checked"));
+            if (!rows.length) { showToast("Оберіть хоча б один рядок.", "error"); return; }
+            applyBulkDates(rows);
+        });
+    }
+    if (bulkClearSelectedButton) {
+        bulkClearSelectedButton.addEventListener("click", () => {
+            const rows = Array.from(modalDetailsBody.querySelectorAll("tr")).filter((r) => r.querySelector(".main-order-detail-row-check:checked"));
+            if (!rows.length) { showToast("Оберіть хоча б один рядок.", "error"); return; }
+            clearBulkDates(rows);
+        });
+    }
+
+    // Check-all header checkbox
+    if (detailsCheckAll) {
+        detailsCheckAll.addEventListener("change", () => {
+            modalDetailsBody.querySelectorAll(".main-order-detail-row-check:not(:disabled)").forEach((cb) => {
+                cb.checked = detailsCheckAll.checked;
+            });
         });
     }
 

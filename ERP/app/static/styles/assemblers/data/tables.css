@@ -298,7 +298,7 @@
 
 /* Compact modal details table (must be at file end) */
 .main-order-modal .main-order-details-wrap {
-    max-height: min(34vh, 300px);
+    max-height: min(52vh, 460px);
     border-radius: 10px;
 }
 
@@ -413,7 +413,7 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 
 /* Bulk date apply panel */
 .main-order-bulk-dates {
-    display: flex;
+    display: none;
     align-items: flex-end;
     gap: 10px;
     flex-wrap: wrap;
@@ -424,11 +424,7 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
     margin-bottom: 10px;
 }
 
-.main-order-bulk-dates[data-main-bulk-dates] {
-    display: none;
-}
-
-.main-order-bulk-dates[data-main-bulk-dates].is-visible {
+.main-order-bulk-dates.is-visible {
     display: flex;
 }
 
@@ -457,10 +453,58 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 }
 
 .main-order-bulk-apply-btn,
-.main-order-bulk-clear-btn {
+.main-order-bulk-clear-btn,
+.main-order-bulk-apply-all-btn {
     align-self: flex-end;
     padding: 7px 14px;
     font-size: 13px;
     border-radius: 7px;
     cursor: pointer;
+}
+
+/* KB status badge */
+.detail-kb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.detail-kb-badge.is-done {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.detail-kb-badge.is-progress {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
+/* Checkbox column */
+.col-check {
+    width: 32px;
+    text-align: center;
+}
+
+.main-order-detail-row-check {
+    cursor: pointer;
+}
+
+/* Blocked row (KB done) */
+.main-order-details-table tr.is-kb-completed {
+    opacity: 0.55;
+    background: #f8fafc;
+}
+
+.main-order-details-table tr.is-kb-completed td {
+    pointer-events: none;
+}
+
+.main-order-details-table tr.is-kb-completed .col-check,
+.main-order-details-table tr.is-kb-completed .col-check * {
+    pointer-events: auto;
 }

@@ -328,6 +328,8 @@
             </article>
         </div>
 
+        <div class="main-order-modal-body">
+
         <div class="main-order-status-warning hidden" data-main-reclamation-warning role="status" aria-live="polite">
             Статус "Рекламація": зміни вносити заборонено.
         </div>
@@ -342,21 +344,24 @@
 
             <div class="main-order-bulk-dates" data-main-bulk-dates>
                 <label class="main-order-bulk-date-label">
-                    <span>Збірка (всі)</span>
+                    <span>Збірка</span>
                     <input type="date" data-main-bulk-assembly-date>
                 </label>
                 <label class="main-order-bulk-date-label">
-                    <span>Монтаж (всі)</span>
+                    <span>Монтаж</span>
                     <input type="date" data-main-bulk-install-date>
                 </label>
-                <button type="button" class="btn-secondary main-order-bulk-apply-btn" data-main-bulk-apply>Застосувати до всіх</button>
-                <button type="button" class="ghost-button main-order-bulk-clear-btn" data-main-bulk-clear>Скинути</button>
+                <button type="button" class="btn-secondary main-order-bulk-apply-btn" data-main-bulk-apply-selected>Застосувати для обраних</button>
+                <button type="button" class="ghost-button main-order-bulk-clear-btn" data-main-bulk-clear-selected>Скинути для обраних</button>
+                <button type="button" class="ghost-button main-order-bulk-apply-all-btn" data-main-bulk-apply>Застосувати до всіх</button>
             </div>
 
             <div class="main-order-details-wrap">
                 <table class="buffer-table main-order-details-table">
                     <thead>
                         <tr>
+                            <th class="col-check"><input type="checkbox" data-main-details-check-all title="Виділити всі"></th>
+                            <th>КБ</th>
                             <th>Частина</th>
                             <th>Виріб</th>
                             <th>Вартість</th>
@@ -370,7 +375,7 @@
                     </thead>
                     <tbody data-main-modal-details-body>
                         <tr>
-                            <td colspan="9">Оберіть замовлення.</td>
+                            <td colspan="11">Оберіть замовлення.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -475,16 +480,18 @@
                     <textarea class="main-order-note-textarea" name="note" rows="4" placeholder="Додайте примітку по замовленню" data-main-modal-note></textarea>
                 </div>
             </div>
-
-            <div class="confirm-actions-row">
-                <div class="confirm-actions-left">
-                    <button type="button" class="ghost-button status-action-button" data-main-modal-close-order>Закрити</button>
-                    <button type="button" class="ghost-button status-action-button" data-main-modal-mark-reclamation>Рекламація</button>
-                    <button type="button" class="ghost-button status-action-button" data-main-modal-cancel-reclamation>Відмінити рекламацію</button>
-                </div>
-                <button type="submit" class="module-link" data-main-modal-submit{% if not can_manage_main_orders %} hidden{% endif %}>Зберегти</button>
-            </div>
         </form>
+
+        </div><!-- /main-order-modal-body -->
+
+        <div class="confirm-actions-row main-order-modal-footer">
+            <div class="confirm-actions-left">
+                <button type="button" class="ghost-button status-action-button" data-main-modal-close-order>Закрити</button>
+                <button type="button" class="ghost-button status-action-button" data-main-modal-mark-reclamation>Рекламація</button>
+                <button type="button" class="ghost-button status-action-button" data-main-modal-cancel-reclamation>Відмінити рекламацію</button>
+            </div>
+            <button type="button" class="module-link" data-main-modal-submit{% if not can_manage_main_orders %} hidden{% endif %} onclick="document.querySelector('[data-main-modal-form]').requestSubmit()">Зберегти</button>
+        </div>
     </div>
 </div>
 
