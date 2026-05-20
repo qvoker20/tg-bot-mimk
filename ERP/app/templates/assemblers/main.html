@@ -7,14 +7,14 @@
 {% block extra_head %}
 <style>
     .main-order-modal .main-order-details-wrap {
-        overflow-x: hidden !important;
+        overflow-x: auto !important;
     }
 
     .main-order-modal table.buffer-table.main-order-details-table {
         width: 100% !important;
         min-width: 100% !important;
         max-width: 100% !important;
-        table-layout: fixed !important;
+        table-layout: auto !important;
     }
 
     .main-order-modal table.buffer-table.main-order-details-table thead th,
@@ -24,45 +24,6 @@
         overflow: visible !important;
         max-width: none !important;
         word-break: break-word !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(1),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(1) {
-        width: 8% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(2),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(2) {
-        width: 18% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(3),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(3) {
-        width: 14% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(4),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(4) {
-        width: 8% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(5),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(5),
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(6),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(6) {
-        width: 9% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(7),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(7),
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(8),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(8) {
-        width: 16% !important;
-    }
-
-    .main-order-modal table.buffer-table.main-order-details-table th:nth-child(9),
-    .main-order-modal table.buffer-table.main-order-details-table td:nth-child(9) {
-        width: 10% !important;
     }
 
     .main-order-modal table.buffer-table.main-order-details-table td input[type="date"] {

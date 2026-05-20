@@ -240,41 +240,48 @@ gap: 8px;
 
 .main-order-modal .main-order-details-table th:nth-child(1),
 .main-order-modal .main-order-details-table td:nth-child(1) {
-    width: 8%;
+    width: 36px;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(2),
 .main-order-modal .main-order-details-table td:nth-child(2) {
-    width: 20%;
+    width: 92px;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(3),
 .main-order-modal .main-order-details-table td:nth-child(3) {
-    width: 16%;
+    width: 10%;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(4),
 .main-order-modal .main-order-details-table td:nth-child(4) {
-    width: 10%;
+    width: 16%;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(5),
-.main-order-modal .main-order-details-table td:nth-child(5),
-.main-order-modal .main-order-details-table th:nth-child(6),
-.main-order-modal .main-order-details-table td:nth-child(6) {
+.main-order-modal .main-order-details-table td:nth-child(5) {
     width: 10%;
 }
 
+.main-order-modal .main-order-details-table th:nth-child(6),
+.main-order-modal .main-order-details-table td:nth-child(6),
 .main-order-modal .main-order-details-table th:nth-child(7),
 .main-order-modal .main-order-details-table td:nth-child(7),
 .main-order-modal .main-order-details-table th:nth-child(8),
 .main-order-modal .main-order-details-table td:nth-child(8) {
-    width: 18%;
+    width: 8%;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(9),
-.main-order-modal .main-order-details-table td:nth-child(9) {
-    width: 12%;
+.main-order-modal .main-order-details-table td:nth-child(9),
+.main-order-modal .main-order-details-table th:nth-child(10),
+.main-order-modal .main-order-details-table td:nth-child(10) {
+    width: 14%;
+}
+
+.main-order-modal .main-order-details-table th:nth-child(11),
+.main-order-modal .main-order-details-table td:nth-child(11) {
+    width: 9%;
 }
 
 .main-order-detail-require-cell {
