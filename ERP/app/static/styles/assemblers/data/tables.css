@@ -410,3 +410,57 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
   background: #ffe8bf;
   color: #7a4b00;
 }
+
+/* Bulk date apply panel */
+.main-order-bulk-dates {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.main-order-bulk-dates[data-main-bulk-dates] {
+    display: none;
+}
+
+.main-order-bulk-dates[data-main-bulk-dates].is-visible {
+    display: flex;
+}
+
+.main-order-bulk-date-label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.main-order-bulk-date-label input[type="date"] {
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    outline: none;
+    transition: border-color 120ms ease;
+}
+
+.main-order-bulk-date-label input[type="date"]:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.main-order-bulk-apply-btn,
+.main-order-bulk-clear-btn {
+    align-self: flex-end;
+    padding: 7px 14px;
+    font-size: 13px;
+    border-radius: 7px;
+    cursor: pointer;
+}

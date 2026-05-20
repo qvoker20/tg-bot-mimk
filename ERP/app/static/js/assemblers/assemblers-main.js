@@ -42,6 +42,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.querySelector("[data-main-modal]");
     const modalForm = document.querySelector("[data-main-modal-form]");
     const modalDetailsBody = document.querySelector("[data-main-modal-details-body]");
+    const bulkDatesPanel = document.querySelector("[data-main-bulk-dates]");
+    const bulkAssemblyDateInput = document.querySelector("[data-main-bulk-assembly-date]");
+    const bulkInstallDateInput = document.querySelector("[data-main-bulk-install-date]");
+    const bulkApplyButton = document.querySelector("[data-main-bulk-apply]");
+    const bulkClearButton = document.querySelector("[data-main-bulk-clear]");
     const modalTitle = document.querySelector("[data-main-modal-title]");
     const modalOrderNumber = document.querySelector("[data-main-modal-order-number]");
     const modalCustomer = document.querySelector("[data-main-modal-customer]");
@@ -1774,6 +1779,7 @@ const closeSubcontractsModal = () => {
         applyNoteAppearanceToField(order.note_color || "", order.note_text_color || NOTE_TEXT_PICKER_FALLBACK);
         modalVat.checked = Boolean(order.vat);
         renderDetails(order.details || []);
+        if (bulkDatesPanel) bulkDatesPanel.classList.add("is-visible");
         modalSubmit.hidden = !canManageOrders;
         updateReclamationWarning();
         updateModalStatusActionButtons();
@@ -1796,6 +1802,11 @@ const closeSubcontractsModal = () => {
         closeNotePopovers();
         applyNoteAppearanceToField("", NOTE_TEXT_PICKER_FALLBACK);
         renderDetails([]);
+        if (bulkDatesPanel) {
+            bulkDatesPanel.classList.remove("is-visible");
+            if (bulkAssemblyDateInput) bulkAssemblyDateInput.value = "";
+            if (bulkInstallDateInput) bulkInstallDateInput.value = "";
+        }
         updateReclamationWarning();
         setModalBusy(false);
         setModalSaving(false);
@@ -2186,6 +2197,46 @@ const closeSubcontractsModal = () => {
     closeButtons.forEach((button) => {
         button.addEventListener("click", closeModal);
     });
+
+    // Bulk date apply handlers
+    if (bulkApplyButton) {
+        bulkApplyButton.addEventListener("click", () => {
+            const assemblyVal = bulkAssemblyDateInput?.value || "";
+            const installVal = bulkInstallDateInput?.value || "";
+            if (!assemblyVal && !installVal) {
+                showToast("Вкажіть хоча б одну дату для застосування.", "error");
+                return;
+            }
+            let count = 0;
+            if (assemblyVal) {
+                modalDetailsBody.querySelectorAll("input[data-detail-field='planned_assembly_due_at']").forEach((inp) => {
+                    if (!inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
+                        inp.value = assemblyVal;
+                        inp.dispatchEvent(new Event("input", { bubbles: true }));
+                        inp.dispatchEvent(new Event("change", { bubbles: true }));
+                        count++;
+                    }
+                });
+            }
+            if (installVal) {
+                modalDetailsBody.querySelectorAll("input[data-detail-field='planned_install_due_at']").forEach((inp) => {
+                    if (!inp.disabled && inp.closest(".main-order-detail-stage-control")?.style.visibility !== "hidden") {
+                        inp.value = installVal;
+                        inp.dispatchEvent(new Event("input", { bubbles: true }));
+                        inp.dispatchEvent(new Event("change", { bubbles: true }));
+                        count++;
+                    }
+                });
+            }
+            if (count > 0) showToast(`Дату застосовано до ${count} поля(-ів).`, "success");
+        });
+    }
+    if (bulkClearButton) {
+        bulkClearButton.addEventListener("click", () => {
+            if (bulkAssemblyDateInput) bulkAssemblyDateInput.value = "";
+            if (bulkInstallDateInput) bulkInstallDateInput.value = "";
+        });
+    }
 
     searchApplyButton?.addEventListener("click", () => {
         void applyMainSearch();
