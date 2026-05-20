@@ -228,6 +228,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return Boolean(s && s !== "—" && s !== "-");
     };
 
+    const isConstructorCompleted = (value) => {
+        const text = String(value || "").trim().toLowerCase();
+        if (!text || text === "—" || text === "-") {
+            return false;
+        }
+        if (text.includes("заверш") || text.includes("викон") || text.includes("готов") || text.includes("done") || text.includes("complete")) {
+            return true;
+        }
+        const match = text.match(/(\d+(?:[.,]\d+)?)/);
+        if (!match) {
+            return false;
+        }
+        const percent = Number.parseFloat(match[1].replace(",", "."));
+        return Number.isFinite(percent) && percent >= 100;
+    };
+
     const resolveStageStatus = (detail, stage, actionState) => {
         const requiresAssembly = detail.requires_assembly !== false;
         const requiresInstall = detail.requires_install !== false;
@@ -419,6 +435,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         detail_id: detailId,
                         planned_assembly_due_at: "",
                         planned_install_due_at: "",
+                        assembly_percent: 0,
+                        install_percent: 0,
                         item_percent: 0,
                         requires_assembly: true,
                         requires_install: true,
@@ -438,6 +456,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 if (input.dataset.detailField === "item_percent") {
                     detail.item_percent = parseFloat(input.value) || 0;
+                }
+                if (input.dataset.detailField === "assembly_percent") {
+                    detail.assembly_percent = parseFloat(input.value) || 0;
+                }
+                if (input.dataset.detailField === "install_percent") {
+                    detail.install_percent = parseFloat(input.value) || 0;
+                    detail.item_percent = detail.install_percent;
                 }
                 if (input.dataset.detailField === "requires_assembly") {
                     detail.requires_assembly = input.checked;
@@ -932,7 +957,7 @@ const renderInfoDetails = (details) => {
     if (!details.length) {
         const tr = document.createElement("tr");
         const td = document.createElement("td");
-        td.colSpan = 8;
+        td.colSpan = 9;
         td.textContent = "Деталізація відсутня.";
         tr.appendChild(td);
         infoDetailsBody.appendChild(tr);
@@ -948,7 +973,8 @@ const renderInfoDetails = (details) => {
             d.part_number || "—",
             d.product_name || "—",
             d.item_value || "—",
-            d.item_percent != null ? String(d.item_percent) + "%" : "—",
+            d.assembly_percent != null ? String(d.assembly_percent) + "%" : "—",
+            d.install_percent != null ? String(d.install_percent) + "%" : "—",
             d.planned_assembly_due_at || "—",
             d.planned_install_due_at || "—",
             effectiveAssemblyStatus,
@@ -1546,7 +1572,7 @@ const closeSubcontractsModal = () => {
         if (!details?.length) {
             const row = document.createElement("tr");
             const cell = document.createElement("td");
-            cell.colSpan = 11;
+            cell.colSpan = 12;
             cell.textContent = "По замовленню ще немає деталізації.";
             row.appendChild(cell);
             modalDetailsBody.appendChild(row);
@@ -1577,7 +1603,9 @@ const closeSubcontractsModal = () => {
                 (!detailAssemblyRequiredBySystem || detailAssemblyCompletedBySystem)
                 && (!detailInstallRequiredBySystem || detailInstallCompletedBySystem)
             );
-            row.dataset.productCompleted = String(detailProductCompletedBySystem);
+            const detailKbCompleted = isConstructorCompleted(detail.constructor_status) || detailProductCompletedBySystem;
+            const detailKbLocked = !detailKbCompleted;
+            row.dataset.kbCompleted = String(detailKbCompleted);
 
             if (detailId != null) {
                 state.detailActionState.set(detailId, cloneDetailActionDefaults());
@@ -1611,20 +1639,20 @@ const closeSubcontractsModal = () => {
             rowCheckbox.type = "checkbox";
             rowCheckbox.className = "main-order-detail-row-check";
             rowCheckbox.title = "Вибрати для застосування дат";
-            if (detailProductCompletedBySystem) rowCheckbox.disabled = true;
+            if (detailKbLocked) rowCheckbox.disabled = true;
             checkCell.appendChild(rowCheckbox);
             row.appendChild(checkCell);
 
             // КБ status badge cell (2nd)
             const kbCell = document.createElement("td");
             const kbBadge = document.createElement("span");
-            kbBadge.className = detailProductCompletedBySystem ? "detail-kb-badge is-done" : "detail-kb-badge is-progress";
-            kbBadge.textContent = detailProductCompletedBySystem ? "Завершено" : "В роботі";
+            kbBadge.className = detailKbCompleted ? "detail-kb-badge is-done" : "detail-kb-badge is-progress";
+            kbBadge.textContent = detailKbCompleted ? "Завершено" : "В роботі";
             kbCell.appendChild(kbBadge);
             row.appendChild(kbCell);
 
             // Block row visually
-            if (detailProductCompletedBySystem) row.classList.add("is-kb-completed");
+            if (detailKbLocked) row.classList.add("is-kb-locked");
 
             [detail.part_number, detail.product_name, detail.item_value].forEach((value) => {
                 const cell = document.createElement("td");
@@ -1632,20 +1660,32 @@ const closeSubcontractsModal = () => {
                 row.appendChild(cell);
             });
 
-            // Відсоток — числове поле
-            const percentCell = document.createElement("td");
-            const percentInput = document.createElement("input");
-            percentInput.type = "number";
-            percentInput.min = "0";
-            percentInput.max = "100";
-            percentInput.step = "0.01";
-            percentInput.value = String(detail.item_percent ?? 0);
-            percentInput.dataset.detailField = "item_percent";
-            percentInput.dataset.detailId = String(detail.detail_id || "");
-            percentInput.setAttribute("aria-label", `Відсоток ${detail.part_number || ""}`.trim());
-            percentInput.style.width = "70px";
-            percentCell.appendChild(percentInput);
-            row.appendChild(percentCell);
+            const buildPercentInput = ({ fieldName, label, value }) => {
+                const cell = document.createElement("td");
+                const input = document.createElement("input");
+                input.type = "number";
+                input.min = "0";
+                input.max = "100";
+                input.step = "0.01";
+                input.value = String(value ?? 0);
+                input.dataset.detailField = fieldName;
+                input.dataset.detailId = String(detail.detail_id || "");
+                input.setAttribute("aria-label", `${label} ${detail.part_number || ""}`.trim());
+                input.style.width = "70px";
+                cell.appendChild(input);
+                return cell;
+            };
+
+            row.appendChild(buildPercentInput({
+                fieldName: "assembly_percent",
+                label: "Відсоток збірка",
+                value: detail.assembly_percent,
+            }));
+            row.appendChild(buildPercentInput({
+                fieldName: "install_percent",
+                label: "Відсоток монтаж",
+                value: detail.install_percent ?? detail.item_percent,
+            }));
 
             const requiresAssemblyCell = document.createElement("td");
             requiresAssemblyCell.className = "main-order-detail-require-cell";
@@ -1692,7 +1732,8 @@ const closeSubcontractsModal = () => {
                     row.dataset.installStatus || "",
                     row.dataset.installCompletedAt || "",
                 );
-                const productCompletedBySystem = row.dataset.productCompleted === "true";
+                const kbCompleted = row.dataset.kbCompleted === "true";
+                const rowLocked = !kbCompleted;
 
                 if (!assemblyRequired && !installRequired) {
                     showToast("Не можна одночасно зняти збірку і монтаж для виробу.", "error");
@@ -1721,13 +1762,17 @@ const closeSubcontractsModal = () => {
                     actionState.reset_install_completed = false;
                 }
 
-                requiresAssemblyInput.disabled = !canEditCurrentOrder() || productCompletedBySystem;
-                requiresInstallInput.disabled = !canEditCurrentOrder() || productCompletedBySystem;
+                requiresAssemblyInput.disabled = !canEditCurrentOrder() || rowLocked;
+                requiresInstallInput.disabled = !canEditCurrentOrder() || rowLocked;
+
+                row.querySelectorAll("input[data-detail-field='assembly_percent'], input[data-detail-field='install_percent']").forEach((input) => {
+                    input.disabled = !canEditCurrentOrder() || rowLocked;
+                });
 
                 const assemblyDateInput = row.querySelector("input[data-detail-field='planned_assembly_due_at']");
                 const installDateInput = row.querySelector("input[data-detail-field='planned_install_due_at']");
                 if (assemblyDateInput) {
-                    assemblyDateInput.disabled = !assemblyRequired || !canEditCurrentOrder() || assemblyStageCompleted || productCompletedBySystem;
+                    assemblyDateInput.disabled = !assemblyRequired || !canEditCurrentOrder() || assemblyStageCompleted || rowLocked;
                     const assemblyWrap = assemblyDateInput.closest(".main-order-detail-stage-control");
                     if (!assemblyRequired) {
                         assemblyDateInput.value = "";
@@ -1738,7 +1783,7 @@ const closeSubcontractsModal = () => {
                     }
                 }
                 if (installDateInput) {
-                    installDateInput.disabled = !installRequired || !canEditCurrentOrder() || installStageCompleted || productCompletedBySystem;
+                    installDateInput.disabled = !installRequired || !canEditCurrentOrder() || installStageCompleted || rowLocked;
                     const installWrap = installDateInput.closest(".main-order-detail-stage-control");
                     if (!installRequired) {
                         installDateInput.value = "";
@@ -1760,8 +1805,10 @@ const closeSubcontractsModal = () => {
             const actionButton = document.createElement("button");
             actionButton.type = "button";
             actionButton.className = "main-order-detail-edit-button";
-            actionButton.textContent = "Редагувати";
-            actionButton.disabled = !canEditCurrentOrder();
+            actionButton.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">edit</span>';
+            actionButton.setAttribute("aria-label", "Редагувати етапи");
+            actionButton.title = "Редагувати етапи";
+            actionButton.disabled = !canEditCurrentOrder() || detailKbLocked;
             actionButton.addEventListener("click", () => openDetailStageModal(detail));
             actionsCell.appendChild(actionButton);
 
@@ -2276,7 +2323,7 @@ const closeSubcontractsModal = () => {
     // "Apply to all" button
     if (bulkApplyButton) {
         bulkApplyButton.addEventListener("click", () => {
-            const rows = Array.from(modalDetailsBody.querySelectorAll("tr:not(.is-kb-completed)"));
+            const rows = Array.from(modalDetailsBody.querySelectorAll("tr:not(.is-kb-locked)"));
             applyBulkDates(rows);
         });
     }

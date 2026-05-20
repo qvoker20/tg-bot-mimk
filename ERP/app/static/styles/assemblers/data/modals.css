@@ -260,7 +260,7 @@ gap: 8px;
 
 .main-order-modal .main-order-details-table th:nth-child(5),
 .main-order-modal .main-order-details-table td:nth-child(5) {
-    width: 10%;
+    width: 9%;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(6),
@@ -276,12 +276,17 @@ gap: 8px;
 .main-order-modal .main-order-details-table td:nth-child(9),
 .main-order-modal .main-order-details-table th:nth-child(10),
 .main-order-modal .main-order-details-table td:nth-child(10) {
-    width: 14%;
+    width: 12%;
 }
 
 .main-order-modal .main-order-details-table th:nth-child(11),
 .main-order-modal .main-order-details-table td:nth-child(11) {
-    width: 9%;
+    width: 12%;
+}
+
+.main-order-modal .main-order-details-table th:nth-child(12),
+.main-order-modal .main-order-details-table td:nth-child(12) {
+    width: 7%;
 }
 
 .main-order-detail-require-cell {
@@ -321,15 +326,23 @@ gap: 8px;
 
 .main-order-detail-edit-button {
     min-height: 32px;
-    padding: 6px 12px;
+    min-width: 32px;
+    width: 32px;
+    padding: 0;
     border: 1px solid rgba(221, 109, 32, 0.45);
     border-radius: 10px;
     background: linear-gradient(180deg, #fff9f3 0%, #fff2e7 100%);
     color: #9a3412;
-    font-size: 12px;
-    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.main-order-detail-edit-button .material-symbols-outlined {
+    font-size: 18px;
+    line-height: 1;
 }
 
 .main-order-detail-edit-button:hover:not(:disabled) {

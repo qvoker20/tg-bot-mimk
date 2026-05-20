@@ -103,6 +103,8 @@ def ensure_schema() -> None:
                         glass_delivered TEXT NOT NULL DEFAULT '',
                         planned_hours TEXT NOT NULL DEFAULT '',
                         item_value NUMERIC(14, 2) NOT NULL DEFAULT 0,
+                        assembly_percent NUMERIC(8, 2) NOT NULL DEFAULT 0,
+                        install_percent NUMERIC(8, 2) NOT NULL DEFAULT 0,
                         requires_assembly BOOLEAN NOT NULL DEFAULT TRUE,
                         requires_install BOOLEAN NOT NULL DEFAULT TRUE,
                         total_hours TEXT NOT NULL DEFAULT '',
@@ -115,6 +117,8 @@ def ensure_schema() -> None:
                 cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS install_days_count INTEGER NOT NULL DEFAULT 0")
                 cursor.execute(f"ALTER TABLE {MAIN_TABLE_NAME} ADD COLUMN IF NOT EXISTS vat BOOLEAN NOT NULL DEFAULT FALSE")
                 cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS item_percent NUMERIC(8,2) NOT NULL DEFAULT 0")
+                cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS assembly_percent NUMERIC(8,2) NOT NULL DEFAULT 0")
+                cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS install_percent NUMERIC(8,2) NOT NULL DEFAULT 0")
                 cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS requires_assembly BOOLEAN NOT NULL DEFAULT TRUE")
                 cursor.execute(f"ALTER TABLE {DETAILS_TABLE_NAME} ADD COLUMN IF NOT EXISTS requires_install BOOLEAN NOT NULL DEFAULT TRUE")
 

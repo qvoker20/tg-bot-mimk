@@ -495,16 +495,16 @@ box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 }
 
 /* Blocked row (KB done) */
-.main-order-details-table tr.is-kb-completed {
+.main-order-details-table tr.is-kb-locked {
     opacity: 0.55;
     background: #f8fafc;
 }
 
-.main-order-details-table tr.is-kb-completed td {
+.main-order-details-table tr.is-kb-locked td {
     pointer-events: none;
 }
 
-.main-order-details-table tr.is-kb-completed .col-check,
-.main-order-details-table tr.is-kb-completed .col-check * {
+.main-order-details-table tr.is-kb-locked .col-check,
+.main-order-details-table tr.is-kb-locked .col-check * {
     pointer-events: auto;
 }

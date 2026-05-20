@@ -72,6 +72,34 @@ def _normalize_note_text_color(value) -> str:
     return color or _DEFAULT_NOTE_TEXT_COLOR
 
 
+def _normalize_percent(value, *, field_label: str) -> float:
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        normalized = 0.0
+
+    if normalized < 0 or normalized > 100:
+        raise ValueError(f"{field_label} повинен бути у діапазоні 0..100.")
+    return normalized
+
+
+def _is_constructor_completed(value) -> bool:
+    text = _safe_text(value).casefold()
+    if not text:
+        return False
+    if any(marker in text for marker in ("заверш", "викон", "готов", "done", "complete")):
+        return True
+
+    match = re.search(r"(\d+(?:[\.,]\d+)?)", text)
+    if not match:
+        return False
+    try:
+        percent = float(match.group(1).replace(",", "."))
+    except ValueError:
+        return False
+    return percent >= 100
+
+
 def _resolve_detail_stage_status(
     *,
     raw_status,
@@ -743,6 +771,9 @@ def load_main_order_card(order_number: str) -> dict | None:
                     install_completed_at,
                     assembly_worker,
                     install_worker,
+                    constructor_status,
+                    assembly_percent,
+                    install_percent,
                     item_percent,
                     requires_assembly,
                     requires_install
@@ -815,9 +846,12 @@ def load_main_order_card(order_number: str) -> dict | None:
             "install_completed_at": record[13],
             "assembly_worker": record[14],
             "install_worker": record[15],
-            "item_percent": float(record[16] or 0),
-            "requires_assembly": bool(record[17]),
-            "requires_install": bool(record[18]),
+            "constructor_status": _safe_text(record[16]) or "",
+            "assembly_percent": float(record[17] or 0),
+            "install_percent": float(record[18] or 0),
+            "item_percent": float(record[19] or 0),
+            "requires_assembly": bool(record[20]),
+            "requires_install": bool(record[21]),
         }
         for record in detail_rows
     ]
@@ -981,6 +1015,9 @@ def load_main_order_card(order_number: str) -> dict | None:
                 "install_hours": _safe_text(d.get("install_hours")) or "-",
                 "assembly_worker": _safe_text(d.get("assembly_worker")) or "-",
                 "install_worker": _safe_text(d.get("install_worker")) or "-",
+                "constructor_status": _safe_text(d.get("constructor_status")) or "",
+                "assembly_percent": d.get("assembly_percent", 0),
+                "install_percent": d.get("install_percent", 0),
                 "item_percent": d.get("item_percent", 0),
                 "requires_assembly": bool(d.get("requires_assembly", True)),
                 "requires_install": bool(d.get("requires_install", True)),
@@ -1058,6 +1095,9 @@ def update_main_order_card(
                         id,
                         requires_assembly,
                         requires_install,
+                        constructor_status,
+                        assembly_percent,
+                        install_percent,
                         TRIM(COALESCE(assembly_status, '')),
                         assembly_completed_at,
                         TRIM(COALESCE(install_status, '')),
@@ -1073,12 +1113,15 @@ def update_main_order_card(
                     int(row[0]): {
                         "requires_assembly": bool(row[1]),
                         "requires_install": bool(row[2]),
-                        "assembly_status": _safe_text(row[3]),
-                        "assembly_completed_at": row[4],
-                        "install_status": _safe_text(row[5]),
-                        "install_completed_at": row[6],
-                        "planned_assembly_due_at": row[7],
-                        "planned_install_due_at": row[8],
+                        "constructor_status": _safe_text(row[3]),
+                        "assembly_percent": float(row[4] or 0),
+                        "install_percent": float(row[5] or 0),
+                        "assembly_status": _safe_text(row[6]),
+                        "assembly_completed_at": row[7],
+                        "install_status": _safe_text(row[8]),
+                        "install_completed_at": row[9],
+                        "planned_assembly_due_at": row[10],
+                        "planned_install_due_at": row[11],
                     }
                     for row in cursor.fetchall()
                 }
@@ -1121,12 +1164,34 @@ def update_main_order_card(
                     requires_install = bool(item.get("requires_install", True))
                     planned_assembly_due_at = _pud(_safe_text(item.get("planned_assembly_due_at")))
                     planned_install_due_at = _pud(_safe_text(item.get("planned_install_due_at")))
+                    assembly_percent = _normalize_percent(
+                        item.get("assembly_percent"),
+                        field_label="Відсоток збірка",
+                    )
+                    install_percent = _normalize_percent(
+                        item.get("install_percent", item.get("item_percent")),
+                        field_label="Відсоток монтаж",
+                    )
 
                     current_detail = detail_state_by_id.get(normalized_detail_id)
                     if not current_detail:
                         if normalized_detail_id in requested_stage_actions:
                             raise ValueError("Вибраний виріб не знайдено або вже неактуальний. Оновіть сторінку.")
                         continue
+
+                    constructor_completed = _is_constructor_completed(current_detail.get("constructor_status"))
+                    if not constructor_completed:
+                        has_stage_actions = bool(requested_stage_actions.get(normalized_detail_id))
+                        if (
+                            planned_assembly_due_at != current_detail.get("planned_assembly_due_at")
+                            or planned_install_due_at != current_detail.get("planned_install_due_at")
+                            or requires_assembly != bool(current_detail.get("requires_assembly"))
+                            or requires_install != bool(current_detail.get("requires_install"))
+                            or assembly_percent != float(current_detail.get("assembly_percent") or 0)
+                            or install_percent != float(current_detail.get("install_percent") or 0)
+                            or has_stage_actions
+                        ):
+                            raise ValueError("Редагування дозволене лише коли статус КБ: 'Завершено'.")
 
                     if not requires_assembly and not requires_install:
                         raise ValueError("Не можна одночасно зняти позначки 'Збірка' і 'Монтаж'.")
@@ -1174,7 +1239,9 @@ def update_main_order_card(
                             planned_assembly_due_at,
                             TASK_STATUS_COMPLETED,
                             planned_install_due_at,
-                            float(item.get("item_percent") or 0),
+                            assembly_percent,
+                            install_percent,
+                            install_percent,
                             requires_assembly,
                             requires_install,
                             complete_assembly_now,
@@ -1214,6 +1281,8 @@ def update_main_order_card(
                                 THEN planned_install_due_at
                                 ELSE %s
                             END,
+                            assembly_percent = %s,
+                            install_percent = %s,
                             item_percent = %s,
                             requires_assembly = %s,
                             requires_install = %s,

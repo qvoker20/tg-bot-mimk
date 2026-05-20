@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS assemblers_detail_rows (
     planned_hours           TEXT NOT NULL DEFAULT '',
     total_hours             TEXT NOT NULL DEFAULT '',
     item_value              NUMERIC(14, 2) NOT NULL DEFAULT 0,
+    assembly_percent        NUMERIC(8, 2) NOT NULL DEFAULT 0,
+    install_percent         NUMERIC(8, 2) NOT NULL DEFAULT 0,
     item_percent            NUMERIC(8, 2) NOT NULL DEFAULT 0,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
