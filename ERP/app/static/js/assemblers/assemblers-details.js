@@ -107,7 +107,10 @@ document.addEventListener("DOMContentLoaded", () => {
             row.assembly_status, row.planned_install_due_at, row.install_worker, row.install_started_at,
             row.install_completed_at, row.install_days, row.install_hours, row.install_status, row.item_type, row.constructor_status,
             row.production_launches, row.production_completed, row.metal, row.glass_eta, row.glass_delivered,
-            row.planned_hours, row.item_value, row.item_percent, row.total_hours,
+            row.planned_hours, row.item_value,
+            row.assembly_percent != null ? `${row.assembly_percent}%` : "—",
+            row.install_percent != null ? `${row.install_percent}%` : "—",
+            row.total_hours,
         ];
 
         values.forEach((value, index) => {

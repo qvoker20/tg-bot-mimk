@@ -105,6 +105,8 @@ def load_detail_rows(
                     d.requires_assembly,
                     d.requires_install,
                     d.total_hours,
+                    d.assembly_percent,
+                    d.install_percent,
                     d.item_percent,
                     COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
                     COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), '')
@@ -161,10 +163,10 @@ def load_detail_rows(
                     is_required=bool(record[28]),
                     skipped_label="Без монтажу",
                 ),
-                "assembly_paused": bool(_safe_text(record[31])),
-                "assembly_pause_reason": _safe_text(record[31]) or "",
-                "install_paused": bool(_safe_text(record[32])),
-                "install_pause_reason": _safe_text(record[32]) or "",
+                "assembly_paused": bool(_safe_text(record[33])),
+                "assembly_pause_reason": _safe_text(record[33]) or "",
+                "install_paused": bool(_safe_text(record[34])),
+                "install_pause_reason": _safe_text(record[34]) or "",
                 "detail_status": _build_detail_status_value(
                     assembly_status=_normalize_execution_status(
                         _safe_text(record[10]),
@@ -197,7 +199,9 @@ def load_detail_rows(
                 "requires_assembly": bool(record[27]),
                 "requires_install": bool(record[28]),
                 "total_hours": _safe_text(record[29]) or "0",
-                "item_percent": float(record[30] or 0),
+                "assembly_percent": float(record[30] or 0),
+                "install_percent": float(record[31] or 0),
+                "item_percent": float(record[32] or 0),
             }
         )
 
