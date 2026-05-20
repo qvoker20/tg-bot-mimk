@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const orderSearch = document.querySelector("[data-buffer-search-order]");
     const customerSearch = document.querySelector("[data-buffer-search-customer]");
     const searchApplyButton = document.querySelector("[data-buffer-search-apply]");
+    const searchClearButton = document.querySelector("[data-buffer-search-clear]");
+    const selectedToggleButton = document.querySelector("[data-buffer-selected-toggle]");
     const infoModal = document.querySelector("[data-buffer-info-modal]");
     const infoModalCloseButtons = document.querySelectorAll("[data-buffer-info-modal-close]");
     const infoOrderNumber = document.querySelector("[data-buffer-info-order-number]");
@@ -82,6 +84,8 @@ document.addEventListener("DOMContentLoaded", () => {
         pendingTransferDetails: [],
         pendingAction: "transfer",
         rowsByOrder: new Map(),
+        selectedOrderNumbers: new Set(),
+        selectedOnlyMode: false,
         filters: {
             orderNumber: "",
             customer: "",
@@ -162,13 +166,24 @@ document.addEventListener("DOMContentLoaded", () => {
     ]);
 
     const syncSelectionState = () => {
-        const selected = tbody.querySelectorAll("input[type='checkbox']:checked").length;
+        const selected = state.selectedOrderNumbers.size;
         if (transferButton) {
             transferButton.disabled = !canTransferOrders || selected === 0;
         }
+
+        if (selectedToggleButton) {
+            selectedToggleButton.textContent = `Обрані: ${selected}`;
+            selectedToggleButton.classList.toggle("is-active-filter", state.selectedOnlyMode);
+            selectedToggleButton.disabled = selected === 0;
+        }
+
         meta.textContent = state.total
             ? `Завантажено ${tbody.children.length} з ${state.total} замовлень. Вибрано: ${selected}.`
             : "Замовлення будуть підгружатись по 30 рядків.";
+
+        if (state.selectedOnlyMode) {
+            meta.textContent = `Режим обраних: показано ${tbody.children.length} рядків. Вибрано всього: ${selected}.`;
+        }
 
         if (!canTransferOrders && !state.loading) {
             meta.textContent = state.total
@@ -186,8 +201,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const checkboxCell = document.createElement("td");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
+        checkbox.checked = state.selectedOrderNumbers.has(row.order_number);
         checkbox.setAttribute("aria-label", `Вибрати замовлення ${row.order_number}`);
-        checkbox.addEventListener("change", syncSelectionState);
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                state.selectedOrderNumbers.add(row.order_number);
+            } else {
+                state.selectedOrderNumbers.delete(row.order_number);
+            }
+            if (state.selectedOnlyMode) {
+                renderSelectedOnlyRows();
+            }
+            syncSelectionState();
+        });
         checkboxCell.appendChild(checkbox);
         tr.appendChild(checkboxCell);
 
@@ -225,6 +251,15 @@ document.addEventListener("DOMContentLoaded", () => {
         tableManager?.applyRow(tr);
 
         return tr;
+    };
+
+    const renderSelectedOnlyRows = () => {
+        tbody.innerHTML = "";
+        const selectedRows = Array.from(state.selectedOrderNumbers)
+            .map((orderNumber) => state.rowsByOrder.get(orderNumber))
+            .filter(Boolean);
+        selectedRows.forEach((row) => tbody.appendChild(renderRow(row)));
+        tableManager?.applyPinnedColumns?.();
     };
 
     const BUFFER_SUBCONTRACT_FIELDS = [
@@ -448,16 +483,13 @@ document.addEventListener("DOMContentLoaded", () => {
         infoModal.classList.add("hidden");
     };
 
-    const getSelectedOrders = () => Array.from(tbody.querySelectorAll("tr[data-order-number] input[type='checkbox']:checked"))
-        .map((input) => {
-            const row = input.closest("tr[data-order-number]");
-            if (!row?.dataset.orderNumber) {
-                return null;
-            }
+    const getSelectedOrders = () => Array.from(state.selectedOrderNumbers)
+        .map((orderNumber) => {
+            const row = state.rowsByOrder.get(orderNumber);
             return {
-                orderNumber: row.dataset.orderNumber,
-                customer: row.dataset.customer || "—",
-                status: row.dataset.status || "—",
+                orderNumber,
+                customer: row?.client || "—",
+                status: row?.status || "—",
             };
         })
         .filter(Boolean);
@@ -480,7 +512,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const loadNextPage = async () => {
-        if (state.loading || !state.hasMore) {
+        if (state.selectedOnlyMode || state.loading || !state.hasMore) {
             return;
         }
 
@@ -515,10 +547,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            payload.rows.forEach((row) => tbody.appendChild(renderRow(row)));
+            payload.rows.forEach((row) => {
+                if (!state.selectedOnlyMode) {
+                    tbody.appendChild(renderRow(row));
+                }
+            });
             state.offset += payload.rows.length;
             state.total = payload.total || 0;
             state.hasMore = Boolean(payload.has_more);
+            if (state.selectedOnlyMode) {
+                renderSelectedOnlyRows();
+            }
             syncSelectionState();
         } catch (error) {
             if (error.name === "AbortError") {
@@ -544,17 +583,28 @@ document.addEventListener("DOMContentLoaded", () => {
         state.total = 0;
         state.hasMore = true;
         state.pendingTransfer = [];
-        state.rowsByOrder.clear();
         tbody.innerHTML = "";
         tableWrap.scrollTop = 0;
         syncSelectionState();
         syncActiveFilters();
+        if (state.selectedOnlyMode) {
+            renderSelectedOnlyRows();
+            return;
+        }
         void loadNextPage();
     };
 
     const applySearch = () => {
         state.filters.orderNumber = orderSearch.value.trim();
         state.filters.customer = customerSearch.value.trim();
+        resetAndReload();
+    };
+
+    const clearSearch = () => {
+        orderSearch.value = "";
+        customerSearch.value = "";
+        state.filters.orderNumber = "";
+        state.filters.customer = "";
         resetAndReload();
     };
 
@@ -659,11 +709,27 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     tableWrap.addEventListener("scroll", () => {
+        if (state.selectedOnlyMode) {
+            return;
+        }
         const threshold = 160;
         if (tableWrap.scrollTop + tableWrap.clientHeight >= tableWrap.scrollHeight - threshold) {
             void loadNextPage();
         }
     }, { passive: true });
+
+    selectedToggleButton?.addEventListener("click", () => {
+        if (state.selectedOrderNumbers.size === 0) {
+            return;
+        }
+        state.selectedOnlyMode = !state.selectedOnlyMode;
+        if (state.selectedOnlyMode) {
+            renderSelectedOnlyRows();
+        } else {
+            resetAndReload();
+        }
+        syncSelectionState();
+    });
 
     transferButton?.addEventListener("click", () => {
         if (!canTransferOrders) {
@@ -775,6 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     searchApplyButton?.addEventListener("click", applySearch);
+    searchClearButton?.addEventListener("click", clearSearch);
     orderSearch.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
             event.preventDefault();
