@@ -15,6 +15,7 @@ from .constants import (
     RECLAMATION_STATUS,
 )
 from .recalc import enqueue_detail_metrics_recalculation
+from .recalc import recalculate_detail_metrics
 from .schema import ensure_schema
 from .utils import (
     _is_done_status,
@@ -223,7 +224,9 @@ def transfer_buffer_orders(order_numbers: list[str], actor: dict | None = None) 
 
         conn.commit()
 
-    enqueue_detail_metrics_recalculation(normalized_orders, source="transfer_buffer_orders")
+    # Force immediate consistency for UI right after transfer.
+    # Queue is still used in other flows, but transfer should be visible instantly.
+    recalculate_detail_metrics(normalized_orders)
 
     record_activity_event(
         action_key="buffer.transfer",
