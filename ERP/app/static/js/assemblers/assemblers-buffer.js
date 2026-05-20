@@ -616,11 +616,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         state.pendingTransfer = orderNumbers;
         state.pendingTransferDetails = orderNumbers.map((orderNumber) => {
-            const row = tbody.querySelector(`tr[data-order-number='${CSS.escape(orderNumber)}']`);
+            const row = state.rowsByOrder.get(orderNumber);
             return {
                 orderNumber,
-                customer: row?.dataset.customer || "—",
-                status: row?.dataset.status || "—",
+                customer: row?.client || "—",
+                status: row?.status || "—",
             };
         });
         if (state.pendingAction === "close") {
@@ -679,8 +679,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
             state.pendingTransfer.forEach((orderNumber) => {
                 tbody.querySelector(`tr[data-order-number='${CSS.escape(orderNumber)}']`)?.remove();
+                state.selectedOrderNumbers.delete(orderNumber);
+                state.rowsByOrder.delete(orderNumber);
             });
             state.total = Math.max(0, state.total - state.pendingTransfer.length);
+
+            if (state.selectedOnlyMode) {
+                renderSelectedOnlyRows();
+            }
+
             syncSelectionState();
             closeModal();
             const resultMessage = payload?.message
