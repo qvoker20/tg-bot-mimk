@@ -11,6 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const openModalButton = page?.querySelector("[data-schedule-open-modal]");
     const openEditModalButton = page?.querySelector("[data-schedule-open-edit-modal]");
     const openForceEditModalButton = page?.querySelector("[data-schedule-open-force-edit-modal]");
+    const clearSelectionButton = page?.querySelector("[data-schedule-clear-selection]");
+    const selectAllCheckbox = document.querySelector("[data-schedule-select-all]");
     const modal = document.querySelector("[data-schedule-modal]");
     const editModal = document.querySelector("[data-schedule-edit-modal]");
     const selectedWorkers = document.querySelector("[data-schedule-selected-workers]");
@@ -35,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const editMeta = document.querySelector("[data-schedule-edit-meta]");
     const rowsScript = page?.querySelector("[data-schedule-rows]");
 
-    if (!page || !tableHead || !tableBody || !meta || !weekLabel || !datePicker || !prevWeekButton || !nextWeekButton || !todayButton || !openModalButton || !openEditModalButton || !modal || !editModal || !selectedWorkers || !selectedDates || !editSelectedWorkers || !editSelectedDates || !orderSection || !relatedSection || !relatedDescription || !orderInput || !orderSearchButton || !searchLoader || !searchMeta || !searchResultsWrap || !searchResults || !confirmButton || !editConfirmButton || !editList || !editMeta || !rowsScript) {
+    if (!page || !tableHead || !tableBody || !meta || !weekLabel || !datePicker || !prevWeekButton || !nextWeekButton || !todayButton || !openModalButton || !openEditModalButton || !openForceEditModalButton || !clearSelectionButton || !selectAllCheckbox || !modal || !editModal || !selectedWorkers || !selectedDates || !editSelectedWorkers || !editSelectedDates || !orderSection || !relatedSection || !relatedDescription || !orderInput || !orderSearchButton || !searchLoader || !searchMeta || !searchResultsWrap || !searchResults || !confirmButton || !editConfirmButton || !editList || !editMeta || !rowsScript) {
         return;
     }
 
@@ -263,7 +265,42 @@ document.addEventListener("DOMContentLoaded", () => {
         if (openForceEditModalButton) {
             openForceEditModalButton.disabled = !canManageSchedule || !isAdmin || getSelectedExistingTaskGroups().length === 0;
         }
+        clearSelectionButton.disabled = !canManageSchedule || selectedCells.size === 0;
         updateMeta();
+    }
+
+    function updateSelectAllCheckbox() {
+        if (!selectAllCheckbox) {
+            return;
+        }
+        const checkboxes = Array.from(searchResults.querySelectorAll(".schedule-part-checkbox:not(:disabled)"));
+        if (!checkboxes.length) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            return;
+        }
+        const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+        selectAllCheckbox.checked = checkedCount === checkboxes.length;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+    }
+
+    function toggleSelectAllParts() {
+        if (!selectAllCheckbox) {
+            return;
+        }
+        const checked = selectAllCheckbox.checked;
+        Array.from(searchResults.querySelectorAll(".schedule-part-checkbox:not(:disabled)")).forEach((checkbox) => {
+            checkbox.checked = checked;
+        });
+    }
+
+    function clearSelection() {
+        if (!selectedCells.size) {
+            return;
+        }
+        selectedCells.clear();
+        renderGrid();
+        updateActionButtons();
     }
 
     function groupAssignments(tasks) {
@@ -372,6 +409,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!rowsToRender.length) {
             wrapTarget.classList.add("hidden");
             metaTarget.textContent = "За цим номером замовлення деталі не знайдено.";
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
             return;
         }
 
@@ -1043,6 +1084,7 @@ document.addEventListener("DOMContentLoaded", () => {
     openModalButton.addEventListener("click", openModal);
     openEditModalButton.addEventListener("click", () => openEditModal("delete"));
     openForceEditModalButton?.addEventListener("click", () => openEditModal("admin_delete"));
+    clearSelectionButton.addEventListener("click", clearSelection);
     assignCloseButtons.forEach((button) => {
         button.addEventListener("click", closeModal);
     });
@@ -1077,6 +1119,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === "Enter") {
             event.preventDefault();
             void searchOrderDetails();
+        }
+    });
+    selectAllCheckbox.addEventListener("change", toggleSelectAllParts);
+    searchResults.addEventListener("change", (event) => {
+        if (event.target instanceof HTMLInputElement && event.target.matches(".schedule-part-checkbox")) {
+            updateSelectAllCheckbox();
         }
     });
     confirmButton.addEventListener("click", assignTask);

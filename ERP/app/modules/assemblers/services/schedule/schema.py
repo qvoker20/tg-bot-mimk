@@ -371,16 +371,16 @@ def ensure_schedule_schema() -> None:
                     UPDATE {SCHEDULE_TASKS_TABLE}
                     SET
                         status = '{TASK_STATUS_COMPLETED}',
-                        completed_at = COALESCE(completed_at, normalized_execution),
+                        completed_at = COALESCE(completed_at, cutoff_at),
                         pause_seconds = COALESCE(pause_seconds, 0) + CASE
                             WHEN paused_at IS NULL THEN 0
-                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (normalized_execution - paused_at))))::BIGINT
+                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (cutoff_at - paused_at))))::BIGINT
                         END,
                         paused_at = NULL,
                         pause_reason = '',
-                        auto_closed_at = normalized_execution,
+                        auto_closed_at = cutoff_at,
                         auto_close_note = 'Автоматично завершено після 18:00',
-                        updated_at = normalized_execution
+                        updated_at = cutoff_at
                     WHERE scheduled_for = normalized_day
                       AND status = '{TASK_STATUS_IN_PROGRESS}';
                     GET DIAGNOSTICS updated_completed = ROW_COUNT;
@@ -388,16 +388,16 @@ def ensure_schedule_schema() -> None:
                     UPDATE {SCHEDULE_TASKS_TABLE}
                     SET
                         status = '{TASK_STATUS_COMPLETED}',
-                        completed_at = COALESCE(completed_at, normalized_execution),
+                        completed_at = COALESCE(completed_at, cutoff_at),
                         pause_seconds = COALESCE(pause_seconds, 0) + CASE
                             WHEN paused_at IS NULL THEN 0
-                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (normalized_execution - paused_at))))::BIGINT
+                            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (cutoff_at - paused_at))))::BIGINT
                         END,
                         paused_at = NULL,
                         pause_reason = '',
-                        auto_closed_at = normalized_execution,
+                        auto_closed_at = cutoff_at,
                         auto_close_note = 'Пауза - завершено автоматично о 18:00',
-                        updated_at = normalized_execution
+                        updated_at = cutoff_at
                     WHERE scheduled_for = normalized_day
                       AND status = '{TASK_STATUS_PAUSED}';
                                         GET DIAGNOSTICS updated_paused_completed = ROW_COUNT;
@@ -406,10 +406,10 @@ def ensure_schedule_schema() -> None:
                     UPDATE {SCHEDULE_TASKS_TABLE}
                     SET
                         status = '{TASK_STATUS_NO_EXECUTION}',
-                        completed_at = COALESCE(completed_at, normalized_execution),
-                        auto_closed_at = normalized_execution,
+                        completed_at = COALESCE(completed_at, cutoff_at),
+                        auto_closed_at = cutoff_at,
                         auto_close_note = 'Автоматично переведено у статус Без виконання після 18:00',
-                        updated_at = normalized_execution
+                        updated_at = cutoff_at
                     WHERE scheduled_for = normalized_day
                       AND status = '{TASK_STATUS_QUEUED}';
                     GET DIAGNOSTICS updated_no_execution = ROW_COUNT;
@@ -454,7 +454,7 @@ def ensure_schedule_schema() -> None:
                     SELECT MIN(scheduled_for)
                     INTO oldest_pending
                     FROM assemblers_schedule_tasks
-                    WHERE status IN ('У черзі', 'В роботі')
+                    WHERE status IN ('У черзі', 'В роботі', 'Пауза')
                       AND scheduled_for <= local_today;
 
                     IF oldest_pending IS NULL THEN
