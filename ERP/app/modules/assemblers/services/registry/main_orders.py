@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 import re
 
@@ -21,7 +22,7 @@ from .constants import (
     TASK_STATUS_PAUSED,
     TASK_STATUS_QUEUED,
 )
-from .context import _load_live_order_context
+from .context import _load_live_order_context, _task_matches_detail
 from .recalc import enqueue_detail_metrics_recalculation
 from .schema import ensure_schema
 from .status import (
@@ -32,6 +33,7 @@ from .status import (
     _derive_order_status,
     _filter_required_stage_details,
     _has_worker_assignment,
+    _normalize_execution_status,
 )
 from .utils import (
     _clean_free_text,
@@ -49,6 +51,7 @@ from .utils import (
     _parse_decimal,
     _parse_uk_date,
     _safe_text,
+    _split_csv_text,
 )
 
 
@@ -56,6 +59,50 @@ _HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _DEFAULT_NOTE_TEXT_COLOR = "#0f172a"
 _CLOSED_LIKE_STATUSES = (CLOSED_STATUS, RECLAMATION_STATUS)
 _CLOSED_LIKE_STATUS_CASEFOLDS = {status.casefold() for status in _CLOSED_LIKE_STATUSES}
+
+
+def _build_today_schedule_flags(schedule_tasks: list[dict], details: list[dict]) -> dict[tuple[str, str], dict[str, bool]]:
+    if not schedule_tasks or not details:
+        return {}
+
+    today = date.today()
+    flags: dict[tuple[str, str], dict[str, bool]] = {}
+    for detail in details:
+        detail_key = (
+            _safe_text(detail.get("part_number")),
+            _safe_text(detail.get("product_name")),
+        )
+        flags[detail_key] = {"assembly": False, "install": False}
+
+    for task in schedule_tasks:
+        if task.get("scheduled_for") != today:
+            continue
+        task_type = _safe_text(task.get("task_type"))
+        if task_type not in {ASSEMBLY_TASK_TYPE, INSTALL_TASK_TYPE}:
+            continue
+
+        task_part_numbers = {value.casefold() for value in _split_csv_text(task.get("part_number"))}
+        task_product_names = {value.casefold() for value in _split_csv_text(task.get("product_name"))}
+
+        for detail in details:
+            detail_key = (
+                _safe_text(detail.get("part_number")),
+                _safe_text(detail.get("product_name")),
+            )
+            if not _task_matches_detail(
+                detail_part_number=detail.get("part_number"),
+                detail_product_name=detail.get("product_name"),
+                task_part_numbers=task_part_numbers,
+                task_product_names=task_product_names,
+            ):
+                continue
+
+            if task_type == ASSEMBLY_TASK_TYPE:
+                flags[detail_key]["assembly"] = True
+            elif task_type == INSTALL_TASK_TYPE:
+                flags[detail_key]["install"] = True
+
+    return flags
 
 
 def _normalize_note_color(value) -> str:
@@ -107,21 +154,19 @@ def _resolve_detail_stage_status(
     started_at,
     is_required: bool,
     skipped_label: str,
+    has_today_schedule: bool = False,
 ) -> str:
     if not is_required:
         return skipped_label
 
-    if _normalize_datetime(completed_at):
-        return TASK_STATUS_COMPLETED
-
-    normalized_status = _safe_text(raw_status)
-    if normalized_status and normalized_status != "—":
-        return normalized_status
-
-    if _normalize_datetime(started_at):
-        return TASK_STATUS_IN_PROGRESS
-
-    return TASK_STATUS_QUEUED
+    return _normalize_execution_status(
+        _safe_text(raw_status),
+        completed_at,
+        0,
+        is_required=is_required,
+        skipped_label=skipped_label,
+        has_today_schedule=has_today_schedule,
+    )
 
 
 def _calculate_schedule_effective_minutes(
@@ -797,31 +842,26 @@ def load_main_order_card(order_number: str) -> dict | None:
                         started_at,
                         completed_at,
                         COALESCE(pause_seconds, 0),
-                        TRIM(COALESCE(assembler_name, ''))
-                    FROM {SCHEDULE_TASKS_TABLE}
-                    WHERE TRIM(COALESCE(order_number, '')) = %s
-                    ORDER BY scheduled_for, assembler_name
-                    """,
-                    (normalized_order,),
-                )
-                schedule_tasks = [
-                    {
-                        "scheduled_for": row[0],
-                        "task_type": row[1],
-                        "status": row[2],
-                        "started_at": row[3],
-                        "completed_at": row[4],
-                        "pause_seconds": row[5],
-                        "assembler_name": row[6],
-                    }
-                    for row in cursor.fetchall()
-                ]
-
-    live = _load_live_order_context([normalized_order]).get(normalized_order, {})
-
-    from .utils import (
-        _format_date_input,
-        _parse_duration_minutes,
+                    TRIM(COALESCE(assembler_name, '')),
+                    TRIM(COALESCE(part_number, '')),
+                    TRIM(COALESCE(product_name, ''))
+                FROM {SCHEDULE_TASKS_TABLE}
+                WHERE TRIM(COALESCE(order_number, '')) = %s
+                ORDER BY scheduled_for, assembler_name
+                """,
+                (normalized_order,),
+            )
+            schedule_tasks = [
+                {
+                    "scheduled_for": row[0],
+                    "task_type": row[1],
+                    "status": row[2],
+                    "started_at": row[3],
+                    "completed_at": row[4],
+                    "pause_seconds": row[5],
+                    "assembler_name": row[6],
+                    "part_number": row[7],
+                    "product_name": row[8],
     )
 
     details_list = [
@@ -855,6 +895,8 @@ def load_main_order_card(order_number: str) -> dict | None:
         }
         for record in detail_rows
     ]
+
+    today_schedule_flags = _build_today_schedule_flags(schedule_tasks, details_list)
 
     assembly_details = _filter_required_stage_details(details_list, required_key="requires_assembly")
     install_details = _filter_required_stage_details(details_list, required_key="requires_install")
@@ -991,6 +1033,11 @@ def load_main_order_card(order_number: str) -> dict | None:
                     started_at=d.get("assembly_started_at"),
                     is_required=bool(d.get("requires_assembly", True)),
                     skipped_label="Без збірки",
+                    has_today_schedule=bool(
+                        today_schedule_flags.get(
+                            (_safe_text(d.get("part_number")), _safe_text(d.get("product_name")))
+                        , {}).get("assembly")
+                    ),
                 ),
                 "install_status": _resolve_detail_stage_status(
                     raw_status=d.get("install_status"),
@@ -998,6 +1045,11 @@ def load_main_order_card(order_number: str) -> dict | None:
                     started_at=d.get("install_started_at"),
                     is_required=bool(d.get("requires_install", True)),
                     skipped_label="Без монтажу",
+                    has_today_schedule=bool(
+                        today_schedule_flags.get(
+                            (_safe_text(d.get("part_number")), _safe_text(d.get("product_name")))
+                        , {}).get("install")
+                    ),
                 ),
                 "assembly_started_at": _format_datetime(
                     _normalize_datetime(d.get("assembly_started_at"))

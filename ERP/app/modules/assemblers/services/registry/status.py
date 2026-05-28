@@ -62,8 +62,10 @@ def _normalize_execution_status(
         return TASK_STATUS_COMPLETED
     if has_today_schedule:
         return TASK_STATUS_IN_PROGRESS
-    if normalized_status in {TASK_STATUS_IN_PROGRESS, _PAUSED}:
-        return TASK_STATUS_IN_PROGRESS
+    if normalized_status.casefold() == _PAUSED.casefold():
+        return TASK_STATUS_QUEUED
+    if normalized_status.casefold() == TASK_STATUS_IN_PROGRESS.casefold():
+        return TASK_STATUS_QUEUED
     return TASK_STATUS_QUEUED
 
 
