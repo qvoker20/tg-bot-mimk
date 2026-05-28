@@ -44,104 +44,41 @@
                 {% include "partials/action_alert.html" %}
                 {% endwith %}
 
-                <style>
-                    .settings-block {
-                        border: 1px dashed #e0e6ef;
-                        padding: 12px;
-                        border-radius: 8px;
-                        margin-bottom: 12px;
-                        background: #fff;
-                    }
-                    .settings-block h4 {
-                        margin: 0 0 8px 0;
-                        font-size: 0.95rem;
-                        color: #223;
-                    }
-                    .settings-block p.desc { margin: 0 0 10px 0; color:#556; font-size:0.9rem }
-                    .settings-compact input[type="number"], .settings-compact input[type="text"] {
-                        padding: 6px 8px; font-size: 0.9rem; border-radius:6px; width:100%; box-sizing:border-box;
-                    }
-                    .settings-compact .small-button { padding:6px 10px; font-size:0.9rem; border-radius:6px }
-                    .settings-compact .grid { display:grid; grid-template-columns: 1fr 1fr auto; gap:10px; align-items:end }
-                    .settings-run-row { display:flex; align-items:center; gap:10px }
-                    .spinner { width:18px; height:18px; border:3px solid #eee; border-top-color:#3578e5; border-radius:50%; animation:spin 0.9s linear infinite; display:inline-block }
-                    .hidden { display:none }
-                    @keyframes spin { to { transform:rotate(360deg) } }
-                </style>
+                <form method="post" action="/assemblers/settings" class="placeholder-block">
+                    <strong>Вартість дня збірки за одного збиральника</strong>
+                    <p class="placeholder-copy">Значення зберігається в базі даних і використовується в формулі для годин у вкладці Деталі.</p>
 
-                <form method="post" action="/assemblers/settings" class="placeholder-block settings-compact">
-                    <div class="settings-block">
-                        <h4>Параметри розрахунків</h4>
-                        <p class="desc">Значення використовуються в формулах для розрахунків робочого часу та вартості.</p>
-                        <div class="grid">
-                            <label>
-                                <span>Сума, грн</span>
-                                <input type="number" name="assembly_day_cost" min="0" step="0.01" inputmode="decimal" placeholder="Наприклад, 2500" value="{{ assembly_day_cost }}" required>
-                            </label>
-                            <label>
-                                <span>Годин у робочому дні</span>
-                                <input type="number" name="assembly_workday_hours" min="0.1" step="0.1" inputmode="decimal" placeholder="8" value="{{ assembly_workday_hours or '8' }}" required>
-                            </label>
-                            <div style="display:flex;align-items:center;">
-                                <button type="submit" class="module-link small-button">Зберегти</button>
-                            </div>
-                        </div>
+                    <div class="settings-form-grid">
+                        <label>
+                            <span>Сума, грн</span>
+                            <input
+                                type="number"
+                                name="assembly_day_cost"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                placeholder="Наприклад, 2500"
+                                value="{{ assembly_day_cost }}"
+                                required
+                            >
+                        </label>
+                        <label>
+                            <span>Годин у робочому дні</span>
+                            <input
+                                type="number"
+                                name="assembly_workday_hours"
+                                min="0.1"
+                                step="0.1"
+                                inputmode="decimal"
+                                placeholder="8"
+                                value="{{ assembly_workday_hours or '8' }}"
+                                required
+                            >
+                        </label>
+                        <div></div>
+                        <button type="submit" class="module-link">Зберегти</button>
                     </div>
                 </form>
-
-                <div class="settings-block settings-compact">
-                    <h4>Ручні дії адміністратора</h4>
-                    <p class="desc">Тут доступні операції обслуговування. Результат кожного запуску записується в журнал активності.</p>
-                    <div class="settings-run-row">
-                        <button type="button" class="ghost-button small-button" id="settings-run-cutoff">Запустити автозакриття</button>
-                        <span id="settings-run-cutoff-spinner" class="spinner hidden" aria-hidden="true"></span>
-                        <span id="settings-run-cutoff-status" style="color:#333;font-size:0.95rem"></span>
-                    </div>
-                    <div style="margin-top:8px;color:#556;font-size:0.9rem">Пояснення: автозакриття ставить задачі до стану "Завершено" або "Без виконання" на момент 18:00 для вказаних днів. Виконується за вказану кількість днів назад.</div>
-                </div>
-
-                <script>
-                    (function(){
-                        const btn = document.getElementById('settings-run-cutoff');
-                        const status = document.getElementById('settings-run-cutoff-status');
-                        const spinner = document.getElementById('settings-run-cutoff-spinner');
-                        if (!btn) return;
-                        btn.addEventListener('click', async function(){
-                            const defaultDays = 31;
-                            let daysInput = prompt(`Вкажіть кількість днів назад для обробки (наприклад ${defaultDays}):`, String(defaultDays));
-                            if (daysInput === null) return;
-                            let daysBack = Number(daysInput || defaultDays);
-                            if (!Number.isFinite(daysBack) || daysBack <= 0) daysBack = defaultDays;
-                            btn.disabled = true;
-                            spinner.classList.remove('hidden');
-                            status.textContent = 'Запуск...';
-                            try {
-                                const resp = await fetch('/assemblers/api/schedule/run_cutoff', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    credentials: 'same-origin',
-                                    body: JSON.stringify({ days_back: daysBack, force_current_day: true }),
-                                });
-                                const data = await resp.json();
-                                if (!resp.ok || !data.ok) {
-                                    const err = data.error || data.message || 'Помилка';
-                                    status.textContent = err;
-                                    if (window.ActionToast?.show) window.ActionToast.show(err, 'error');
-                                } else {
-                                    const msg = `Оброблено днів=${data.processed_days||0}, завершено=${data.completed_count||0}, без виконання=${data.no_execution_count||0}`;
-                                    status.textContent = msg;
-                                    if (window.ActionToast?.show) window.ActionToast.show('Автозакриття виконано', 'success');
-                                }
-                            } catch (e) {
-                                status.textContent = e.message || String(e);
-                                if (window.ActionToast?.show) window.ActionToast.show(e.message || 'Помилка', 'error');
-                            } finally {
-                                btn.disabled = false;
-                                spinner.classList.add('hidden');
-                            }
-                        });
-                    })();
-                </script>
             </section>
         </section>
     </section>

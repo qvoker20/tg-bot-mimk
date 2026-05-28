@@ -31,7 +31,7 @@ def _context(request: Request, title: str):
 def _has_zapusky_access(request: Request) -> bool:
     user = _user(request) or {}
     role = str(user.get("role") or "").strip().lower()
-    return role in {"admin", "адмін", "технолог виробництво", "технолог виробництва", "комплектувальник"}
+    return role in {"admin", "адмін", "технолог виробництво", "технолог виробництва"}
 
 
 def _has_komplekt_access(request: Request) -> bool:

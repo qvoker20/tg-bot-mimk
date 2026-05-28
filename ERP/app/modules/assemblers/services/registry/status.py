@@ -52,6 +52,7 @@ def _normalize_execution_status(
     *,
     is_required: bool = True,
     skipped_label: str = "",
+    has_today_schedule: bool = False,
 ) -> str:
     from .constants import TASK_STATUS_IN_PROGRESS, TASK_STATUS_PAUSED as _PAUSED
     if not is_required:
@@ -59,7 +60,9 @@ def _normalize_execution_status(
     normalized_status = _safe_text(saved_status)
     if completed_at or normalized_status.casefold() == TASK_STATUS_COMPLETED.casefold():
         return TASK_STATUS_COMPLETED
-    if normalized_status in {TASK_STATUS_IN_PROGRESS, _PAUSED} or started_days > 0:
+    if has_today_schedule:
+        return TASK_STATUS_IN_PROGRESS
+    if normalized_status in {TASK_STATUS_IN_PROGRESS, _PAUSED}:
         return TASK_STATUS_IN_PROGRESS
     return TASK_STATUS_QUEUED
 

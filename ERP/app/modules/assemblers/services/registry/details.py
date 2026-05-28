@@ -72,6 +72,36 @@ def load_detail_rows(
             )
             total = int(cursor.fetchone()[0] or 0)
 
+            cursor.execute("SELECT to_regclass(%s)", (SCHEDULE_TASKS_TABLE,))
+            schedule_table_exists = cursor.fetchone()[0] is not None
+
+            if schedule_table_exists:
+                schedule_columns = f"""
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
+                    EXISTS(
+                        SELECT 1
+                        FROM {SCHEDULE_TASKS_TABLE}
+                        WHERE TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(d.order_number, ''))
+                          AND task_type = 'assembly'
+                          AND scheduled_for = CURRENT_DATE
+                    ) AS assembly_schedule_today,
+                    EXISTS(
+                        SELECT 1
+                        FROM {SCHEDULE_TASKS_TABLE}
+                        WHERE TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(d.order_number, ''))
+                          AND task_type = 'install'
+                          AND scheduled_for = CURRENT_DATE
+                    ) AS install_schedule_today
+                """
+            else:
+                schedule_columns = """
+                    '' AS assembly_pause_reason,
+                    '' AS install_pause_reason,
+                    FALSE AS assembly_schedule_today,
+                    FALSE AS install_schedule_today
+                """
+
             cursor.execute(
                 f"""
                 SELECT
@@ -108,8 +138,7 @@ def load_detail_rows(
                     d.assembly_percent,
                     d.install_percent,
                     d.item_percent,
-                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
-                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), '')
+                    {schedule_columns}
                 FROM {DETAILS_TABLE_NAME} d
                 LEFT JOIN {MAIN_TABLE_NAME} m ON m.order_number = d.order_number
                 {where_sql}
@@ -149,6 +178,7 @@ def load_detail_rows(
                     assembly_days_count,
                     is_required=bool(record[27]),
                     skipped_label="Без збірки",
+                    has_today_schedule=bool(record[35]),
                 ),
                 "planned_install_due_at": _format_date(record[11]),
                 "install_worker": _safe_text(record[12]) or "—",
@@ -162,6 +192,7 @@ def load_detail_rows(
                     install_days_count,
                     is_required=bool(record[28]),
                     skipped_label="Без монтажу",
+                    has_today_schedule=bool(record[36]),
                 ),
                 "assembly_paused": bool(_safe_text(record[33])),
                 "assembly_pause_reason": _safe_text(record[33]) or "",
@@ -174,6 +205,7 @@ def load_detail_rows(
                         assembly_days_count,
                         is_required=bool(record[27]),
                         skipped_label="Без збірки",
+                        has_today_schedule=bool(record[35]),
                     ),
                     install_status=_normalize_execution_status(
                         _safe_text(record[17]),
@@ -181,6 +213,7 @@ def load_detail_rows(
                         install_days_count,
                         is_required=bool(record[28]),
                         skipped_label="Без монтажу",
+                        has_today_schedule=bool(record[36]),
                     ),
                     assembly_completed_at=record[7],
                     install_completed_at=record[14],

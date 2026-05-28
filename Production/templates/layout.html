@@ -11,7 +11,7 @@
 <body>
   <header class="topbar">
     {% set role = (user.role if user and user.role else '')|lower %}
-    {% set can_zapusky = role in ['admin', 'адмін', 'технолог виробництво', 'технолог виробництва', 'комплектувальник'] %}
+    {% set can_zapusky = role in ['admin', 'адмін', 'технолог виробництво', 'технолог виробництва'] %}
     {% set can_komplekt = role in ['майстер цеху', 'комплектувальник', 'admin', 'директор з виробництва'] %}
     <div class="topbar-brand">
       <img src="/static/branding/logo-mimk.png" alt="MIM-K" class="topbar-logo" onerror="this.style.display='none'">

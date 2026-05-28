@@ -554,8 +554,23 @@ def run_schedule_daily_cutoff_catchup(*, days_back: int = 31, force_current_day:
             rows = cursor.fetchall()
         conn.commit()
 
-    return {
+    summary = {
         "processed_days": len(rows),
         "completed_count": sum(int(row[1] or 0) for row in rows),
         "no_execution_count": sum(int(row[2] or 0) for row in rows),
     }
+
+    if summary["completed_count"] + summary["no_execution_count"] > 0:
+        # If auto-close changed schedule rows, flush detail recalculation now so
+        # the order/detail statuses stay in sync with the updated schedule.
+        try:
+            from app.modules.assemblers.services import process_detail_metrics_recalc_queue
+
+            for _ in range(10):
+                result = process_detail_metrics_recalc_queue(batch_size=500)
+                if result.get("queued_orders", 0) < 500:
+                    break
+        except Exception:
+            pass
+
+    return summary
