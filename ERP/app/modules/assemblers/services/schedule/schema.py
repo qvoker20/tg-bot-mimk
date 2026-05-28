@@ -330,7 +330,8 @@ def ensure_schedule_schema() -> None:
                 f"""
                 CREATE OR REPLACE FUNCTION assemblers_schedule_apply_daily_cutoff(
                     target_day DATE,
-                    execution_time TIMESTAMPTZ DEFAULT NOW()
+                    execution_time TIMESTAMPTZ DEFAULT NOW(),
+                    force_current_day BOOLEAN DEFAULT FALSE
                 )
                 RETURNS TABLE (
                     run_date DATE,
@@ -342,11 +343,12 @@ def ensure_schedule_schema() -> None:
                     normalized_day DATE;
                     normalized_execution TIMESTAMPTZ := COALESCE(execution_time, NOW());
                     cutoff_at TIMESTAMPTZ;
+                    local_today DATE := (normalized_execution AT TIME ZONE 'Europe/Kyiv')::DATE;
                     updated_completed INTEGER := 0;
                     updated_paused_completed INTEGER := 0;
                     updated_no_execution INTEGER := 0;
                 BEGIN
-                    normalized_day := COALESCE(target_day, (normalized_execution AT TIME ZONE 'Europe/Kyiv')::DATE);
+                    normalized_day := COALESCE(target_day, local_today);
                     cutoff_at := (normalized_day::TIMESTAMP + TIME '18:00') AT TIME ZONE 'Europe/Kyiv';
 
                     PERFORM set_config('assemblers.activity_log_enabled', '1', true);
@@ -354,7 +356,7 @@ def ensure_schedule_schema() -> None:
                     PERFORM set_config('assemblers.activity_actor_name', 'Система', true);
                     PERFORM set_config('assemblers.activity_actor_role', 'system', true);
 
-                    IF normalized_execution < cutoff_at THEN
+                    IF normalized_execution < cutoff_at AND NOT (force_current_day AND normalized_day = local_today) THEN
                         RETURN QUERY SELECT normalized_day, 0, 0, FALSE;
                         RETURN;
                     END IF;
@@ -427,6 +429,49 @@ def ensure_schedule_schema() -> None:
                     )
                     ON CONFLICT ON CONSTRAINT assemblers_schedule_auto_close_runs_pkey DO NOTHING;
 
+                    IF updated_completed + updated_no_execution > 0 THEN
+                        INSERT INTO assemblers_activity_journal (
+                            actor_kind,
+                            actor_name,
+                            actor_role,
+                            action_key,
+                            action_label,
+                            entity_type,
+                            entity_id,
+                            order_number,
+                            subdivision,
+                            source_table,
+                            source_op,
+                            description,
+                            details
+                        ) VALUES (
+                            'system',
+                            'Система',
+                            'system',
+                            'schedule.system.auto_close_batch',
+                            'Автоматичне автозакриття задач графіку',
+                            'schedule_task_batch',
+                            '',
+                            '',
+                            '',
+                            'assemblers_schedule_tasks',
+                            'auto_close_batch',
+                            format(
+                                'Автоматично закрито %s задач(ок) на %s: completed=%s, no_execution=%s',
+                                updated_completed + updated_no_execution,
+                                normalized_day,
+                                updated_completed,
+                                updated_no_execution
+                            ),
+                            jsonb_build_object(
+                                'date', normalized_day::TEXT,
+                                'completed_count', updated_completed,
+                                'no_execution_count', updated_no_execution,
+                                'execution_time', normalized_execution::TEXT
+                            )
+                        );
+                    END IF;
+
                     RETURN QUERY SELECT normalized_day, updated_completed, updated_no_execution, TRUE;
                 END;
                 $$ LANGUAGE plpgsql;
@@ -436,7 +481,8 @@ def ensure_schedule_schema() -> None:
                 """
                 CREATE OR REPLACE FUNCTION assemblers_schedule_run_daily_cutoff_catchup(
                     reference_time TIMESTAMPTZ DEFAULT NOW(),
-                    days_back INTEGER DEFAULT 31
+                    days_back INTEGER DEFAULT 31,
+                    force_current_day BOOLEAN DEFAULT FALSE
                 )
                 RETURNS TABLE (
                     run_date DATE,
@@ -470,7 +516,7 @@ def ensure_schedule_schema() -> None:
                         SELECT gs::DATE
                         FROM generate_series(start_day::TIMESTAMP, end_day::TIMESTAMP, INTERVAL '1 day') AS gs
                     LOOP
-                        PERFORM assemblers_schedule_apply_daily_cutoff(candidate_day, normalized_reference);
+                        PERFORM assemblers_schedule_apply_daily_cutoff(candidate_day, normalized_reference, force_current_day);
                     END LOOP;
 
                     RETURN QUERY
@@ -491,7 +537,7 @@ def ensure_schedule_schema() -> None:
         _SCHEDULE_SCHEMA_READY = True
 
 
-def run_schedule_daily_cutoff_catchup(*, days_back: int = 31) -> dict[str, int]:
+def run_schedule_daily_cutoff_catchup(*, days_back: int = 31, force_current_day: bool = False) -> dict[str, int]:
     """Run 18:00 daily auto-close checks, including missed days after downtime."""
     ensure_schedule_schema()
     normalized_days_back = max(1, min(int(days_back or 31), 365))
@@ -501,11 +547,12 @@ def run_schedule_daily_cutoff_catchup(*, days_back: int = 31) -> dict[str, int]:
             cursor.execute(
                 """
                 SELECT run_date, completed_count, no_execution_count
-                FROM assemblers_schedule_run_daily_cutoff_catchup(NOW(), %s)
+                FROM assemblers_schedule_run_daily_cutoff_catchup(NOW(), %s, %s)
                 """,
-                (normalized_days_back,),
+                (normalized_days_back, force_current_day),
             )
             rows = cursor.fetchall()
+        conn.commit()
 
     return {
         "processed_days": len(rows),

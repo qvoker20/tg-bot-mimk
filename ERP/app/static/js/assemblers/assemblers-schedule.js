@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const editCloseButtons = document.querySelectorAll("[data-schedule-edit-modal-close]");
     const editList = document.querySelector("[data-schedule-edit-list]");
     const editMeta = document.querySelector("[data-schedule-edit-meta]");
+    const runCutoffButton = page?.querySelector("[data-schedule-run-cutoff]");
     const rowsScript = page?.querySelector("[data-schedule-rows]");
 
     if (!page || !tableHead || !tableBody || !meta || !weekLabel || !datePicker || !prevWeekButton || !nextWeekButton || !todayButton || !openModalButton || !openEditModalButton || !openForceEditModalButton || !clearSelectionButton || !selectAllCheckbox || !modal || !editModal || !selectedWorkers || !selectedDates || !editSelectedWorkers || !editSelectedDates || !orderSection || !relatedSection || !relatedDescription || !orderInput || !orderSearchButton || !searchLoader || !searchMeta || !searchResultsWrap || !searchResults || !confirmButton || !editConfirmButton || !editList || !editMeta || !rowsScript) {
@@ -1090,6 +1091,49 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     editCloseButtons.forEach((button) => {
         button.addEventListener("click", closeEditModal);
+    });
+    runCutoffButton?.addEventListener("click", async () => {
+        if (!isAdmin) {
+            meta.textContent = "Ця дія доступна лише адміністратору.";
+            return;
+        }
+
+        const defaultDays = 31;
+        let daysInput = prompt(`Вкажіть кількість днів назад для обробки (наприклад ${defaultDays}):`, String(defaultDays));
+        if (daysInput === null) {
+            return;
+        }
+        let daysBack = Number(daysInput || defaultDays);
+        if (!Number.isFinite(daysBack) || daysBack <= 0) {
+            daysBack = defaultDays;
+        }
+
+        runCutoffButton.disabled = true;
+        try {
+            const payload = await withGlobalLoader(async () => {
+                const response = await fetch("/assemblers/api/schedule/run_cutoff", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ days_back: daysBack }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.error || data.message || "Не вдалося запустити автозакриття.");
+                }
+                return data;
+            }, "Запуск автозакриття...");
+
+            meta.textContent = `Автозакриття виконано: оброблено днів=${payload.processed_days || 0}, завершено=${payload.completed_count || 0}, без виконання=${payload.no_execution_count || 0}`;
+            showToast("Автозакриття виконано", "success");
+            // Refresh current week to reflect changes
+            await loadWeekTasks();
+        } catch (err) {
+            meta.textContent = err.message || "Помилка при запуску автозакриття.";
+            showToast(err.message || "Помилка при запуску автозакриття.", "error");
+        } finally {
+            runCutoffButton.disabled = false;
+        }
     });
     modal.addEventListener("click", (event) => {
         if (event.target === modal) {

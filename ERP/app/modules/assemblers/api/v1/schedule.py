@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -12,6 +12,8 @@ from app.modules.assemblers.services.schedule import (
     edit_schedule_tasks,
     load_schedule_tasks,
 )
+from app.modules.assemblers.services.schedule import run_schedule_daily_cutoff_catchup
+from app.modules.assemblers.services.activity_log import record_activity_event
 
 
 router = APIRouter()
@@ -110,3 +112,63 @@ async def assemblers_schedule_tasks_edit_api(request: Request):
         return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
 
     return {"ok": True, **result, "message": "Задачі видалено."}
+
+
+@router.post("/api/schedule/run_cutoff")
+async def assemblers_run_cutoff_api(
+    request: Request,
+    days_back: int = Body(31),
+    force_current_day: bool = Body(True),
+):
+    """Manual endpoint to run daily cutoff catchup (admin only).
+
+    Calls `run_schedule_daily_cutoff_catchup` in a threadpool and records
+    an activity journal entry with the results.
+    """
+    user, redirect = require_user(request)
+    if redirect:
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+    if not is_admin_user(user):
+        return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
+
+    try:
+        summary = await run_in_threadpool(
+            run_schedule_daily_cutoff_catchup,
+            days_back=days_back,
+            force_current_day=force_current_day,
+        )
+    except Exception as error:
+        try:
+            await run_in_threadpool(
+                record_activity_event,
+                action_key="schedule.system.run_cutoff",
+                action_label="Помилка при запуску автозакриття",
+                description=str(error),
+                actor=user,
+                entity_type="maintenance",
+                source_table="system",
+                source_op="run_cutoff",
+                details={"error": str(error)},
+            )
+        except Exception:
+            pass
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=500)
+
+    # record successful run in activity journal
+    try:
+        await run_in_threadpool(
+            record_activity_event,
+            action_key="schedule.system.run_cutoff",
+            action_label="Запущено автозакриття (ручний запуск)",
+            description=f"Ручний запуск автозакриття: processed_days={summary.get('processed_days')}",
+            actor=user,
+            entity_type="maintenance",
+            source_table="system",
+            source_op="run_cutoff",
+            details=summary,
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, **summary}
