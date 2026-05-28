@@ -46,6 +46,18 @@ document.addEventListener("DOMContentLoaded", () => {
         ? window.ERPLoading.withLoader(operation, { message })
         : operation();
 
+    const parseJsonResponse = async (response) => {
+        try {
+            return await response.json();
+        } catch {
+            const text = await response.text();
+            return {
+                ok: response.ok,
+                error: text || response.statusText || `HTTP ${response.status}`,
+            };
+        }
+    };
+
     const safeParseRows = () => {
         try {
             const parsed = JSON.parse(rowsScript.textContent || "[]");
@@ -1117,9 +1129,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     credentials: "same-origin",
                     body: JSON.stringify({ days_back: daysBack }),
                 });
-                const data = await response.json();
+                const data = await parseJsonResponse(response);
                 if (!response.ok || !data.ok) {
-                    throw new Error(data.error || data.message || "Не вдалося запустити автозакриття.");
+                    throw new Error(data.error || data.message || response.statusText || "Не вдалося запустити автозакриття.");
                 }
                 return data;
             }, "Запуск автозакриття...");

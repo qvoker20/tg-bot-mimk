@@ -863,7 +863,7 @@ def load_main_order_card(order_number: str) -> dict | None:
                     "part_number": row[7],
                     "product_name": row[8],
                 }
-                for row in rows  # <--- Замініть "rows" на вашу змінну з результатами запиту
+                for row in rows 
             ]
 
     details_list = [
