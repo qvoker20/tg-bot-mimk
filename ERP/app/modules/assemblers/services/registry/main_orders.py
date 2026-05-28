@@ -862,7 +862,9 @@ def load_main_order_card(order_number: str) -> dict | None:
                     "assembler_name": row[6],
                     "part_number": row[7],
                     "product_name": row[8],
-    )
+                }
+                for row in rows  # <--- Замініть "rows" на вашу змінну з результатами запиту
+            ]
 
     details_list = [
         {
