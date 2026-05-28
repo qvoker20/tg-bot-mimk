@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.modules.assemblers.db.connection import get_db_connection
 
 from .constants import CLOSED_STATUS, DETAILS_TABLE_NAME, MAIN_TABLE_NAME, SCHEDULE_TASKS_TABLE
-from .context import _load_detail_production_context
+from .context import _load_detail_production_context, _split_csv_text, _task_matches_detail
 from .schema import ensure_schema
 from .status import _build_detail_status_value, _normalize_execution_status
 from .utils import (
@@ -75,33 +75,6 @@ def load_detail_rows(
             cursor.execute("SELECT to_regclass(%s)", (SCHEDULE_TASKS_TABLE,))
             schedule_table_exists = cursor.fetchone()[0] is not None
 
-            if schedule_table_exists:
-                schedule_columns = f"""
-                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
-                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
-                    EXISTS(
-                        SELECT 1
-                        FROM {SCHEDULE_TASKS_TABLE}
-                        WHERE TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(d.order_number, ''))
-                          AND task_type = 'assembly'
-                          AND scheduled_for = CURRENT_DATE
-                    ) AS assembly_schedule_today,
-                    EXISTS(
-                        SELECT 1
-                        FROM {SCHEDULE_TASKS_TABLE}
-                        WHERE TRIM(COALESCE(order_number, '')) = TRIM(COALESCE(d.order_number, ''))
-                          AND task_type = 'install'
-                          AND scheduled_for = CURRENT_DATE
-                    ) AS install_schedule_today
-                """
-            else:
-                schedule_columns = """
-                    '' AS assembly_pause_reason,
-                    '' AS install_pause_reason,
-                    FALSE AS assembly_schedule_today,
-                    FALSE AS install_schedule_today
-                """
-
             cursor.execute(
                 f"""
                 SELECT
@@ -138,7 +111,8 @@ def load_detail_rows(
                     d.assembly_percent,
                     d.install_percent,
                     d.item_percent,
-                    {schedule_columns}
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'assembly' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), ''),
+                    COALESCE((SELECT pause_reason FROM {SCHEDULE_TASKS_TABLE} WHERE order_number = d.order_number AND task_type = 'install' AND status = 'Пауза' ORDER BY updated_at DESC LIMIT 1), '')
                 FROM {DETAILS_TABLE_NAME} d
                 LEFT JOIN {MAIN_TABLE_NAME} m ON m.order_number = d.order_number
                 {where_sql}
@@ -149,6 +123,52 @@ def load_detail_rows(
             )
             detail_rows = cursor.fetchall()
 
+            today_schedule_flags: dict[tuple[str, str, str], dict[str, bool]] = {}
+            if schedule_table_exists and detail_rows:
+                order_numbers = sorted({_safe_text(row[0]) for row in detail_rows if _safe_text(row[0])})
+                if order_numbers:
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            TRIM(COALESCE(order_number, '')),
+                            TRIM(COALESCE(task_type, '')),
+                            TRIM(COALESCE(part_number, '')),
+                            TRIM(COALESCE(product_name, ''))
+                        FROM {SCHEDULE_TASKS_TABLE}
+                        WHERE TRIM(COALESCE(order_number, '')) = ANY(%s)
+                          AND scheduled_for = CURRENT_DATE
+                        """,
+                        (order_numbers,),
+                    )
+                    schedule_rows = cursor.fetchall()
+
+                    schedule_by_order: dict[str, list[tuple[str, set[str], set[str]]]] = {}
+                    for order_number, task_type, task_part_number, task_product_name in schedule_rows:
+                        task_part_numbers = {value.casefold() for value in _split_csv_text(task_part_number)}
+                        task_product_names = {value.casefold() for value in _split_csv_text(task_product_name)}
+                        schedule_by_order.setdefault(order_number, []).append(
+                            (task_type, task_part_numbers, task_product_names)
+                        )
+
+                    for row in detail_rows:
+                        order_value = _safe_text(row[0])
+                        part_value = _safe_text(row[1])
+                        product_value = _safe_text(row[3])
+                        detail_key = (order_value, part_value, product_value)
+                        detail_flags = {"assembly": False, "install": False}
+                        for task_type, task_part_numbers, task_product_names in schedule_by_order.get(order_value, []):
+                            if _task_matches_detail(
+                                detail_part_number=part_value,
+                                detail_product_name=product_value,
+                                task_part_numbers=task_part_numbers,
+                                task_product_names=task_product_names,
+                            ):
+                                if task_type == 'assembly':
+                                    detail_flags['assembly'] = True
+                                elif task_type == 'install':
+                                    detail_flags['install'] = True
+                        today_schedule_flags[detail_key] = detail_flags
+
     production_context = _load_detail_production_context(
         [(_safe_text(record[0]), _safe_text(record[1])) for record in detail_rows]
     )
@@ -157,15 +177,17 @@ def load_detail_rows(
     for record in detail_rows:
         order_num = _safe_text(record[0]) or "-"
         part_number = _safe_text(record[1]) or "-"
+        product_name = _safe_text(record[3])
         production_info = production_context.get((order_num, part_number), {})
         assembly_days_count = int(record[8] or 0)
         install_days_count = int(record[15] or 0)
+        today_schedule = today_schedule_flags.get((order_num, part_number, product_name), {})
         rows.append(
             {
                 "order_number": order_num,
                 "part_number": part_number,
                 "customer": _safe_text(record[2]) or "-",
-                "product_name": _safe_text(record[3]) or "-",
+                "product_name": product_name or "-",
                 "planned_assembly_due_at": _format_date(record[4]),
                 "assembly_worker": _safe_text(record[5]) or "-",
                 "assembly_started_at": _format_datetime(record[6]),
@@ -178,7 +200,7 @@ def load_detail_rows(
                     assembly_days_count,
                     is_required=bool(record[27]),
                     skipped_label="Без збірки",
-                    has_today_schedule=bool(record[35]),
+                    has_today_schedule=bool(today_schedule.get("assembly")),
                 ),
                 "planned_install_due_at": _format_date(record[11]),
                 "install_worker": _safe_text(record[12]) or "—",
@@ -192,7 +214,7 @@ def load_detail_rows(
                     install_days_count,
                     is_required=bool(record[28]),
                     skipped_label="Без монтажу",
-                    has_today_schedule=bool(record[36]),
+                    has_today_schedule=bool(today_schedule.get("install")),
                 ),
                 "assembly_paused": bool(_safe_text(record[33])),
                 "assembly_pause_reason": _safe_text(record[33]) or "",
@@ -205,7 +227,7 @@ def load_detail_rows(
                         assembly_days_count,
                         is_required=bool(record[27]),
                         skipped_label="Без збірки",
-                        has_today_schedule=bool(record[35]),
+                        has_today_schedule=bool(today_schedule.get("assembly")),
                     ),
                     install_status=_normalize_execution_status(
                         _safe_text(record[17]),
@@ -213,7 +235,7 @@ def load_detail_rows(
                         install_days_count,
                         is_required=bool(record[28]),
                         skipped_label="Без монтажу",
-                        has_today_schedule=bool(record[36]),
+                        has_today_schedule=bool(today_schedule.get("install")),
                     ),
                     assembly_completed_at=record[7],
                     install_completed_at=record[14],
