@@ -539,55 +539,46 @@
         const details = [];
         const seen = new Set();
 
-        // 1. ВІДСІКАЄМО ЗАЙВЕ (шукаємо початок таблиці)
-        // Це гарантує, що ми не будемо парсити перші сторінки з технічним сміттям
         const startIndex = text.indexOf('Загальна специфікація');
         if (startIndex !== -1) {
             text = text.substring(startIndex);
         }
 
-        // 2. БРОНЕБІЙНИЙ ВИРАЗ З ПРОПУСКОМ СЛІВ
-        // (?:[^\d]*?) означає: пропустити будь-які букви (напр. "Монтажники"), 
-        // якщо pdf.js випадково закинув їх між нашими цифрами.
         const pattern = /(\d+)\s+([A-Za-zА-Яа-яІіЇїЄє0-9\-\(\)]+(?:\s*\.\s*\d+)+)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)/g;
 
         let m;
         while ((m = pattern.exec(text)) !== null) {
-            const detailNum = m[1];
-            // Очищаємо код деталі від можливих пробілів та перенесень
+            const detailNum = String(m[1]).trim();
             const designation = String(m[2]).replace(/\s+/g, '');
 
-            // Відсіюємо відверте сміття (короткі коди типу "1.5")
             if (designation.length < 5) continue;
 
-            // Збираємо наші три числа
             let n1 = parseFloat(String(m[3]).replace(',', '.'));
             let n2 = parseFloat(String(m[4]).replace(',', '.'));
             let n3 = parseFloat(String(m[5]).replace(',', '.'));
 
+            // Фільтр від зламаних чисел (щоб не відправити null на бекенд і не отримати 422)
+            if (isNaN(n1) || isNaN(n2) || isNaN(n3)) continue;
+
             let qty, len, wid;
 
-            // 3. РОЗУМНЕ РОЗПІЗНАВАННЯ (Кількість vs Розміри)
-            // Оскільки pdf.js часто міняє колонки місцями (напр. 2408.00 | 572.00 | 1)
             if (n1 > 50 && n2 > 50 && n3 < 50) {
-                // Якщо перші два числа великі (розміри), а третє маленьке:
                 len = n1; wid = n2; qty = n3;
             } else if (n1 < 50 && n2 > 50 && n3 > 50) {
-                // Нормальний порядок: кількість, довжина, ширина
                 qty = n1; len = n2; wid = n3;
             } else {
-                // Якщо щось нестандартне - беремо як є
                 qty = n1; len = n2; wid = n3;
             }
 
             if (len === 0 || wid === 0 || qty === 0) continue;
 
+            // СУВОРА ТИПІЗАЦІЯ ДЛЯ FASTAPI: примусово робимо все рядками (String)
             const row = {
                 detail_number: detailNum,
                 designation: designation,
-                quantity: qty,
-                length: len,
-                width: wid,
+                quantity: String(qty),
+                length: String(len),
+                width: String(wid),
             };
 
             const key = `${row.detail_number}|${row.designation}|${row.length}|${row.width}`;
