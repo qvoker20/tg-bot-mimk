@@ -67,26 +67,31 @@ def _extract_details(pdf_text: str):
     details = []
     seen = set()
 
+    # Секретна зброя: група 'code' тепер вимагає, щоб у позначенні 
+    # обов'язково була хоча б одна крапка з цифрами після неї. 
+    # Також вона дозволяє пробіли (\s*) всередині коду, якщо PDF їх туди вліпив.
     pattern = re.compile(
-        r"^\s*(\d+)\s+([A-Za-zА-Яа-я0-9\-\(\)\./]+)\s+(\d+(?:[\.,]\d+)?)\s+(\d+(?:[\.,]\d+)?)\s+(\d+(?:[\.,]\d+)?)\s*$"
+        r"(?P<num>\d+)\s+"                                          # 1. Номер деталі
+        r"(?P<code>[A-Za-zА-Яа-я0-9\-\(\)]+(?:\s*\.\s*\d+)+)\s+"    # 2. Позначення (обов'язково з крапками)
+        r"(?P<qty>\d+(?:[\.,]\d+)?)\s+"                             # 3. Кількість
+        r"(?P<len>\d+(?:[\.,]\d+)?)\s+"                             # 4. Довжина
+        r"(?P<wid>\d+(?:[\.,]\d+)?)"                                # 5. Ширина
     )
 
-    for line in pdf_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if "Позначення" in line or "Загальна специфікація" in line:
-            continue
+    for m in pattern.finditer(pdf_text):
+        detail_number = _safe_text(m.group("num"))
+        
+        # Очищаємо код від можливих пробілів та перенесень рядків, 
+        # які міг додати парсер PDF, щоб вийшло рівно "12(26).01.01.001"
+        designation = re.sub(r'\s+', '', m.group("code")) 
+        
+        qty = _to_decimal(m.group("qty"))
+        length = _to_decimal(m.group("len"))
+        width = _to_decimal(m.group("wid"))
 
-        m = pattern.match(line)
-        if not m:
+        # Додаткова фільтрація
+        if qty == 0 or length == 0 or width == 0:
             continue
-
-        detail_number = _safe_text(m.group(1))
-        designation = _safe_text(m.group(2))
-        qty = _to_decimal(m.group(3))
-        length = _to_decimal(m.group(4))
-        width = _to_decimal(m.group(5))
 
         key = (detail_number, designation, str(qty), str(length), str(width))
         if key in seen:

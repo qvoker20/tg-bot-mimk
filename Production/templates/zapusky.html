@@ -536,37 +536,68 @@
 	}
 
 	function parseDetails(text) {
-		const lines = text.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
-		const details = [];
-		const seen = new Set();
+        const details = [];
+        const seen = new Set();
 
-		function hasDigitsNumericToken(token) {
-			const t = String(token || '').trim();
-			return /^[\d.,]+$/.test(t) && /\d/.test(t);
-		}
+        // 1. ВІДСІКАЄМО ЗАЙВЕ (шукаємо початок таблиці)
+        // Це гарантує, що ми не будемо парсити перші сторінки з технічним сміттям
+        const startIndex = text.indexOf('Загальна специфікація');
+        if (startIndex !== -1) {
+            text = text.substring(startIndex);
+        }
 
-		for (const line of lines) {
-			const m = line.match(/^(\d+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/);
-			if (!m) continue;
-			if (!hasDigitsNumericToken(m[3]) || !hasDigitsNumericToken(m[4]) || !hasDigitsNumericToken(m[5])) continue;
+        // 2. БРОНЕБІЙНИЙ ВИРАЗ З ПРОПУСКОМ СЛІВ
+        // (?:[^\d]*?) означає: пропустити будь-які букви (напр. "Монтажники"), 
+        // якщо pdf.js випадково закинув їх між нашими цифрами.
+        const pattern = /(\d+)\s+([A-Za-zА-Яа-яІіЇїЄє0-9\-\(\)]+(?:\s*\.\s*\d+)+)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)(?:[^\d]*?)\s+(\d+(?:[\.,]\d+)?)/g;
 
-			// У типовому файлі останні 3 значення: довжина, ширина, кількість.
-			const row = {
-				detail_number: m[1],
-				designation: m[2],
-				quantity: m[5],
-				length: m[3],
-				width: m[4],
-			};
+        let m;
+        while ((m = pattern.exec(text)) !== null) {
+            const detailNum = m[1];
+            // Очищаємо код деталі від можливих пробілів та перенесень
+            const designation = String(m[2]).replace(/\s+/g, '');
 
-			const key = `${row.detail_number}|${row.designation}|${row.quantity}|${row.length}|${row.width}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			details.push(row);
-		}
+            // Відсіюємо відверте сміття (короткі коди типу "1.5")
+            if (designation.length < 5) continue;
 
-		return details;
-	}
+            // Збираємо наші три числа
+            let n1 = parseFloat(String(m[3]).replace(',', '.'));
+            let n2 = parseFloat(String(m[4]).replace(',', '.'));
+            let n3 = parseFloat(String(m[5]).replace(',', '.'));
+
+            let qty, len, wid;
+
+            // 3. РОЗУМНЕ РОЗПІЗНАВАННЯ (Кількість vs Розміри)
+            // Оскільки pdf.js часто міняє колонки місцями (напр. 2408.00 | 572.00 | 1)
+            if (n1 > 50 && n2 > 50 && n3 < 50) {
+                // Якщо перші два числа великі (розміри), а третє маленьке:
+                len = n1; wid = n2; qty = n3;
+            } else if (n1 < 50 && n2 > 50 && n3 > 50) {
+                // Нормальний порядок: кількість, довжина, ширина
+                qty = n1; len = n2; wid = n3;
+            } else {
+                // Якщо щось нестандартне - беремо як є
+                qty = n1; len = n2; wid = n3;
+            }
+
+            if (len === 0 || wid === 0 || qty === 0) continue;
+
+            const row = {
+                detail_number: detailNum,
+                designation: designation,
+                quantity: qty,
+                length: len,
+                width: wid,
+            };
+
+            const key = `${row.detail_number}|${row.designation}|${row.length}|${row.width}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            details.push(row);
+        }
+
+        return details;
+    }
 
 	async function parseSelectedFile() {
 		if (!selectedFile) {
