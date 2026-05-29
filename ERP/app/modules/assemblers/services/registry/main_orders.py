@@ -39,12 +39,14 @@ from .utils import (
     _clean_free_text,
     _days_until,
     _format_date,
+    _format_date_input,
     _format_datetime,
     _format_duration,
     _format_hours,
     _format_money,
     _normalize_datetime,
     _normalize_limit,
+    _parse_duration_minutes,
     _normalize_offset,
     _build_products_text,
     _count_workers,
@@ -851,6 +853,7 @@ def load_main_order_card(order_number: str) -> dict | None:
                 """,
                 (normalized_order,),
             )
+            rows = cursor.fetchall()
             schedule_tasks = [
                 {
                     "scheduled_for": row[0],
@@ -863,8 +866,11 @@ def load_main_order_card(order_number: str) -> dict | None:
                     "part_number": row[7],
                     "product_name": row[8],
                 }
-                for row in rows 
+                for row in rows
             ]
+
+    live_context = _load_live_order_context([normalized_order])
+    live = live_context.get(normalized_order, {})
 
     details_list = [
         {

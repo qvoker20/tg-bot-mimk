@@ -52,8 +52,9 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch {
             const text = await response.text();
             return {
-                ok: response.ok,
+                ok: response.ok && text.length === 0,
                 error: text || response.statusText || `HTTP ${response.status}`,
+                raw: text,
             };
         }
     };
@@ -334,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const payload = await withGlobalLoader(async () => {
             const response = await fetch(`/assemblers/api/details/search?order_number=${encodeURIComponent(normalizedOrder)}`, { cache: "no-store" });
-            const result = await response.json();
+            const result = await parseJsonResponse(response);
             if (!response.ok || !result.ok) {
                 throw new Error(result.error || "Не вдалося знайти деталі замовлення.");
             }
@@ -356,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const response = await fetch(`/assemblers/api/schedule/tasks?subdivision=${encodeURIComponent(page.dataset.scheduleSubdivision || "")}&start_date=${encodeURIComponent(formatIso(currentWeekStart))}`, {
                     cache: "no-store",
                 });
-                const result = await response.json();
+                const result = await parseJsonResponse(response);
                 if (!response.ok || !result.ok) {
                     throw new Error(result.error || "Не вдалося завантажити задачі графіка.");
                 }
@@ -840,7 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }),
                     }),
                 });
-                const result = await response.json();
+                const result = await parseJsonResponse(response);
                 if (!response.ok || !result.ok) {
                     throw new Error(result.error || "Не вдалося записати задачі в базу.");
                 }
@@ -1002,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     },
                     body: JSON.stringify(payload),
                 });
-                const data = await response.json();
+                const data = await parseJsonResponse(response);
                 if (!response.ok || !data.ok) {
                     throw new Error(data.error || "Не вдалося оновити задачі графіка.");
                 }
